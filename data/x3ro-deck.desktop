@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Example Control
+GenericName=Agent & Docker dashboard
+Comment=Claude Code agents and Docker services for every Example checkout
+Exec=x3ro-deck
+Icon=x3ro-deck
+Terminal=false
+Categories=Development;Utility;
+StartupWMClass=x3ro-deck
+X-KDE-StartupNotify=true

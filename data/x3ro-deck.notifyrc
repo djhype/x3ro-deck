@@ -1,0 +1,15 @@
+[Global]
+IconName=x3ro-deck
+Name=Example Control
+Comment=Claude Code agents and Docker services
+
+[Event/needsYou]
+Name=Agent needs you
+Comment=An agent asks for permission, has a question, or finished a turn
+Action=Popup
+Urgency=High
+
+[Event/containerIssue]
+Name=Container issue
+Comment=A compose service is unhealthy, restarting or exited with an error
+Action=Popup

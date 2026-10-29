@@ -1,0 +1,136 @@
+import QtQuick
+
+Rectangle {
+    id: root
+    readonly property Theme t: Theme {}
+    color: t.bg1
+
+    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: t.line }
+
+    Text {
+        id: heading
+        x: 20; y: 18
+        text: "CHECKOUTS"
+        color: t.dim
+        font.family: t.sans; font.pixelSize: 11; font.letterSpacing: 1.6
+    }
+
+    ListView {
+        id: list
+        anchors.top: heading.bottom
+        anchors.topMargin: 10
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: footer.top
+        anchors.margins: 12
+        spacing: 8
+        clip: true
+        model: app.checkouts
+
+        delegate: Rectangle {
+            id: card
+            required property int index
+            required property string name
+            required property string offsetLabel
+            required property string ticket
+            required property string agentState
+            required property string healthText
+            required property string healthState
+            required property bool selected
+            readonly property bool needsYou: agentState === "permission" || agentState === "question"
+
+            width: ListView.view.width
+            height: col.implicitHeight + 24
+            radius: 12
+            color: selected ? t.selected : (mouse.containsMouse ? t.raised : t.panel)
+            border.width: 1
+            border.color: selected ? t.magenta : (needsYou ? Qt.rgba(0.96, 0.65, 0.14, 0.6) : t.line)
+            Behavior on color { ColorAnimation { duration: 140 } }
+            Behavior on border.color { ColorAnimation { duration: 140 } }
+
+            // Glow for the selected checkout and a pulse for one that needs you.
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -4
+                radius: 16
+                z: -1
+                color: "transparent"
+                border.width: 4
+                border.color: card.selected ? Qt.rgba(1, 0.44, 0.95, 0.16) : Qt.rgba(0.96, 0.65, 0.14, 0.22)
+                visible: card.selected || card.needsYou
+                SequentialAnimation on opacity {
+                    running: card.needsYou && !card.selected
+                    loops: Animation.Infinite
+                    NumberAnimation { from: 1; to: 0.2; duration: 900; easing.type: Easing.InOutSine }
+                    NumberAnimation { from: 0.2; to: 1; duration: 900; easing.type: Easing.InOutSine }
+                }
+            }
+
+            Column {
+                id: col
+                x: 14; y: 12
+                width: parent.width - 28
+                spacing: 8
+                Item {
+                    width: parent.width; height: nameText.implicitHeight
+                    Text {
+                        id: nameText
+                        text: card.name
+                        color: card.selected ? t.magenta : t.text
+                        font.family: t.sans; font.pixelSize: 15; font.weight: Font.DemiBold
+                    }
+                    Text {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Alt+" + (card.index + 1) + "  " + card.offsetLabel
+                        color: t.dim
+                        font.family: t.mono; font.pixelSize: 11
+                    }
+                }
+                Text {
+                    width: parent.width
+                    text: card.ticket || "—"
+                    elide: Text.ElideRight
+                    color: t.soft
+                    font.family: t.mono; font.pixelSize: 12
+                }
+                Flow {
+                    width: parent.width
+                    spacing: 6
+                    Pill { text: t.agentLabel(card.agentState); fg: t.agentColor(card.agentState) }
+                    Pill { text: card.healthText; fg: t.healthColor(card.healthState); mono: true; dot: false }
+                }
+            }
+
+            MouseArea {
+                id: mouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: app.select(card.index)
+            }
+        }
+    }
+
+    Column {
+        id: footer
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.margins: 12
+        spacing: 8
+        Text {
+            visible: !!app.configError
+            width: parent.width
+            wrapMode: Text.Wrap
+            text: app.configError
+            color: t.pink
+            font.family: t.sans; font.pixelSize: 11
+        }
+        NeonButton {
+            width: parent.width
+            text: "Edit checkouts…"
+            onClicked: app.editConfig()
+        }
+    }
+}

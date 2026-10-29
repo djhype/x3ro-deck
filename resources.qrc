@@ -1,0 +1,19 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file>qml/Theme.qml</file>
+        <file>qml/Pill.qml</file>
+        <file>qml/NeonButton.qml</file>
+        <file>qml/TopBar.qml</file>
+        <file>qml/CheckoutRail.qml</file>
+        <file>qml/ContextHeader.qml</file>
+        <file>qml/DockerPanel.qml</file>
+        <file>qml/SessionPanel.qml</file>
+        <file>qml/PrPanel.qml</file>
+        <file>qml/NeedsYouRail.qml</file>
+        <file>data/style.qss</file>
+        <file>data/close.svg</file>
+        <file>data/icons/x3ro-deck.svg</file>
+        <file>data/close-hover.svg</file>
+    </qresource>
+</RCC>

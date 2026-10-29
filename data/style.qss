@@ -1,0 +1,80 @@
+/* Widget chrome around the QML panels and embedded terminals. */
+
+QMainWindow, #central, QSplitter, QStackedWidget {
+    background: #0a0a16;
+}
+
+QSplitter::handle {
+    background: #22224a;
+}
+QSplitter::handle:horizontal { width: 1px; }
+QSplitter::handle:vertical { height: 1px; }
+QSplitter::handle:hover { background: #ff6ff2; }
+
+#shellStack, #agentStack {
+    background: #07070f;
+}
+
+#terminalFrame {
+    background: #07070f;
+    border: 1px solid #22224a;
+    border-radius: 0px;
+}
+#terminalFrame[accent="attention"] {
+    border: 1px solid #f5a623;
+}
+
+#terminalPlaceholder {
+    color: #ff5c7a;
+    font-size: 13px;
+    padding: 24px;
+}
+
+QTabWidget#shellTabs::pane {
+    border: none;
+    background: #07070f;
+}
+QTabWidget#shellTabs QTabBar {
+    background: #0d0d1f;
+    qproperty-drawBase: 0;
+}
+QTabWidget#shellTabs QTabBar::tab {
+    background: transparent;
+    color: #a0a0c8;
+    font-family: "MesloLGS Nerd Font Mono";
+    font-size: 12px;
+    padding: 7px 14px;
+    margin: 4px 2px 4px 0;
+    border-radius: 7px;
+    border: none;
+}
+QTabWidget#shellTabs QTabBar::tab:selected {
+    background: #1a1a3a;
+    color: #e6e6f5;
+}
+QTabWidget#shellTabs QTabBar::tab:hover:!selected {
+    background: #14142e;
+}
+QTabWidget#shellTabs QTabBar::close-button {
+    subcontrol-position: right;
+    image: url(:/data/close.svg);
+    margin-left: 6px;
+}
+QTabWidget#shellTabs QTabBar::close-button:hover {
+    image: url(:/data/close-hover.svg);
+}
+
+QToolButton#newTab {
+    background: transparent;
+    color: #a0a0c8;
+    border: none;
+    border-radius: 7px;
+    font-size: 16px;
+    min-width: 32px;
+    min-height: 28px;
+    margin: 4px 8px;
+}
+QToolButton#newTab:hover {
+    background: #1a1a3a;
+    color: #ff6ff2;
+}
