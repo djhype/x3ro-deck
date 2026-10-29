@@ -29,7 +29,7 @@ Rectangle {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.StyledText
-            text: "X3RO<font color='#ff6ff2'>//</font>CTL"
+            text: "X3RO<font color='#ff6ff2'>//</font>DECK"
             color: t.text
             font.family: t.display
             font.pixelSize: 17

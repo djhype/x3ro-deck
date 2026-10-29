@@ -38,7 +38,7 @@ QtObject {
         case "question": return "Has a question"
         case "done": return "Done · waiting"
         case "ready": return "Ready"
-        default: return "No agent"
+        default: return "Offline"
         }
     }
     function healthColor(state) {

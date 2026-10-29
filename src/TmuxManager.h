@@ -24,6 +24,9 @@ public:
     QStringList attachArgs(const QString &name) const;
     // `keys` are tmux key names (Enter, Escape, …) unless `literal` is set.
     void sendKeys(const QString &name, const QStringList &keys, bool literal = false);
+    // Types `text` and presses Enter. `enterDelayMs` holds Enter back for TUIs
+    // that read a fast burst of input as a paste.
+    void submit(const QString &name, const QString &text, int enterDelayMs = 0);
     void startPolling(int intervalMs);
 
 Q_SIGNALS:

@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QUrl>
 
 #include <algorithm>
@@ -15,13 +16,15 @@ namespace
 {
 const QStringList kCheckoutRoles{QStringLiteral("id"),         QStringLiteral("name"),       QStringLiteral("offsetLabel"),
                                  QStringLiteral("ticket"),     QStringLiteral("branch"),     QStringLiteral("agentState"),
-                                 QStringLiteral("healthText"), QStringLiteral("healthState"), QStringLiteral("selected")};
+                                 QStringLiteral("agentLabel"), QStringLiteral("healthText"), QStringLiteral("healthState"),
+                                 QStringLiteral("selected")};
 const QStringList kServiceRoles{QStringLiteral("id"),     QStringLiteral("name"), QStringLiteral("health"), QStringLiteral("ports"),
                                 QStringLiteral("uptime"), QStringLiteral("cpu"),  QStringLiteral("mem")};
 const QStringList kAttentionRoles{QStringLiteral("id"),      QStringLiteral("itemId"),    QStringLiteral("key"),       QStringLiteral("kind"),
                                   QStringLiteral("checkout"), QStringLiteral("checkoutName"), QStringLiteral("title"),
                                   QStringLiteral("detail"),  QStringLiteral("since"),     QStringLiteral("canAlways"),
-                                  QStringLiteral("dismissable"), QStringLiteral("prUrl")};
+                                  QStringLiteral("dismissable"), QStringLiteral("prUrl"), QStringLiteral("prPrompt"),
+                                  QStringLiteral("agentLabel")};
 
 int healthRank(const QString &h)
 {
@@ -73,12 +76,58 @@ QString sessionName(const QString &checkout)
     return s;
 }
 
+// Codex has sent shell commands both as a string and as an argv array.
+QString commandText(const QJsonValue &command)
+{
+    if (!command.isArray()) {
+        return command.toString();
+    }
+    QStringList argv;
+    for (const QJsonValue &v : command.toArray()) {
+        argv.append(v.toString());
+    }
+    return argv.join(QLatin1Char(' '));
+}
+
+// Files named in a Codex apply_patch body ("*** Update File: src/main.cpp").
+QStringList patchFiles(const QJsonObject &input)
+{
+    static const QRegularExpression re(QStringLiteral(R"(^\*\*\* (?:Add|Update|Delete) File: (.+)$)"),
+                                       QRegularExpression::MultilineOption);
+    QStringList files;
+    for (auto it = re.globalMatch(commandText(input.value(QStringLiteral("command")))); it.hasNext();) {
+        files.append(it.next().captured(1).trimmed());
+    }
+    return files;
+}
+
+// Tools that stop for an answer: Claude Code's AskUserQuestion and Codex's request_user_input.
+bool isQuestionTool(const QString &tool)
+{
+    return tool == QLatin1String("AskUserQuestion") || tool == QLatin1String("request_user_input");
+}
+
+QString questionText(const QJsonObject &input)
+{
+    QStringList questions;
+    for (const QJsonValue &q : input.value(QStringLiteral("questions")).toArray()) {
+        questions.append(q.toObject().value(QStringLiteral("question")).toString());
+    }
+    return questions.isEmpty() ? input.value(QStringLiteral("question")).toString() : questions.join(QLatin1Char('\n'));
+}
+
 QString describeInput(const QString &tool, const QJsonObject &input, const QString &root)
 {
     auto rel = [&root](const QString &p) {
         return p.startsWith(root + QLatin1Char('/')) ? p.mid(root.size() + 1) : p;
     };
-    if (tool == QLatin1String("Bash")) return input.value(QStringLiteral("command")).toString();
+    if (tool == QLatin1String("Bash")) return commandText(input.value(QStringLiteral("command")));
+    if (tool == QLatin1String("apply_patch")) {
+        QStringList files = patchFiles(input);
+        std::transform(files.begin(), files.end(), files.begin(), rel);
+        return files.join(QStringLiteral(", "));
+    }
+    if (tool == QLatin1String("ExitPlanMode")) return input.value(QStringLiteral("plan")).toString();
     if (input.contains(QStringLiteral("file_path"))) return rel(input.value(QStringLiteral("file_path")).toString());
     if (input.contains(QStringLiteral("notebook_path"))) return rel(input.value(QStringLiteral("notebook_path")).toString());
     if (input.contains(QStringLiteral("url"))) return input.value(QStringLiteral("url")).toString();
@@ -93,10 +142,27 @@ QString permissionTitle(const QString &tool)
     if (tool == QLatin1String("Edit") || tool == QLatin1String("MultiEdit") || tool == QLatin1String("Write")
         || tool == QLatin1String("NotebookEdit"))
         return QStringLiteral("Wants to edit a file");
+    if (tool == QLatin1String("apply_patch")) return QStringLiteral("Wants to edit files");
     if (tool == QLatin1String("WebFetch")) return QStringLiteral("Wants to fetch a URL");
     if (tool.isEmpty()) return QStringLiteral("Needs your permission");
     return QStringLiteral("Wants to use %1").arg(tool);
 }
+
+// Shown while an agent runs but none of its hook events have arrived.
+QString hookHint(const QString &kind)
+{
+    if (kind == QLatin1String("codex")) {
+        return QStringLiteral("No hook events from Codex yet. Codex runs a new hook only after you trust it: type /hooks in "
+                              "Codex and trust x3ro-deck-hook.");
+    }
+    return QStringLiteral("No hook events from Claude Code yet. Check that x3ro-deck-hook is registered in ~/.claude/settings.json.");
+}
+
+bool runs(const AgentProfile &p, const QString &paneCommand)
+{
+    return !p.process.isEmpty() && paneCommand.startsWith(p.process);
+}
+
 QVariantMap prMap(const PrInfo &pr)
 {
     if (pr.number == 0) {
@@ -146,11 +212,14 @@ AppController::AppController(QObject *parent)
     , m_serviceModel(new VariantListModel(kServiceRoles, this))
     , m_attention(new VariantListModel(kAttentionRoles, this))
 {
+    // The last profile picked for a checkout wins over its configured default.
+    QSettings settings;
     for (const CheckoutConfig &cc : std::as_const(m_config.checkouts)) {
         Checkout c;
         c.cfg = cc;
         c.session = sessionName(cc.name);
         c.project = cc.name;
+        c.agent.profile = m_config.agent(settings.value(QStringLiteral("agents/") + cc.name, cc.agent).toString()).id;
         m_checkouts.append(c);
     }
 
@@ -217,11 +286,18 @@ QVariantMap AppController::current() const
     }
     const Checkout &c = m_checkouts.at(m_current);
     const AgentInfo &a = c.agent;
+    const AgentProfile &p = profile(m_current);
     int up = 0;
     int total = 0;
     for (const ContainerInfo &ci : c.containers) {
         up += isUp(ci) ? 1 : 0;
         total += counts(ci) ? 1 : 0;
+    }
+    QString model = a.model;
+    for (const auto &[name, value] : p.env) {
+        if (model.isEmpty() && name == QLatin1String("ANTHROPIC_MODEL")) {
+            model = value;
+        }
     }
     return {
         {QStringLiteral("name"), c.cfg.name},
@@ -237,6 +313,15 @@ QVariantMap AppController::current() const
         {QStringLiteral("containersTotal"), total},
         {QStringLiteral("agentState"), a.state},
         {QStringLiteral("agentRunning"), a.running},
+        {QStringLiteral("agentId"), p.id},
+        {QStringLiteral("agentLabel"), p.label},
+        {QStringLiteral("agentKind"), p.kind},
+        {QStringLiteral("model"), model},
+        {QStringLiteral("runningSince"), a.runningSince.isValid() ? a.runningSince.toMSecsSinceEpoch() : 0},
+        {QStringLiteral("hookHint"), a.running && !a.hooksSeen ? hookHint(p.kind) : QString()},
+        {QStringLiteral("continueCommand"), p.continueArgs.isEmpty() ? QString() : p.command + QLatin1Char(' ') + p.continueArgs},
+        {QStringLiteral("prPrompt"), p.prPrompt},
+        {QStringLiteral("prompts"), p.prompts},
         {QStringLiteral("startedAt"), a.startedAt.isValid() ? a.startedAt.toMSecsSinceEpoch() : 0},
         {QStringLiteral("since"), a.since.isValid() ? a.since.toMSecsSinceEpoch() : 0},
         {QStringLiteral("tools"), a.tools},
@@ -253,6 +338,15 @@ QVariantList AppController::quickCommands() const
     QVariantList out;
     for (const QuickCommand &q : m_config.quickCommands) {
         out.append(QVariantMap{{QStringLiteral("label"), q.label}, {QStringLiteral("command"), q.command}, {QStringLiteral("group"), q.group}});
+    }
+    return out;
+}
+
+QVariantList AppController::agentProfiles() const
+{
+    QVariantList out;
+    for (const AgentProfile &p : m_config.agents) {
+        out.append(QVariantMap{{QStringLiteral("id"), p.id}, {QStringLiteral("label"), p.label}, {QStringLiteral("kind"), p.kind}});
     }
     return out;
 }
@@ -450,9 +544,25 @@ void AppController::onPaneCommands(const QHash<QString, QString> &commands)
     for (int i = 0; i < m_checkouts.size(); ++i) {
         Checkout &c = m_checkouts[i];
         const QString cmd = commands.value(c.session);
-        const bool running = cmd == QLatin1String("claude") || cmd.startsWith(QLatin1String("claude"));
+        // Someone may start a different agent by hand in the session; follow it.
+        if (!runs(profile(i), cmd)) {
+            for (const AgentProfile &p : std::as_const(m_config.agents)) {
+                if (runs(p, cmd)) {
+                    useProfile(i, p.id);
+                    break;
+                }
+            }
+        }
+        const bool running = runs(profile(i), cmd);
         const bool wasRunning = c.agent.running;
         c.agent.running = running;
+        if (running && !wasRunning) {
+            const QDateTime now = QDateTime::currentDateTime();
+            c.agent.runningSince = now;
+            // An agent found running at app start has had working hooks all
+            // along. A fresh one usually sends SessionStart before this poll sees it.
+            c.agent.hooksSeen = !m_panesPolled || (c.agent.lastHookAt.isValid() && c.agent.lastHookAt.secsTo(now) < 10);
+        }
         // Only transitions in our own session change state: hooks also report
         // agents running elsewhere (another terminal), which must stay visible.
         if (wasRunning && !running) {
@@ -467,8 +577,11 @@ void AppController::onPaneCommands(const QHash<QString, QString> &commands)
             }
         }
     }
+    m_panesPolled = true;
 }
 
+// Claude Code and Codex send the same hook format. Codex adds an Interrupt
+// event, names its file edits apply_patch and has no Notification event.
 void AppController::onHookEvent(const QJsonObject &p)
 {
     const int idx = checkoutForPath(canonical(p.value(QStringLiteral("cwd")).toString()));
@@ -488,14 +601,29 @@ void AppController::onHookEvent(const QJsonObject &p)
         a.files.clear();
         a.lastTool.clear();
     }
+    a.hooksSeen = true;
+    a.lastHookAt = now;
+    if (const QString model = p.value(QStringLiteral("model")).toString(); !model.isEmpty()) {
+        a.model = model;
+    }
     const QString tool = p.value(QStringLiteral("tool_name")).toString();
     const QJsonObject input = p.value(QStringLiteral("tool_input")).toObject();
+    const bool asks = ev == QLatin1String("PreToolUse") || ev == QLatin1String("PermissionRequest");
 
     if (ev == QLatin1String("SessionStart")) {
         setAgentState(idx, QStringLiteral("ready"));
     } else if (ev == QLatin1String("UserPromptSubmit")) {
         a.lastMessage.clear();
         setAgentState(idx, QStringLiteral("working"));
+    } else if (asks && isQuestionTool(tool)) {
+        a.questionTitle = QStringLiteral("Has a question for you");
+        a.lastMessage = questionText(input);
+        setAgentState(idx, QStringLiteral("question"));
+    } else if (asks && tool == QLatin1String("ExitPlanMode")) {
+        // The plan prompt's options are not allow/always/deny; read it in the terminal.
+        a.questionTitle = QStringLiteral("Has a plan for you to review");
+        a.lastMessage = describeInput(tool, input, c.cfg.path);
+        setAgentState(idx, QStringLiteral("question"));
     } else if (ev == QLatin1String("PreToolUse")) {
         // A later PreToolUse means any earlier permission prompt was answered.
         a.lastTool = tool + QStringLiteral("(") + describeInput(tool, input, c.cfg.path) + QStringLiteral(")");
@@ -503,7 +631,10 @@ void AppController::onHookEvent(const QJsonObject &p)
     } else if (ev == QLatin1String("PermissionRequest")) {
         a.permTool = tool;
         a.permDetail = describeInput(tool, input, c.cfg.path);
-        a.permCanAlways = !p.value(QStringLiteral("permission_suggestions")).toArray().isEmpty();
+        // Codex offers "approve for this session" on every prompt; Claude Code
+        // offers "always" only when it has a rule to suggest.
+        a.permCanAlways = profile(idx).kind == QLatin1String("codex")
+            || !p.value(QStringLiteral("permission_suggestions")).toArray().isEmpty();
         setAgentState(idx, QStringLiteral("permission"));
     } else if (ev == QLatin1String("PostToolUse") || ev == QLatin1String("PostToolUseFailure")) {
         ++a.tools;
@@ -512,25 +643,32 @@ void AppController::onHookEvent(const QJsonObject &p)
                 || tool == QLatin1String("NotebookEdit"))) {
             a.files.insert(input.value(QStringLiteral("file_path")).toString());
         }
-        if (tool == QLatin1String("Bash") && touchesPr(input.value(QStringLiteral("command")).toString())) {
+        if (tool == QLatin1String("apply_patch")) {
+            for (const QString &f : patchFiles(input)) {
+                a.files.insert(f);
+            }
+        }
+        if (tool == QLatin1String("Bash") && touchesPr(commandText(input.value(QStringLiteral("command"))))) {
             m_prs->refresh(c.cfg.name, 2000);
         }
         setAgentState(idx, QStringLiteral("working"));
     } else if (ev == QLatin1String("Notification")) {
         const QString type = p.value(QStringLiteral("notification_type")).toString();
         const QString message = p.value(QStringLiteral("message")).toString();
+        const bool waiting = a.state == QLatin1String("permission") || a.state == QLatin1String("question");
         if (type == QLatin1String("permission_prompt")) {
-            if (a.state != QLatin1String("permission")) {
+            if (!waiting) {
                 a.permTool.clear();
                 a.permDetail = message;
                 a.permCanAlways = false;
                 setAgentState(idx, QStringLiteral("permission"));
             }
         } else if (type == QLatin1String("elicitation_dialog")) {
+            a.questionTitle = QStringLiteral("Has a question for you");
             a.lastMessage = message;
             setAgentState(idx, QStringLiteral("question"));
         } else if (type == QLatin1String("idle_prompt")) {
-            if (a.state != QLatin1String("permission") && a.state != QLatin1String("question")) {
+            if (!waiting) {
                 setAgentState(idx, QStringLiteral("done"));
             }
         }
@@ -538,7 +676,7 @@ void AppController::onHookEvent(const QJsonObject &p)
         a.lastMessage = p.value(QStringLiteral("last_assistant_message")).toString();
         setAgentState(idx, QStringLiteral("done"));
         m_prs->refresh(c.cfg.name, 1000);
-    } else if (ev == QLatin1String("SessionEnd")) {
+    } else if (ev == QLatin1String("Interrupt") || ev == QLatin1String("SessionEnd")) {
         setAgentState(idx, QStringLiteral("ready"));
     }
 
@@ -560,12 +698,31 @@ void AppController::setAgentState(int index, const QString &state)
         a.permTool.clear();
         a.permDetail.clear();
     }
+    if (state == QLatin1String("offline")) {
+        a.model.clear();
+    }
     publishCheckouts();
     publishAttention();
     if (index == m_current) {
         Q_EMIT currentChanged();
     }
     Q_EMIT agentStateChanged(index);
+}
+
+void AppController::useProfile(int index, const QString &id)
+{
+    AgentInfo &a = m_checkouts[index].agent;
+    const QString resolved = m_config.agent(id).id;
+    if (a.profile == resolved) {
+        return;
+    }
+    a.profile = resolved;
+    QSettings().setValue(QStringLiteral("agents/") + m_checkouts.at(index).cfg.name, resolved);
+    publishCheckouts();
+    publishAttention();
+    if (index == m_current) {
+        Q_EMIT currentChanged();
+    }
 }
 
 void AppController::onPr(const QString &key, const PrInfo &info)
@@ -604,6 +761,7 @@ void AppController::publishCheckouts()
             {QStringLiteral("ticket"), c.ticket.isEmpty() ? c.git.branch : c.ticket},
             {QStringLiteral("branch"), c.git.branch},
             {QStringLiteral("agentState"), c.agent.state},
+            {QStringLiteral("agentLabel"), profile(i).label},
             {QStringLiteral("healthText"), total ? QStringLiteral("%1/%2").arg(up).arg(total) : QStringLiteral("down")},
             {QStringLiteral("healthState"), total == 0 ? QStringLiteral("down") : (worst >= 3 ? QStringLiteral("bad") : (worst > 0 ? QStringLiteral("warn") : QStringLiteral("ok")))},
             {QStringLiteral("selected"), i == m_current},
@@ -644,6 +802,7 @@ void AppController::publishAttention()
     for (int i = 0; i < m_checkouts.size(); ++i) {
         const Checkout &c = m_checkouts.at(i);
         const AgentInfo &a = c.agent;
+        const AgentProfile &agent = profile(i);
         auto make = [&](const QString &id, const QString &kind, const QString &title, const QString &detail, const QDateTime &since,
                         bool dismissable) {
             const QDateTime s = since.isValid() ? since : now;
@@ -659,7 +818,9 @@ void AppController::publishAttention()
                                {QStringLiteral("since"), s.toMSecsSinceEpoch()},
                                {QStringLiteral("canAlways"), a.permCanAlways},
                                {QStringLiteral("dismissable"), dismissable},
-                               {QStringLiteral("prUrl"), viewableUrl(c.pr)}};
+                               {QStringLiteral("prUrl"), viewableUrl(c.pr)},
+                               {QStringLiteral("prPrompt"), agent.prPrompt},
+                               {QStringLiteral("agentLabel"), agent.label}};
         };
         const QString agentId = QStringLiteral("agent:") + c.cfg.name;
         if (a.state == QLatin1String("permission")) {
@@ -667,7 +828,7 @@ void AppController::publishAttention()
                                   a.permTool.isEmpty() ? a.permDetail : a.permTool + QStringLiteral("(") + a.permDetail + QStringLiteral(")"), a.since, false),
                           a.since});
         } else if (a.state == QLatin1String("question")) {
-            items.append({1, make(agentId, QStringLiteral("question"), QStringLiteral("Has a question for you"), a.lastMessage, a.since, false), a.since});
+            items.append({1, make(agentId, QStringLiteral("question"), a.questionTitle, a.lastMessage, a.since, false), a.since});
         } else if (a.state == QLatin1String("done")) {
             QString msg = a.lastMessage.simplified();
             if (msg.size() > 280) {
@@ -743,7 +904,7 @@ void AppController::toggleRail()
 
 void AppController::runQuick(int index)
 {
-    if (index < 0 || index >= m_config.quickCommands.size()) {
+    if (index < 0 || index >= m_config.quickCommands.size() || m_current >= m_checkouts.size()) {
         return;
     }
     const QuickCommand &q = m_config.quickCommands.at(index);
@@ -752,6 +913,9 @@ void AppController::runQuick(int index)
 
 void AppController::runCompose(const QString &which)
 {
+    if (m_current >= m_checkouts.size()) {
+        return;
+    }
     const QString cmd = which == QLatin1String("up") ? m_config.composeUp
         : which == QLatin1String("down")             ? m_config.composeDown
                                                      : m_config.composeRestart;
@@ -769,6 +933,9 @@ void AppController::openLink(int index)
 
 void AppController::serviceAction(int row, const QString &action)
 {
+    if (m_current >= m_checkouts.size()) {
+        return;
+    }
     const Checkout &c = m_checkouts.at(m_current);
     if (row < 0 || row >= c.services.size()) {
         return;
@@ -822,9 +989,10 @@ void AppController::attentionAction(const QString &id, const QString &action)
 
     if (kind == QLatin1String("permission")) {
         const QString &session = m_checkouts.at(idx).session;
-        const QString key = action == QLatin1String("allow") ? m_config.allowKey
-            : action == QLatin1String("always")              ? m_config.alwaysKey
-                                                             : m_config.denyKey;
+        const AgentProfile &p = profile(idx);
+        const QString key = action == QLatin1String("allow") ? p.allowKey
+            : action == QLatin1String("always")              ? p.alwaysKey
+                                                             : p.denyKey;
         m_tmux->sendKeys(session, {key});
         // Clear the card now; hook events confirm the new state moments later.
         setAgentState(idx, action == QLatin1String("deny") ? QStringLiteral("ready") : QStringLiteral("working"));
@@ -847,29 +1015,43 @@ void AppController::attentionAction(const QString &id, const QString &action)
 bool AppController::ensureAgentSession(int index)
 {
     const Checkout &c = m_checkouts.at(index);
-    return m_tmux->ensureSession(c.session, c.cfg.path, m_config.autostartAgents ? m_config.agentCommand : QString());
+    return m_tmux->ensureSession(c.session, c.cfg.path, m_config.autostartAgents ? profile(index).launchLine(false) : QString());
 }
 
 void AppController::sendToAgent(const QString &text)
 {
-    const QString &session = m_checkouts.at(m_current).session;
-    m_tmux->sendKeys(session, {text}, true);
-    m_tmux->sendKeys(session, {QStringLiteral("Enter")});
+    if (m_current >= m_checkouts.size()) {
+        return;
+    }
+    m_tmux->submit(m_checkouts.at(m_current).session, text, profile(m_current).submitDelayMs);
     Q_EMIT focusAgentTerminal(m_current);
 }
 
 void AppController::agentAction(const QString &action)
 {
+    if (m_current >= m_checkouts.size()) {
+        return;
+    }
     const Checkout &c = m_checkouts.at(m_current);
     if (action == QLatin1String("interrupt")) {
         m_tmux->sendKeys(c.session, {QStringLiteral("Escape")});
+        // Claude Code sends no hook event for an interrupt.
+        if (c.agent.state == QLatin1String("working")) {
+            setAgentState(m_current, QStringLiteral("ready"));
+        }
     } else if (action == QLatin1String("start") || action == QLatin1String("continue")) {
-        ensureAgentSession(m_current);
-        const QString cmd = action == QLatin1String("continue") ? m_config.agentCommand + QStringLiteral(" --continue") : m_config.agentCommand;
-        m_tmux->sendKeys(c.session, {cmd}, true);
-        m_tmux->sendKeys(c.session, {QStringLiteral("Enter")});
+        // No autostart here: the line typed below starts the agent.
+        m_tmux->ensureSession(c.session, c.cfg.path, QString());
+        m_tmux->submit(c.session, profile(m_current).launchLine(action == QLatin1String("continue")));
     }
     Q_EMIT focusAgentTerminal(m_current);
+}
+
+void AppController::setAgentProfile(const QString &id)
+{
+    if (m_current < m_checkouts.size() && !m_checkouts.at(m_current).agent.running) {
+        useProfile(m_current, id);
+    }
 }
 
 void AppController::editConfig()

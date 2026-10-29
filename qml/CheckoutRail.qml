@@ -34,6 +34,7 @@ Rectangle {
             required property string offsetLabel
             required property string ticket
             required property string agentState
+            required property string agentLabel
             required property string healthText
             required property string healthState
             required property bool selected
@@ -87,12 +88,26 @@ Rectangle {
                         font.family: t.mono; font.pixelSize: 11
                     }
                 }
-                Text {
-                    width: parent.width
-                    text: card.ticket || "—"
-                    elide: Text.ElideRight
-                    color: t.soft
-                    font.family: t.mono; font.pixelSize: 12
+                Item {
+                    width: parent.width; height: ticketText.implicitHeight
+                    Text {
+                        id: ticketText
+                        anchors.left: parent.left
+                        anchors.right: agentText.left
+                        anchors.rightMargin: 8
+                        text: card.ticket || "—"
+                        elide: Text.ElideRight
+                        color: t.soft
+                        font.family: t.mono; font.pixelSize: 12
+                    }
+                    Text {
+                        id: agentText
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: card.agentLabel
+                        color: t.dim
+                        font.family: t.sans; font.pixelSize: 11
+                    }
                 }
                 Flow {
                     width: parent.width

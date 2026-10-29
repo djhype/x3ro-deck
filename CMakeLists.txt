@@ -42,7 +42,7 @@ target_link_libraries(x3ro-deck PRIVATE
     KF6::GlobalAccel KF6::DBusAddons KF6::WindowSystem
 )
 
-# The hook runs on every Claude Code tool call, so it is plain C++ with no Qt
+# The hook runs on every agent tool call, so it is plain C++ with no Qt
 # dependency: it starts in about a millisecond and never blocks the agent.
 add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
 target_compile_options(x3ro-deck-hook PRIVATE -Wall -Wextra -O2)

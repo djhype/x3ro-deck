@@ -1,7 +1,7 @@
 [Global]
 IconName=x3ro-deck
-Name=Example Control
-Comment=Claude Code agents and Docker services
+Name=X3RO Deck
+Comment=Coding agents and Docker services
 
 [Event/needsYou]
 Name=Agent needs you

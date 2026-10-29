@@ -15,9 +15,14 @@
 #include <QVariantMap>
 
 struct AgentInfo {
+    QString profile; // AgentProfile::id
     // offline | ready | working | permission | question | done
     QString state = QStringLiteral("offline");
     bool running = false;
+    QDateTime runningSince;
+    bool hooksSeen = false; // a hook event arrived since the agent process started
+    QDateTime lastHookAt;
+    QString model;
     QString sessionId;
     QDateTime startedAt;
     QDateTime since; // when `state` was entered
@@ -25,6 +30,7 @@ struct AgentInfo {
     QSet<QString> files;
     QString lastTool;
     QString lastMessage;
+    QString questionTitle;
     QString permTool;
     QString permDetail;
     bool permCanAlways = false;
@@ -61,6 +67,7 @@ class AppController : public QObject
     Q_PROPERTY(QString tab READ tab NOTIFY tabChanged)
     Q_PROPERTY(QVariantMap current READ current NOTIFY currentChanged)
     Q_PROPERTY(QVariantList quickCommands READ quickCommands CONSTANT)
+    Q_PROPERTY(QVariantList agents READ agentProfiles CONSTANT)
     Q_PROPERTY(QVariantList links READ links NOTIFY currentChanged)
     Q_PROPERTY(int containersUp READ containersUp NOTIFY totalsChanged)
     Q_PROPERTY(int containersTotal READ containersTotal NOTIFY totalsChanged)
@@ -81,6 +88,7 @@ public:
     QString tab() const { return m_tab; }
     QVariantMap current() const;
     QVariantList quickCommands() const;
+    QVariantList agentProfiles() const;
     QVariantList links() const;
     int containersUp() const;
     int containersTotal() const;
@@ -96,6 +104,7 @@ public:
     const Config &config() const { return m_config; }
     int checkoutCount() const { return static_cast<int>(m_checkouts.size()); }
     const Checkout &checkout(int i) const { return m_checkouts.at(i); }
+    const AgentProfile &profile(int i) const { return m_config.agent(m_checkouts.at(i).agent.profile); }
     TmuxManager *tmux() const { return m_tmux; }
 
     // The window reports whether container stats are on screen, so sampling stops when hidden.
@@ -111,6 +120,8 @@ public:
     Q_INVOKABLE void attentionAction(const QString &id, const QString &action);
     Q_INVOKABLE void sendToAgent(const QString &text);
     Q_INVOKABLE void agentAction(const QString &action);
+    // Picks the current checkout's agent profile; ignored while an agent runs there.
+    Q_INVOKABLE void setAgentProfile(const QString &id);
     Q_INVOKABLE void editConfig();
     // -1 means the current checkout.
     Q_INVOKABLE void openPr(int index = -1);
@@ -140,6 +151,7 @@ private:
 
     int checkoutForPath(const QString &path) const;
     void setAgentState(int index, const QString &state);
+    void useProfile(int index, const QString &id);
     void rebuildServices(int index);
     void publishCheckouts();
     void publishServices();
@@ -169,4 +181,5 @@ private:
     QSet<QString> m_raised;    // attention keys already announced
     QTimer m_statsTimer;
     bool m_statsVisible = false;
+    bool m_panesPolled = false;
 };

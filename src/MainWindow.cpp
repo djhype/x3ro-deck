@@ -35,7 +35,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     , m_app(app)
     , m_engine(new QQmlEngine(this))
 {
-    setWindowTitle(QStringLiteral("Example Control"));
+    setWindowTitle(QStringLiteral("X3RO Deck"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("x3ro-deck"), QIcon(QStringLiteral(":/data/icons/x3ro-deck.svg"))));
     resize(1600, 980);
 
@@ -145,7 +145,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
         if (m_tray) {
             const int n = m_app->needsYou();
             m_tray->setStatus(n > 0 ? KStatusNotifierItem::NeedsAttention : KStatusNotifierItem::Active);
-            m_tray->setToolTip(QStringLiteral("utilities-terminal"), QStringLiteral("Example Control"),
+            m_tray->setToolTip(QStringLiteral("utilities-terminal"), QStringLiteral("X3RO Deck"),
                                n > 0 ? QStringLiteral("%1 item(s) need you").arg(n) : QStringLiteral("All quiet"));
         }
     });
@@ -154,8 +154,8 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
         saveLayout();
     });
 
-    // Agent sessions start with the app, like `agent-sessions` did; the
-    // terminals that attach to them load on first view.
+    // Agent sessions start with the app; the terminals that attach to them
+    // load on first view.
     for (int i = 0; i < m_app->checkoutCount(); ++i) {
         m_app->ensureAgentSession(i);
     }
@@ -207,7 +207,7 @@ void MainWindow::buildShortcuts()
     add(QKeySequence(Qt::CTRL | Qt::Key_Q), [] { qApp->quit(); });
     TerminalHost::setAppShortcuts(keys);
 
-    auto *toggle = new QAction(QStringLiteral("Show/hide Example Control"), this);
+    auto *toggle = new QAction(QStringLiteral("Show/hide X3RO Deck"), this);
     toggle->setObjectName(QStringLiteral("toggle-window"));
     connect(toggle, &QAction::triggered, this, &MainWindow::toggleVisible);
     KGlobalAccel::setGlobalShortcut(toggle, QKeySequence(Qt::META | Qt::ALT | Qt::Key_H));
@@ -218,7 +218,7 @@ void MainWindow::buildTray()
     m_tray = new KStatusNotifierItem(QStringLiteral("x3ro-deck"), this);
     m_tray->setIconByName(QStringLiteral("x3ro-deck"));
     m_tray->setAttentionIconByName(QStringLiteral("dialog-warning"));
-    m_tray->setTitle(QStringLiteral("Example Control"));
+    m_tray->setTitle(QStringLiteral("X3RO Deck"));
     m_tray->setCategory(KStatusNotifierItem::ApplicationStatus);
     m_tray->setStatus(KStatusNotifierItem::Active);
     m_tray->setStandardActionsEnabled(true);
@@ -434,7 +434,10 @@ void MainWindow::notify(const QVariantMap &item)
     }
     const QString id = item.value(QStringLiteral("id")).toString();
     auto *n = new KNotification(kind == QLatin1String("docker") ? QStringLiteral("containerIssue") : QStringLiteral("needsYou"));
-    n->setTitle(QStringLiteral("%1 · %2").arg(item.value(QStringLiteral("checkoutName")).toString(), item.value(QStringLiteral("title")).toString()));
+    const QString who = kind == QLatin1String("docker")
+        ? item.value(QStringLiteral("checkoutName")).toString()
+        : QStringLiteral("%1 · %2").arg(item.value(QStringLiteral("checkoutName")).toString(), item.value(QStringLiteral("agentLabel")).toString());
+    n->setTitle(QStringLiteral("%1 · %2").arg(who, item.value(QStringLiteral("title")).toString()));
     n->setText(item.value(QStringLiteral("detail")).toString().toHtmlEscaped());
     n->setIconName(QStringLiteral("x3ro-deck"));
     if (kind == QLatin1String("permission")) {

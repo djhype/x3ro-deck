@@ -69,6 +69,8 @@ Rectangle {
             required property bool canAlways
             required property bool dismissable
             required property string prUrl
+            required property string prPrompt
+            required property string agentLabel
 
             readonly property color accent: kind === "permission" || kind === "question" ? t.amber
                                           : kind === "docker" ? t.pink : t.magenta
@@ -98,7 +100,7 @@ Rectangle {
                             color: card.checkoutColors[card.checkout % card.checkoutColors.length]
                         }
                         Text {
-                            text: card.checkoutName + (card.kind === "docker" ? "  · docker" : "")
+                            text: card.checkoutName + "  · " + (card.kind === "docker" ? "docker" : card.agentLabel)
                             color: t.text
                             font.family: t.sans; font.pixelSize: 13
                         }
@@ -155,10 +157,10 @@ Rectangle {
                     NeonButton { visible: card.kind === "docker"; text: "Tail logs"; onClicked: app.attentionAction(card.itemId, "logs") }
 
                     // done / question
-                    NeonButton { visible: card.kind === "done"; text: card.prUrl ? "View PR" : "/create-pr"; mono: !card.prUrl; variant: "outline"; accent: t.magenta
+                    NeonButton { visible: card.kind === "done" && !!(card.prUrl || card.prPrompt); text: card.prUrl ? "View PR" : card.prPrompt; mono: !card.prUrl; variant: "outline"; accent: t.magenta
                         onClicked: {
                             if (card.prUrl) { app.openPr(card.checkout); return }
-                            app.select(card.checkout); app.sendToAgent("/create-pr")
+                            app.select(card.checkout); app.sendToAgent(card.prPrompt)
                         } }
 
                     NeonButton { text: "Open →"; variant: card.kind === "question" ? "outline" : "ghost"; accent: t.amber; onClicked: app.attentionAction(card.itemId, "open") }

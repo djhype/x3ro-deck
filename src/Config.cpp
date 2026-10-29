@@ -20,53 +20,139 @@ QString expandHome(QString path)
     return canonical.isEmpty() ? info.absoluteFilePath() : canonical;
 }
 
-QJsonObject defaults()
+// What each agent CLI needs by default; a profile overrides any of these keys.
+QJsonObject kindDefaults(const QString &kind)
 {
-    auto checkout = [](const char *name, int offset) {
-        return QJsonObject{{QStringLiteral("name"), QLatin1String(name)},
-                           {QStringLiteral("path"), QStringLiteral("~/Development/") + QLatin1String(name)},
-                           {QStringLiteral("portOffset"), offset}};
-    };
-    auto cmd = [](const char *label, const char *command, const char *group) {
-        return QJsonObject{{QStringLiteral("label"), QLatin1String(label)},
-                           {QStringLiteral("command"), QLatin1String(command)},
-                           {QStringLiteral("group"), QLatin1String(group)}};
-    };
-    auto link = [](const char *label, const char *service, int port) {
-        return QJsonObject{{QStringLiteral("label"), QLatin1String(label)},
-                           {QStringLiteral("service"), QLatin1String(service)},
-                           {QStringLiteral("containerPort"), port}};
-    };
+    if (kind == QLatin1String("codex")) {
+        return QJsonObject{
+            {QStringLiteral("command"), QStringLiteral("codex")},
+            {QStringLiteral("continueArgs"), QStringLiteral("resume --last")},
+            {QStringLiteral("process"), QStringLiteral("codex")},
+            // y approves once, a approves for the rest of the session, Esc declines.
+            {QStringLiteral("permissionKeys"),
+             QJsonObject{{QStringLiteral("allow"), QStringLiteral("y")},
+                         {QStringLiteral("always"), QStringLiteral("a")},
+                         {QStringLiteral("deny"), QStringLiteral("Escape")}}},
+            {QStringLiteral("prPrompt"), QString()},
+            {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/review")}},
+            // Codex reads fast typed input as a paste and turns an Enter that
+            // arrives within 120 ms of it into a newline instead of a submit.
+            {QStringLiteral("submitDelayMs"), 300},
+        };
+    }
     return QJsonObject{
-        {QStringLiteral("checkouts"), QJsonArray{checkout("example", 0), checkout("example-2", 10000), checkout("example-3", 20000)}},
-        {QStringLiteral("quickCommands"),
-         QJsonArray{cmd("Check", "make check", "check"),
-                    cmd("Unit tests", "make test-unit", "check"),
-                    cmd("Integration", "make test-integration-affected", "check"),
-                    cmd("Type-check", "make type-check", "check"),
-                    cmd("Sync env", "make sync-env", "env"),
-                    cmd("Leapp up", "make leapp-up", "env"),
-                    cmd("DB migrate", "make db-migrate", "data"),
-                    cmd("Service logs", "make services-logs", "data")}},
-        {QStringLiteral("links"),
-         QJsonArray{link("windmill", "windmill-server", 8000),
-                    link("maildev", "maildev", 1080),
-                    link("minio console", "minio", 9001),
-                    link("verdaccio", "verdaccio", 4873)}},
-        {QStringLiteral("agentCommand"), QStringLiteral("claude")},
-        {QStringLiteral("konsoleProfile"), QString()},
-        {QStringLiteral("composeUp"), QStringLiteral("make services-up")},
-        {QStringLiteral("composeDown"), QStringLiteral("make services-down")},
-        {QStringLiteral("composeRestart"), QStringLiteral("make services-down && make services-up")},
+        {QStringLiteral("command"), QStringLiteral("claude")},
+        {QStringLiteral("continueArgs"), QStringLiteral("--continue")},
+        {QStringLiteral("process"), QStringLiteral("claude")},
         {QStringLiteral("permissionKeys"),
          QJsonObject{{QStringLiteral("allow"), QStringLiteral("1")},
                      {QStringLiteral("always"), QStringLiteral("2")},
                      {QStringLiteral("deny"), QStringLiteral("Escape")}}},
+        {QStringLiteral("prPrompt"), QStringLiteral("/create-pr")},
+        {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/full-review")}},
+        {QStringLiteral("submitDelayMs"), 0},
+    };
+}
+
+QJsonArray defaultAgents()
+{
+    auto agent = [](const char *id, const char *label, const char *kind) {
+        return QJsonObject{{QStringLiteral("id"), QLatin1String(id)},
+                           {QStringLiteral("label"), QLatin1String(label)},
+                           {QStringLiteral("kind"), QLatin1String(kind)}};
+    };
+    // A model on a local server, through Claude Code's Anthropic-compatible
+    // client. ANTHROPIC_AUTH_TOKEN must stay set: without it Claude Code would
+    // send the claude.ai login to the server. `local connect` prints the
+    // values for a running server.
+    const QString localModel = QStringLiteral("local-model");
+    QJsonObject local = agent("local", "Local", "claude");
+    local.insert(QStringLiteral("env"),
+                QJsonObject{{QStringLiteral("ANTHROPIC_BASE_URL"), QStringLiteral("http://localhost:8080")},
+                            {QStringLiteral("ANTHROPIC_AUTH_TOKEN"), QStringLiteral("local")},
+                            {QStringLiteral("ANTHROPIC_MODEL"), localModel},
+                            {QStringLiteral("ANTHROPIC_DEFAULT_OPUS_MODEL"), localModel},
+                            {QStringLiteral("ANTHROPIC_DEFAULT_SONNET_MODEL"), localModel},
+                            {QStringLiteral("ANTHROPIC_DEFAULT_HAIKU_MODEL"), localModel}});
+    return QJsonArray{agent("claude", "Claude", "claude"), agent("codex", "Codex", "codex"), local};
+}
+
+QJsonObject defaults()
+{
+    return QJsonObject{
+        {QStringLiteral("checkouts"), QJsonArray{}},
+        {QStringLiteral("quickCommands"), QJsonArray{}},
+        {QStringLiteral("links"), QJsonArray{}},
+        {QStringLiteral("agents"), defaultAgents()},
+        {QStringLiteral("defaultAgent"), QStringLiteral("claude")},
+        {QStringLiteral("konsoleProfile"), QString()},
+        {QStringLiteral("composeUp"), QStringLiteral("docker compose up -d")},
+        {QStringLiteral("composeDown"), QStringLiteral("docker compose down")},
+        {QStringLiteral("composeRestart"), QStringLiteral("docker compose restart")},
         {QStringLiteral("notifyOnDone"), true},
         {QStringLiteral("autostartAgents"), true},
     };
 }
+
+AgentProfile parseAgent(const QJsonObject &user)
+{
+    const QString kind = user.value(QStringLiteral("kind")).toString(QStringLiteral("claude"));
+    QJsonObject o = kindDefaults(kind);
+    for (auto it = user.begin(); it != user.end(); ++it) {
+        o.insert(it.key(), it.value());
+    }
+    AgentProfile p;
+    p.kind = kind == QLatin1String("codex") ? kind : QStringLiteral("claude");
+    p.id = o.value(QStringLiteral("id")).toString(p.kind);
+    p.label = o.value(QStringLiteral("label")).toString(p.id);
+    p.command = o.value(QStringLiteral("command")).toString();
+    p.continueArgs = o.value(QStringLiteral("continueArgs")).toString();
+    p.process = o.value(QStringLiteral("process")).toString();
+    const QJsonObject env = o.value(QStringLiteral("env")).toObject();
+    for (auto it = env.begin(); it != env.end(); ++it) {
+        p.env.append({it.key(), it.value().toString()});
+    }
+    const QJsonObject keys = o.value(QStringLiteral("permissionKeys")).toObject();
+    p.allowKey = keys.value(QStringLiteral("allow")).toString();
+    p.alwaysKey = keys.value(QStringLiteral("always")).toString();
+    p.denyKey = keys.value(QStringLiteral("deny")).toString();
+    p.prPrompt = o.value(QStringLiteral("prPrompt")).toString();
+    for (const QJsonValue &v : o.value(QStringLiteral("prompts")).toArray()) {
+        p.prompts.append(v.toString());
+    }
+    p.submitDelayMs = o.value(QStringLiteral("submitDelayMs")).toInt();
+    return p;
+}
 } // namespace
+
+QString AgentProfile::launchLine(bool resume) const
+{
+    QStringList parts;
+    for (const auto &[name, value] : env) {
+        QString quoted = value;
+        quoted.replace(QLatin1Char('\\'), QStringLiteral("\\\\"))
+            .replace(QLatin1Char('"'), QStringLiteral("\\\""))
+            .replace(QLatin1Char('`'), QStringLiteral("\\`"));
+        parts.append(name + QStringLiteral("=\"") + quoted + QLatin1Char('"'));
+    }
+    parts.append(command);
+    if (resume && !continueArgs.isEmpty()) {
+        parts.append(continueArgs);
+    }
+    return parts.join(QLatin1Char(' '));
+}
+
+const AgentProfile &Config::agent(const QString &id) const
+{
+    for (const QString &want : {id, defaultAgent}) {
+        for (const AgentProfile &p : agents) {
+            if (p.id == want) {
+                return p;
+            }
+        }
+    }
+    return agents.first();
+}
 
 QString Config::configDir()
 {
@@ -108,6 +194,7 @@ Config Config::load(QString *error)
         cc.name = o.value(QStringLiteral("name")).toString();
         cc.path = expandHome(o.value(QStringLiteral("path")).toString());
         cc.portOffset = o.value(QStringLiteral("portOffset")).toInt();
+        cc.agent = o.value(QStringLiteral("agent")).toString();
         if (!cc.name.isEmpty()) {
             c.checkouts.append(cc);
         }
@@ -124,15 +211,21 @@ Config Config::load(QString *error)
                         o.value(QStringLiteral("service")).toString(),
                         o.value(QStringLiteral("containerPort")).toInt()});
     }
-    c.agentCommand = root.value(QStringLiteral("agentCommand")).toString(c.agentCommand);
+    for (const QJsonValue &v : root.value(QStringLiteral("agents")).toArray()) {
+        if (v.isObject()) {
+            c.agents.append(parseAgent(v.toObject()));
+        }
+    }
+    if (c.agents.isEmpty()) {
+        for (const QJsonValue &v : defaultAgents()) {
+            c.agents.append(parseAgent(v.toObject()));
+        }
+    }
+    c.defaultAgent = root.value(QStringLiteral("defaultAgent")).toString(c.agents.first().id);
     c.konsoleProfile = root.value(QStringLiteral("konsoleProfile")).toString();
     c.composeUp = root.value(QStringLiteral("composeUp")).toString(c.composeUp);
     c.composeDown = root.value(QStringLiteral("composeDown")).toString(c.composeDown);
     c.composeRestart = root.value(QStringLiteral("composeRestart")).toString(c.composeRestart);
-    const QJsonObject keys = root.value(QStringLiteral("permissionKeys")).toObject();
-    c.allowKey = keys.value(QStringLiteral("allow")).toString(c.allowKey);
-    c.alwaysKey = keys.value(QStringLiteral("always")).toString(c.alwaysKey);
-    c.denyKey = keys.value(QStringLiteral("deny")).toString(c.denyKey);
     c.notifyOnDone = root.value(QStringLiteral("notifyOnDone")).toBool(true);
     c.autostartAgents = root.value(QStringLiteral("autostartAgents")).toBool(true);
     return c;

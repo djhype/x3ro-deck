@@ -66,9 +66,8 @@ bool TmuxManager::ensureSession(const QString &name, const QString &dir, const Q
     }
     if (!startCommand.isEmpty()) {
         // Typed into the shell rather than passed as the session command, so the
-        // shell survives the agent exiting and `claude --continue` is one keystroke away.
-        sendKeys(name, {startCommand}, true);
-        sendKeys(name, {QStringLiteral("Enter")});
+        // shell survives the agent exiting and resuming it is one keystroke away.
+        submit(name, startCommand);
     }
     return true;
 }
@@ -86,6 +85,21 @@ void TmuxManager::sendKeys(const QString &name, const QStringList &keys, bool li
     }
     args << keys;
     QProcess::startDetached(QStringLiteral("tmux"), args);
+}
+
+void TmuxManager::submit(const QString &name, const QString &text, int enterDelayMs)
+{
+    if (enterDelayMs > 0) {
+        sendKeys(name, {text}, true);
+        QTimer::singleShot(enterDelayMs, this, [this, name] { sendKeys(name, {QStringLiteral("Enter")}); });
+        return;
+    }
+    // One tmux invocation, so Enter cannot overtake the text.
+    const QString target = QLatin1Char('=') + name + QLatin1Char(':');
+    QProcess::startDetached(QStringLiteral("tmux"),
+                            baseArgs() << QStringLiteral("send-keys") << QStringLiteral("-t") << target << QStringLiteral("-l") << text
+                                       << QStringLiteral(";") << QStringLiteral("send-keys") << QStringLiteral("-t") << target
+                                       << QStringLiteral("Enter"));
 }
 
 void TmuxManager::startPolling(int intervalMs)

@@ -1,10 +1,12 @@
-// x3ro-deck-hook — Claude Code hook that forwards the hook payload to x3ro-deck.
+// x3ro-deck-hook — agent hook that forwards the hook payload to x3ro-deck.
 //
-// Reads the hook JSON from stdin and writes it, unchanged, to the x3ro-deck
-// Unix socket ($XDG_RUNTIME_DIR/x3ro-deck.sock). One connection carries one
-// event; closing the connection marks the end of the payload.
+// Claude Code (~/.claude/settings.json) and Codex (~/.codex/hooks.json) both
+// run it with the same Claude-style JSON on stdin. It writes that JSON,
+// unchanged, to the x3ro-deck Unix socket ($XDG_RUNTIME_DIR/x3ro-deck.sock).
+// One connection carries one event; closing the connection marks the end of
+// the payload.
 //
-// It always exits 0 and prints nothing, so Claude Code treats it as a no-op
+// It always exits 0 and prints nothing, so either agent treats it as a no-op
 // hook whether or not x3ro-deck is running.
 
 #include <cerrno>

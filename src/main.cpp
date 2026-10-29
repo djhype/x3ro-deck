@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("x3ro-deck"));
-    QApplication::setApplicationDisplayName(QStringLiteral("Example Control"));
+    QApplication::setApplicationDisplayName(QStringLiteral("X3RO Deck"));
     QApplication::setOrganizationDomain(QStringLiteral("x3ro.dev"));
     QApplication::setOrganizationName(QStringLiteral("x3ro-deck")); // QSettings → ~/.config/x3ro-deck/x3ro-deck.conf
     QApplication::setDesktopFileName(QStringLiteral("x3ro-deck"));

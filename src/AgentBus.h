@@ -5,8 +5,9 @@
 
 class QLocalServer;
 
-// Receives Claude Code hook payloads forwarded by x3ro-deck-hook over
-// $XDG_RUNTIME_DIR/x3ro-deck.sock. One connection carries one JSON payload.
+// Receives agent hook payloads (Claude Code and Codex share one format)
+// forwarded by x3ro-deck-hook over $XDG_RUNTIME_DIR/x3ro-deck.sock. One
+// connection carries one JSON payload.
 class AgentBus : public QObject
 {
     Q_OBJECT
