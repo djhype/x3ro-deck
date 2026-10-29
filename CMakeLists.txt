@@ -49,7 +49,10 @@ add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
 target_compile_options(x3ro-deck-hook PRIVATE -Wall -Wextra -O2)
 
 install(TARGETS x3ro-deck x3ro-deck-hook RUNTIME DESTINATION bin)
-install(FILES data/x3ro-deck.desktop DESTINATION share/applications)
+# Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually
+# comes from a shell rc file that only terminals read.
+configure_file(data/x3ro-deck.desktop.in x3ro-deck.desktop @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/x3ro-deck.desktop DESTINATION share/applications)
 install(FILES data/x3ro-deck.notifyrc DESTINATION share/knotifications6)
 install(FILES data/icons/x3ro-deck.svg DESTINATION share/icons/hicolor/scalable/apps)
 foreach(size 16 22 24 32 48 64 128 256 512)

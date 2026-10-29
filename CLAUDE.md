@@ -6,7 +6,7 @@ Qt 6 / KF6 desktop app (C++20, Widgets + QML panels) for running coding agents a
 
 - `cmake -S . -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local`: configure. Plain CMake, without extra-cmake-modules.
 - `cmake --build build`: build both targets. The build must stay warning-free.
-- `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file, notifyrc and hicolor icons.
+- `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file, notifyrc and hicolor icons. The desktop file comes from `data/x3ro-deck.desktop.in` with an absolute `Exec`, because Plasma's session PATH lacks `~/.local/bin`.
 - `kbuildsycoca6`: refresh KDE's caches after changing the desktop file or icons.
 
 There is no test suite. Verify changes with a headless screenshot (see Workflow).
