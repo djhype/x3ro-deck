@@ -46,15 +46,16 @@ QStringList TmuxManager::baseArgs() const
     return {QStringLiteral("-L"), socketName(), QStringLiteral("-f"), m_configPath};
 }
 
-bool TmuxManager::ensureSession(const QString &name, const QString &dir, const QString &startCommand)
+bool TmuxManager::hasSession(const QString &name) const
 {
     QProcess has;
     has.start(QStringLiteral("tmux"), baseArgs() << QStringLiteral("has-session") << QStringLiteral("-t") << (QLatin1Char('=') + name));
     has.waitForFinished(2000);
-    if (has.exitStatus() == QProcess::NormalExit && has.exitCode() == 0) {
-        return true;
-    }
+    return has.exitStatus() == QProcess::NormalExit && has.exitCode() == 0;
+}
 
+bool TmuxManager::createSession(const QString &name, const QString &dir, const QString &startCommand)
+{
     QProcess create;
     create.start(QStringLiteral("tmux"),
                  baseArgs() << QStringLiteral("new-session") << QStringLiteral("-d") << QStringLiteral("-s") << name << QStringLiteral("-c") << dir
@@ -70,6 +71,43 @@ bool TmuxManager::ensureSession(const QString &name, const QString &dir, const Q
         submit(name, startCommand);
     }
     return true;
+}
+
+bool TmuxManager::ensureSession(const QString &name, const QString &dir, const QString &startCommand)
+{
+    return hasSession(name) || createSession(name, dir, startCommand);
+}
+
+QStringList TmuxManager::sessionsIn(const QString &dir) const
+{
+    QProcess list;
+    list.start(QStringLiteral("tmux"),
+               baseArgs() << QStringLiteral("list-sessions") << QStringLiteral("-F") << QStringLiteral("#{session_path}\t#{session_name}"));
+    list.waitForFinished(2000);
+    QStringList out;
+    for (const QString &line : QString::fromUtf8(list.readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        if (line.section(QLatin1Char('\t'), 0, 0) == dir) {
+            out.append(line.section(QLatin1Char('\t'), 1));
+        }
+    }
+    return out;
+}
+
+bool TmuxManager::renameSession(const QString &from, const QString &to)
+{
+    QProcess rename;
+    rename.start(QStringLiteral("tmux"),
+                 baseArgs() << QStringLiteral("rename-session") << QStringLiteral("-t") << (QLatin1Char('=') + from) << to);
+    rename.waitForFinished(2000);
+    return rename.exitStatus() == QProcess::NormalExit && rename.exitCode() == 0;
+}
+
+void TmuxManager::killServer()
+{
+    m_poll.stop();
+    QProcess kill;
+    kill.start(QStringLiteral("tmux"), baseArgs() << QStringLiteral("kill-server"));
+    kill.waitForFinished(3000);
 }
 
 QStringList TmuxManager::attachArgs(const QString &name) const

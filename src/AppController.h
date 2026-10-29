@@ -66,15 +66,15 @@ class AppController : public QObject
     Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentChanged)
     Q_PROPERTY(QString tab READ tab NOTIFY tabChanged)
     Q_PROPERTY(QVariantMap current READ current NOTIFY currentChanged)
-    Q_PROPERTY(QVariantList quickCommands READ quickCommands CONSTANT)
-    Q_PROPERTY(QVariantList agents READ agentProfiles CONSTANT)
+    Q_PROPERTY(QVariantList quickCommands READ quickCommands NOTIFY configChanged)
+    Q_PROPERTY(QVariantList agents READ agentProfiles NOTIFY configChanged)
     Q_PROPERTY(QVariantList links READ links NOTIFY currentChanged)
     Q_PROPERTY(int containersUp READ containersUp NOTIFY totalsChanged)
     Q_PROPERTY(int containersTotal READ containersTotal NOTIFY totalsChanged)
     Q_PROPERTY(int needsYou READ needsYou NOTIFY totalsChanged)
     Q_PROPERTY(bool dockerConnected READ dockerConnected NOTIFY totalsChanged)
     Q_PROPERTY(bool railVisible READ railVisible NOTIFY railVisibleChanged)
-    Q_PROPERTY(QString configError READ configError CONSTANT)
+    Q_PROPERTY(QString configError READ configError NOTIFY configChanged)
     Q_PROPERTY(VariantListModel *checkouts READ checkoutModel CONSTANT)
     Q_PROPERTY(VariantListModel *services READ serviceModel CONSTANT)
     Q_PROPERTY(VariantListModel *attention READ attentionModel CONSTANT)
@@ -122,13 +122,18 @@ public:
     Q_INVOKABLE void agentAction(const QString &action);
     // Picks the current checkout's agent profile; ignored while an agent runs there.
     Q_INVOKABLE void setAgentProfile(const QString &id);
-    Q_INVOKABLE void editConfig();
+    // Opens the settings dialog on `page` (checkouts, agents, docker or general).
+    Q_INVOKABLE void openSettings(const QString &page = QString());
     // -1 means the current checkout.
     Q_INVOKABLE void openPr(int index = -1);
     Q_INVOKABLE void refreshPr();
 
-    // Makes sure the checkout's tmux session exists; the first creation starts the agent.
+    // Makes sure the checkout's tmux session exists. Creating it switches to
+    // the checkout's configured agent and, with autostartAgents, starts it.
     bool ensureAgentSession(int index);
+    // Re-reads config.json and applies what can change at runtime. Returns
+    // false when the checkout list changed, which takes a restart.
+    bool reloadConfig();
 
 Q_SIGNALS:
     void currentChanged();
@@ -139,6 +144,8 @@ Q_SIGNALS:
     void focusAgentTerminal(int checkout);
     void attentionRaised(const QVariantMap &item);
     void agentStateChanged(int checkout);
+    void configChanged();
+    void settingsRequested(const QString &page);
 
 private:
     void sampleStats();

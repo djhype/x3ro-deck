@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AppController.h"
+#include "SettingsDialog.h"
 #include "TerminalHost.h"
 
 #include <KGlobalAccel>
@@ -11,8 +12,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDesktopServices>
 #include <QFile>
 #include <QMenu>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickWidget>
@@ -23,12 +27,22 @@
 #include <QTabWidget>
 #include <QTimer>
 #include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace
 {
 const QStringList kShells{QStringLiteral("zsh"), QStringLiteral("bash"), QStringLiteral("fish"), QStringLiteral("sh")};
+
+QString stateText(const QString &state)
+{
+    if (state == QLatin1String("working")) return QStringLiteral("working");
+    if (state == QLatin1String("permission")) return QStringLiteral("needs permission");
+    if (state == QLatin1String("question")) return QStringLiteral("has a question");
+    if (state == QLatin1String("done")) return QStringLiteral("done, waiting for you");
+    return QStringLiteral("ready");
 }
+} // namespace
 
 MainWindow::MainWindow(AppController *app, QWidget *parent)
     : QMainWindow(parent)
@@ -141,6 +155,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     });
     connect(m_app, &AppController::attentionRaised, this, &MainWindow::notify);
     connect(m_app, &AppController::railVisibleChanged, this, [this] { m_rail->setVisible(m_app->railVisible()); });
+    connect(m_app, &AppController::settingsRequested, this, &MainWindow::openSettings);
     connect(m_app, &AppController::totalsChanged, this, [this] {
         if (m_tray) {
             const int n = m_app->needsYou();
@@ -204,7 +219,7 @@ void MainWindow::buildShortcuts()
             m_app->attentionAction(m_app->attentionModel()->row(0).value(QStringLiteral("id")).toString(), QStringLiteral("open"));
         }
     });
-    add(QKeySequence(Qt::CTRL | Qt::Key_Q), [] { qApp->quit(); });
+    add(QKeySequence(Qt::CTRL | Qt::Key_Q), [this] { confirmQuit(); });
     TerminalHost::setAppShortcuts(keys);
 
     auto *toggle = new QAction(QStringLiteral("Show/hide X3RO Deck"), this);
@@ -223,6 +238,107 @@ void MainWindow::buildTray()
     m_tray->setStatus(KStatusNotifierItem::Active);
     m_tray->setStandardActionsEnabled(true);
     connect(m_tray, &KStatusNotifierItem::activateRequested, this, [this](bool, const QPoint &) { toggleVisible(); });
+    connect(m_tray, &KStatusNotifierItem::quitRequested, this, [this] {
+        m_tray->abortQuit();
+        QTimer::singleShot(0, this, &MainWindow::confirmQuit);
+    });
+}
+
+void MainWindow::confirmQuit()
+{
+    if (m_confirmingQuit) {
+        return;
+    }
+    m_confirmingQuit = true;
+    QStringList running;
+    for (int i = 0; i < m_app->checkoutCount(); ++i) {
+        const Checkout &c = m_app->checkout(i);
+        if (c.agent.running) {
+            running.append(QStringLiteral("• %1 · %2, %3").arg(c.cfg.name, m_app->profile(i).label, stateText(c.agent.state)));
+        }
+    }
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Question);
+    box.setWindowTitle(QStringLiteral("Quit X3RO Deck"));
+    box.setText(QStringLiteral("Stop the agents too?"));
+    box.setInformativeText(
+        (running.isEmpty() ? QStringLiteral("No agent is running.") : QStringLiteral("Running now:\n") + running.join(QLatin1Char('\n')))
+        + QStringLiteral("\n\nStopping shuts down X3RO Deck's tmux server and every session on it, so the next launch starts "
+                         "each checkout's agent fresh. Kept agents carry on, and the next launch reattaches to them."));
+    QPushButton *stop = box.addButton(QStringLiteral("Stop agents and quit"), QMessageBox::DestructiveRole);
+    QPushButton *keep = box.addButton(QStringLiteral("Quit, keep agents"), QMessageBox::AcceptRole);
+    box.setEscapeButton(box.addButton(QMessageBox::Cancel));
+    box.setDefaultButton(keep);
+    box.exec();
+    m_confirmingQuit = false;
+    if (box.clickedButton() != stop && box.clickedButton() != keep) {
+        return;
+    }
+    // Set before the tmux clients exit, so no terminal recreates its session.
+    m_quitting = true;
+    if (box.clickedButton() == stop) {
+        m_app->tmux()->killServer();
+    }
+    qApp->quit();
+}
+
+void MainWindow::restart()
+{
+    m_restart = true;
+    m_quitting = true;
+    qApp->quit();
+}
+
+void MainWindow::openSettings(const QString &page)
+{
+    if (m_settings) {
+        m_settings->showPage(page);
+        m_settings->raise();
+        m_settings->activateWindow();
+        return;
+    }
+    QString error;
+    const QJsonObject config = Config::readJson(&error);
+    if (!error.isEmpty()) {
+        // Saving the form over a file it could not parse would lose the file's contents.
+        if (QMessageBox::warning(this, QStringLiteral("Settings"), error + QStringLiteral("\n\nFix the file in a text editor first."),
+                                 QMessageBox::Open | QMessageBox::Cancel, QMessageBox::Open)
+            == QMessageBox::Open) {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(Config::configPath()));
+        }
+        return;
+    }
+    reveal();
+    auto *dialog = new SettingsDialog(config, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->showPage(page);
+    connect(dialog, &QDialog::accepted, this, [this, dialog] { applySettings(dialog->config()); });
+    m_settings = dialog;
+    dialog->open();
+}
+
+void MainWindow::applySettings(const QJsonObject &config)
+{
+    QString error;
+    if (!Config::writeJson(config, &error)) {
+        QMessageBox::warning(this, QStringLiteral("Settings"), QStringLiteral("Could not save the settings.\n\n%1").arg(error));
+        return;
+    }
+    if (m_app->reloadConfig()) {
+        return;
+    }
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Question);
+    box.setWindowTitle(QStringLiteral("Restart X3RO Deck"));
+    box.setText(QStringLiteral("The checkout list changed. It takes effect when X3RO Deck restarts."));
+    box.setInformativeText(QStringLiteral("Agents keep running in tmux through the restart. Shell tabs close."));
+    QPushButton *now = box.addButton(QStringLiteral("Restart now"), QMessageBox::AcceptRole);
+    box.addButton(QStringLiteral("Later"), QMessageBox::RejectRole);
+    box.setDefaultButton(now);
+    box.exec();
+    if (box.clickedButton() == now) {
+        restart();
+    }
 }
 
 void MainWindow::toggleVisible()

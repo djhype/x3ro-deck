@@ -6,6 +6,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 namespace
@@ -18,40 +20,6 @@ QString expandHome(QString path)
     QFileInfo info(path);
     const QString canonical = info.canonicalFilePath();
     return canonical.isEmpty() ? info.absoluteFilePath() : canonical;
-}
-
-// What each agent CLI needs by default; a profile overrides any of these keys.
-QJsonObject kindDefaults(const QString &kind)
-{
-    if (kind == QLatin1String("codex")) {
-        return QJsonObject{
-            {QStringLiteral("command"), QStringLiteral("codex")},
-            {QStringLiteral("continueArgs"), QStringLiteral("resume --last")},
-            {QStringLiteral("process"), QStringLiteral("codex")},
-            // y approves once, a approves for the rest of the session, Esc declines.
-            {QStringLiteral("permissionKeys"),
-             QJsonObject{{QStringLiteral("allow"), QStringLiteral("y")},
-                         {QStringLiteral("always"), QStringLiteral("a")},
-                         {QStringLiteral("deny"), QStringLiteral("Escape")}}},
-            {QStringLiteral("prPrompt"), QString()},
-            {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/review")}},
-            // Codex reads fast typed input as a paste and turns an Enter that
-            // arrives within 120 ms of it into a newline instead of a submit.
-            {QStringLiteral("submitDelayMs"), 300},
-        };
-    }
-    return QJsonObject{
-        {QStringLiteral("command"), QStringLiteral("claude")},
-        {QStringLiteral("continueArgs"), QStringLiteral("--continue")},
-        {QStringLiteral("process"), QStringLiteral("claude")},
-        {QStringLiteral("permissionKeys"),
-         QJsonObject{{QStringLiteral("allow"), QStringLiteral("1")},
-                     {QStringLiteral("always"), QStringLiteral("2")},
-                     {QStringLiteral("deny"), QStringLiteral("Escape")}}},
-        {QStringLiteral("prPrompt"), QStringLiteral("/create-pr")},
-        {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/full-review")}},
-        {QStringLiteral("submitDelayMs"), 0},
-    };
 }
 
 QJsonArray defaultAgents()
@@ -94,20 +62,35 @@ QJsonObject defaults()
     };
 }
 
+// "FOO=1 aider --model x" → "aider"
+QString programName(const QString &command)
+{
+    static const QRegularExpression assignment(QStringLiteral(R"(^[A-Za-z_][A-Za-z0-9_]*=)"));
+    for (const QString &word : command.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+        if (!assignment.match(word).hasMatch()) {
+            return QFileInfo(word).fileName();
+        }
+    }
+    return {};
+}
+
 AgentProfile parseAgent(const QJsonObject &user)
 {
     const QString kind = user.value(QStringLiteral("kind")).toString(QStringLiteral("claude"));
-    QJsonObject o = kindDefaults(kind);
+    QJsonObject o = Config::kindDefaults(kind);
     for (auto it = user.begin(); it != user.end(); ++it) {
         o.insert(it.key(), it.value());
     }
     AgentProfile p;
-    p.kind = kind == QLatin1String("codex") ? kind : QStringLiteral("claude");
+    p.kind = kind == QLatin1String("codex") || kind == QLatin1String("custom") ? kind : QStringLiteral("claude");
     p.id = o.value(QStringLiteral("id")).toString(p.kind);
     p.label = o.value(QStringLiteral("label")).toString(p.id);
     p.command = o.value(QStringLiteral("command")).toString();
     p.continueArgs = o.value(QStringLiteral("continueArgs")).toString();
     p.process = o.value(QStringLiteral("process")).toString();
+    if (p.process.isEmpty() && p.kind == QLatin1String("custom")) {
+        p.process = programName(p.command);
+    }
     const QJsonObject env = o.value(QStringLiteral("env")).toObject();
     for (auto it = env.begin(); it != env.end(); ++it) {
         p.env.append({it.key(), it.value().toString()});
@@ -142,6 +125,49 @@ QString AgentProfile::launchLine(bool resume) const
     return parts.join(QLatin1Char(' '));
 }
 
+QJsonObject Config::kindDefaults(const QString &kind)
+{
+    if (kind == QLatin1String("codex")) {
+        return QJsonObject{
+            {QStringLiteral("command"), QStringLiteral("codex")},
+            {QStringLiteral("continueArgs"), QStringLiteral("resume --last")},
+            {QStringLiteral("process"), QStringLiteral("codex")},
+            // y approves once, a approves for the rest of the session, Esc declines.
+            {QStringLiteral("permissionKeys"),
+             QJsonObject{{QStringLiteral("allow"), QStringLiteral("y")},
+                         {QStringLiteral("always"), QStringLiteral("a")},
+                         {QStringLiteral("deny"), QStringLiteral("Escape")}}},
+            {QStringLiteral("prPrompt"), QString()},
+            {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/review")}},
+            // Codex reads fast typed input as a paste and turns an Enter that
+            // arrives within 120 ms of it into a newline instead of a submit.
+            {QStringLiteral("submitDelayMs"), 300},
+        };
+    }
+    if (kind == QLatin1String("custom")) {
+        return QJsonObject{
+            {QStringLiteral("command"), QString()},
+            {QStringLiteral("continueArgs"), QString()},
+            {QStringLiteral("process"), QString()},
+            {QStringLiteral("prPrompt"), QString()},
+            {QStringLiteral("prompts"), QJsonArray{}},
+            {QStringLiteral("submitDelayMs"), 0},
+        };
+    }
+    return QJsonObject{
+        {QStringLiteral("command"), QStringLiteral("claude")},
+        {QStringLiteral("continueArgs"), QStringLiteral("--continue")},
+        {QStringLiteral("process"), QStringLiteral("claude")},
+        {QStringLiteral("permissionKeys"),
+         QJsonObject{{QStringLiteral("allow"), QStringLiteral("1")},
+                     {QStringLiteral("always"), QStringLiteral("2")},
+                     {QStringLiteral("deny"), QStringLiteral("Escape")}}},
+        {QStringLiteral("prPrompt"), QStringLiteral("/create-pr")},
+        {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/full-review")}},
+        {QStringLiteral("submitDelayMs"), 0},
+    };
+}
+
 const AgentProfile &Config::agent(const QString &id) const
 {
     for (const QString &want : {id, defaultAgent}) {
@@ -164,7 +190,7 @@ QString Config::configPath()
     return configDir() + QStringLiteral("/config.json");
 }
 
-Config Config::load(QString *error)
+QJsonObject Config::readJson(QString *error)
 {
     QDir().mkpath(configDir());
     QFile file(configPath());
@@ -186,7 +212,24 @@ Config Config::load(QString *error)
             *error = QStringLiteral("%1: %2 — using defaults").arg(configPath(), parseError.errorString());
         }
     }
+    return root;
+}
 
+bool Config::writeJson(const QJsonObject &root, QString *error)
+{
+    QSaveFile file(configPath());
+    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) >= 0 && file.commit()) {
+        return true;
+    }
+    if (error) {
+        *error = QStringLiteral("%1: %2").arg(configPath(), file.errorString());
+    }
+    return false;
+}
+
+Config Config::load(QString *error)
+{
+    const QJsonObject root = readJson(error);
     Config c;
     for (const QJsonValue &v : root.value(QStringLiteral("checkouts")).toArray()) {
         const QJsonObject o = v.toObject();

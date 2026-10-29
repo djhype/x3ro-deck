@@ -19,8 +19,15 @@ public:
     static QString socketName() { return QStringLiteral("x3ro-deck"); }
     QString configPath() const { return m_configPath; }
 
-    // Creates the session if it does not exist. A new session starts `startCommand`.
+    bool hasSession(const QString &name) const;
+    // A new session starts `startCommand`.
+    bool createSession(const QString &name, const QString &dir, const QString &startCommand);
     bool ensureSession(const QString &name, const QString &dir, const QString &startCommand);
+    // Sessions started in `dir`, whatever their name.
+    QStringList sessionsIn(const QString &dir) const;
+    bool renameSession(const QString &from, const QString &to);
+    // Ends every session on our socket, and the agents in them.
+    void killServer();
     QStringList attachArgs(const QString &name) const;
     // `keys` are tmux key names (Enter, Escape, …) unless `literal` is set.
     void sendKeys(const QString &name, const QStringList &keys, bool literal = false);

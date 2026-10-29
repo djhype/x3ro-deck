@@ -16,7 +16,7 @@ find_package(KF6Parts REQUIRED)
 find_package(KF6CoreAddons REQUIRED)
 find_package(KF6XmlGui REQUIRED)
 find_package(KF6Notifications REQUIRED)
-find_package(KF6StatusNotifierItem REQUIRED)
+find_package(KF6StatusNotifierItem 6.5 REQUIRED) # quitRequested/abortQuit
 find_package(KF6GlobalAccel REQUIRED)
 find_package(KF6DBusAddons REQUIRED)
 find_package(KF6WindowSystem REQUIRED)
@@ -33,6 +33,7 @@ add_executable(x3ro-deck
     src/AppController.cpp
     src/TerminalHost.cpp
     src/MainWindow.cpp
+    src/SettingsDialog.cpp
     resources.qrc
 )
 target_compile_options(x3ro-deck PRIVATE -Wall -Wextra)

@@ -11,6 +11,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <utility>
 
 namespace
 {
@@ -151,6 +152,9 @@ QString permissionTitle(const QString &tool)
 // Shown while an agent runs but none of its hook events have arrived.
 QString hookHint(const QString &kind)
 {
+    if (kind == QLatin1String("custom")) {
+        return {};
+    }
     if (kind == QLatin1String("codex")) {
         return QStringLiteral("No hook events from Codex yet. Codex runs a new hook only after you trust it: type /hooks in "
                               "Codex and trust x3ro-deck-hook.");
@@ -212,7 +216,8 @@ AppController::AppController(QObject *parent)
     , m_serviceModel(new VariantListModel(kServiceRoles, this))
     , m_attention(new VariantListModel(kAttentionRoles, this))
 {
-    // The last profile picked for a checkout wins over its configured default.
+    // A session that survived a restart runs the profile last picked for it;
+    // ensureAgentSession() switches a fresh one to the configured agent.
     QSettings settings;
     for (const CheckoutConfig &cc : std::as_const(m_config.checkouts)) {
         Checkout c;
@@ -1015,7 +1020,48 @@ void AppController::attentionAction(const QString &id, const QString &action)
 bool AppController::ensureAgentSession(int index)
 {
     const Checkout &c = m_checkouts.at(index);
-    return m_tmux->ensureSession(c.session, c.cfg.path, m_config.autostartAgents ? profile(index).launchLine(false) : QString());
+    if (m_tmux->hasSession(c.session)) {
+        return true;
+    }
+    // A renamed checkout takes over the session it had under its old name.
+    for (const QString &old : m_tmux->sessionsIn(c.cfg.path)) {
+        const bool ours = std::any_of(m_checkouts.cbegin(), m_checkouts.cend(), [&old](const Checkout &o) { return o.session == old; });
+        if (!ours && m_tmux->renameSession(old, c.session)) {
+            return true;
+        }
+    }
+    useProfile(index, c.cfg.agent);
+    return m_tmux->createSession(c.session, c.cfg.path, m_config.autostartAgents ? profile(index).launchLine(false) : QString());
+}
+
+bool AppController::reloadConfig()
+{
+    QString error;
+    Config next = Config::load(&error);
+    m_configError = error;
+    bool sameCheckouts = next.checkouts.size() == m_checkouts.size();
+    for (int i = 0; sameCheckouts && i < m_checkouts.size(); ++i) {
+        sameCheckouts = next.checkouts.at(i).name == m_checkouts.at(i).cfg.name && next.checkouts.at(i).path == m_checkouts.at(i).cfg.path;
+    }
+    const Config prev = std::exchange(m_config, next);
+    for (int i = 0; i < m_checkouts.size(); ++i) {
+        Checkout &c = m_checkouts[i];
+        const QString configuredBefore = prev.agent(c.cfg.agent).id;
+        for (const CheckoutConfig &cc : std::as_const(m_config.checkouts)) {
+            if (cc.name == c.cfg.name && cc.path == c.cfg.path) {
+                c.cfg = cc;
+            }
+        }
+        // A changed agent applies now unless one is running. Re-resolving the
+        // current pick also covers a profile that was removed.
+        const QString configured = m_config.agent(c.cfg.agent).id;
+        useProfile(i, !c.agent.running && configured != configuredBefore ? configured : QString(c.agent.profile));
+    }
+    publishCheckouts();
+    publishAttention();
+    Q_EMIT configChanged();
+    Q_EMIT currentChanged();
+    return sameCheckouts;
 }
 
 void AppController::sendToAgent(const QString &text)
@@ -1054,9 +1100,9 @@ void AppController::setAgentProfile(const QString &id)
     }
 }
 
-void AppController::editConfig()
+void AppController::openSettings(const QString &page)
 {
-    QDesktopServices::openUrl(QUrl::fromLocalFile(Config::configPath()));
+    Q_EMIT settingsRequested(page);
 }
 
 void AppController::openPr(int index)

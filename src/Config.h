@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QList>
 #include <QPair>
 #include <QString>
@@ -27,14 +28,16 @@ struct LinkConfig {
 // One way to run an agent. `kind` names the CLI it drives ("claude" or
 // "codex"), which fixes the hook dialect, prompt keys and resume flags; a
 // profile can point that CLI at another backend through `env`, which is how a
-// local model (a model on a local server, say) runs under Claude Code or Codex.
+// local model (a model on a local server, say) runs under Claude Code or Codex. Kind
+// "custom" runs any other command; it sends no hooks, so only the pane poll
+// tracks it.
 struct AgentProfile {
     QString id;
     QString label;
     QString kind;
     QString command;      // typed into the checkout's tmux shell
     QString continueArgs; // appended to `command` to resume the latest conversation
-    QString process;      // tmux's pane_current_command while the agent runs
+    QString process;      // tmux's pane_current_command while the agent runs; a custom command's first word by default
     QList<QPair<QString, QString>> env;
     QString allowKey;
     QString alwaysKey;
@@ -68,4 +71,10 @@ struct Config {
     static QString configPath();
     // Loads ~/.config/x3ro-deck/config.json, writing the defaults first if it is missing.
     static Config load(QString *error = nullptr);
+    // The same file as JSON, with defaults for missing top-level keys. On a
+    // parse error it returns the defaults and sets `error`.
+    static QJsonObject readJson(QString *error = nullptr);
+    static bool writeJson(const QJsonObject &root, QString *error = nullptr);
+    // The keys a profile of this kind has unless it overrides them.
+    static QJsonObject kindDefaults(const QString &kind);
 };

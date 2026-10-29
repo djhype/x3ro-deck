@@ -13,18 +13,23 @@ There is no test suite. Verify changes with a headless screenshot (see Workflow)
 
 # Architecture
 
-- `src/main.cpp`: app setup and `KDBusService` Unique (a second launch raises the first window). Dev flags: `--tab <docker|agents>`, `--select N`, `--screenshot <file> [delayMs]`.
+- `src/main.cpp`: app setup and `KDBusService` Unique (a second launch raises the first window). It relaunches the binary after `MainWindow::restart()`. Dev flags: `--tab <docker|agents>`, `--select N`, `--settings [checkouts|agents|docker|general]`, `--screenshot <file> [delayMs]`. The screenshot captures an open dialog instead of the window.
 - `src/AppController.{h,cpp}`: the only state owner. The context property `app` exposes it to QML through Q_PROPERTYs, `VariantListModel`s and Q_INVOKABLEs.
   - Each checkout runs one agent at a time in one tmux session. `AgentInfo::profile` names its `AgentProfile`; the pick persists in QSettings under `agents/<checkout>`.
+  - A session that survives a restart keeps that pick. `ensureAgentSession` switches a freshly created session to the checkout's configured agent, and a renamed checkout takes over its old session, matched by path.
+  - `reloadConfig` applies saved settings while running. A changed checkout list (names, paths or order) takes a restart.
   - `onHookEvent` maps hook payloads to the agent state machine: `offline | ready | working | permission | question | done`.
   - `publishAttention` builds the NEEDS YOU items. Priority order: permission, question, docker, done.
   - Each hook payload's `cwd` is matched to a checkout by longest canonical path prefix.
 - `src/Config.{h,cpp}`: `~/.config/x3ro-deck/config.json`, written with defaults on first run. User keys override defaults at the top level.
-  - `agents` is an ordered list of `AgentProfile`s. `kind` (`claude` or `codex`) selects `kindDefaults`: command, resume args, process name, permission keys, prompt buttons and submit delay. Profile keys override them.
+  - `agents` is an ordered list of `AgentProfile`s. `kind` (`claude`, `codex` or `custom`) selects `kindDefaults`: command, resume args, process name, permission keys, prompt buttons and submit delay. Profile keys override them.
+  - `custom` runs any CLI. It sends no hooks, so only the pane poll tracks it, and its `process` defaults to the command's first word.
   - `env` makes a profile run its CLI against another backend. `launchLine` types it as `KEY="value"` prefixes, so `$VAR` expands in the session shell.
-  - A checkout's `agent` key sets its initial profile; `defaultAgent` covers the rest.
+  - A checkout's `agent` key names the profile a fresh session starts; `defaultAgent` covers the rest.
+- `src/SettingsDialog.cpp`: the Settings dialog, a Widgets form over `config.json`. It edits the JSON itself, so keys without a field survive a save, and it leaves profile keys at their kind's defaults out of the file. `data/style.qss` styles it under `SettingsDialog` and `QMessageBox` selectors.
 - `src/MainWindow.cpp`: builds the widget layout with `QSplitter`s and one `QQuickWidget` per QML panel; all panels share one `QQmlEngine`.
   - It also owns the terminals, shortcuts, the tray icon and `KNotification`s.
+  - Ctrl+Q and the tray's Quit go through `confirmQuit`, which offers to stop the agents by killing the tmux server.
   - Layout state persists in `~/.config/x3ro-deck/x3ro-deck.conf`.
 - `src/TerminalHost.cpp`: embeds Konsole via `konsolepart` (`KParts::PartLoader`), so terminals use the user's Konsole profile.
 - `src/TmuxManager.cpp`: agents run in tmux on socket `-L x3ro-deck`, with config `~/.config/x3ro-deck/tmux.conf`. `ensureSession` only creates sessions that are missing, so agents survive app restarts. `submit` types text and presses Enter in one tmux call, or after a delay.
@@ -46,7 +51,7 @@ There is no test suite. Verify changes with a headless screenshot (see Workflow)
 # Workflow
 
 - QML is compiled into the binary through `resources.qrc`, so rebuild before every screenshot.
-- Run a headless screenshot after every UI change and inspect the PNG:
+- Run a headless screenshot after every UI change and inspect the PNG. Add `--settings <page>` to capture the Settings dialog.
   ```
   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1 \
     dbus-run-session -- ./build/x3ro-deck --tab agents --select 0 --screenshot out.png 9000
@@ -54,9 +59,10 @@ There is no test suite. Verify changes with a headless screenshot (see Workflow)
 - Simulate agents by piping hook JSON into `./build/x3ro-deck-hook` with the test instance's `XDG_RUNTIME_DIR`.
 - IMPORTANT: the user usually has the app running. When testing alongside it:
   - Use `dbus-run-session`. Without it, the test only activates the live window and exits.
-  - Point `XDG_RUNTIME_DIR` at a private 0700 directory with a short path. `AgentBus` removes an existing socket and would take the live app's hooks, and a socket path over 107 bytes fails to bind.
+  - Point `XDG_RUNTIME_DIR` at a private 0700 directory with a short path, such as `/run/user/1000/xdt`. `AgentBus` removes an existing socket and would take the live app's hooks, and a socket path over 107 bytes fails to bind.
+  - Point `TMUX_TMPDIR` at the same directory. The test instance then runs its own `-L x3ro-deck` tmux server, which is safe to kill.
   - Point `XDG_CONFIG_HOME` at a temporary directory containing `{"autostartAgents": false}` in `x3ro-deck/config.json`, and set `GH_CONFIG_DIR=$HOME/.config/gh` so `gh` stays authenticated.
-  - The test instance still attaches to the live `-L x3ro-deck` tmux server. NEVER run `tmux kill-server` or `kill-session` against it, because those sessions hold the user's live agents.
+  - Without `TMUX_TMPDIR`, the test instance attaches to the live `-L x3ro-deck` tmux server. NEVER run `tmux kill-server` or `kill-session` against that server, or choose "Stop agents and quit" in a test instance attached to it, because its sessions hold the user's live agents.
 - QML errors go to journald unless `QT_FORCE_STDERR_LOGGING=1` is set.
 - `cmake --install` succeeds while the app runs. The user restarts the app (Ctrl+Q, then relaunch) to pick up the new binary, and agents keep running in tmux.
 - Edit `~/.claude/settings.json` and `~/.codex/hooks.json` only by merging. Other hooks (for example `agent-notify`) live alongside `x3ro-deck-hook`.

@@ -106,8 +106,8 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 8
         NeonButton {
-            text: "Config"
-            onClicked: app.editConfig()
+            text: "Settings"
+            onClicked: app.openSettings("")
         }
         NeonButton {
             text: app.railVisible ? "Hide rail" : "Needs you ›"

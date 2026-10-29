@@ -145,7 +145,7 @@ Rectangle {
         NeonButton {
             width: parent.width
             text: "Edit checkouts…"
-            onClicked: app.editConfig()
+            onClicked: app.openSettings("checkouts")
         }
     }
 }

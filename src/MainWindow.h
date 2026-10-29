@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QHash>
+#include <QJsonObject>
 #include <QMainWindow>
+#include <QPointer>
 
 class AppController;
 class KStatusNotifierItem;
@@ -10,6 +12,7 @@ class QQuickWidget;
 class QSplitter;
 class QStackedWidget;
 class QTabWidget;
+class SettingsDialog;
 class TerminalHost;
 
 class MainWindow : public QMainWindow
@@ -20,6 +23,10 @@ public:
 
     void toggleVisible();
     void reveal();
+    // checkouts | agents | docker | general; empty opens the first page.
+    void openSettings(const QString &page);
+    // Set when the app quit to start again; main() relaunches it.
+    bool restartRequested() const { return m_restart; }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -40,6 +47,10 @@ private:
     void notify(const QVariantMap &item);
     void updateStatsVisibility();
     void saveLayout();
+    void applySettings(const QJsonObject &config);
+    // Quits after asking whether the agents' tmux server should stop too.
+    void confirmQuit();
+    void restart();
 
     AppController *m_app;
     QQmlEngine *m_engine;
@@ -51,5 +62,8 @@ private:
     QHash<int, QTabWidget *> m_shellTabs;
     QHash<int, TerminalHost *> m_agentTerms;
     KStatusNotifierItem *m_tray = nullptr;
+    QPointer<SettingsDialog> m_settings;
     bool m_quitting = false;
+    bool m_confirmingQuit = false;
+    bool m_restart = false;
 };

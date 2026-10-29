@@ -15,5 +15,7 @@
         <file>data/close.svg</file>
         <file>data/icons/x3ro-deck.svg</file>
         <file>data/close-hover.svg</file>
+        <file>data/chevron-down.svg</file>
+        <file>data/check.svg</file>
     </qresource>
 </RCC>

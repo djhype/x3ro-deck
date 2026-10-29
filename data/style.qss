@@ -78,3 +78,237 @@ QToolButton#newTab:hover {
     background: #1a1a3a;
     color: #ff6ff2;
 }
+
+/* Settings and message boxes, in the QML panels' palette. Scoped by class so
+   the Konsole parts and the system file dialog keep their own look. */
+
+SettingsDialog, QMessageBox {
+    background: #0d0d1f;
+}
+SettingsDialog QLabel, QMessageBox QLabel {
+    color: #c8c8e8;
+    font-family: "Fira Sans";
+    font-size: 13px;
+}
+SettingsDialog QLabel#hint {
+    color: #a0a0c8;
+    font-size: 12px;
+}
+SettingsDialog QLabel#warning {
+    color: #f5a623;
+    font-size: 12px;
+}
+SettingsDialog QLabel#section {
+    color: #a0a0c8;
+    font-size: 11px;
+    font-weight: 600;
+    padding-top: 6px;
+}
+
+SettingsDialog QLineEdit, SettingsDialog QPlainTextEdit, SettingsDialog QComboBox {
+    background: #0a0a16;
+    color: #e6e6f5;
+    border: 1px solid #22224a;
+    border-radius: 7px;
+    padding: 6px 9px;
+    font-family: "Fira Sans";
+    font-size: 13px;
+    selection-background-color: #ff6ff2;
+    selection-color: #1a1a2e;
+}
+SettingsDialog QLineEdit[mono="true"], SettingsDialog QPlainTextEdit[mono="true"] {
+    font-family: "MesloLGS Nerd Font Mono";
+    font-size: 12px;
+}
+SettingsDialog QLineEdit:focus, SettingsDialog QPlainTextEdit:focus, SettingsDialog QComboBox:focus {
+    border-color: #ff6ff2;
+}
+SettingsDialog QLineEdit:disabled, SettingsDialog QPlainTextEdit:disabled, SettingsDialog QComboBox:disabled {
+    color: #6a6a90;
+    border-color: #1a1a3a;
+}
+SettingsDialog QComboBox QLineEdit {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+SettingsDialog QComboBox::drop-down {
+    border: none;
+    width: 26px;
+}
+SettingsDialog QComboBox::down-arrow {
+    image: url(:/data/chevron-down.svg);
+    width: 12px;
+    height: 12px;
+}
+SettingsDialog QComboBox QAbstractItemView {
+    background: #11112a;
+    color: #e6e6f5;
+    border: 1px solid #33335e;
+    padding: 4px;
+    outline: none;
+    selection-background-color: #1c1c44;
+    selection-color: #ff6ff2;
+}
+
+SettingsDialog QPushButton, QMessageBox QPushButton {
+    background: #14142e;
+    color: #e6e6f5;
+    border: 1px solid #22224a;
+    border-radius: 9px;
+    padding: 8px 16px;
+    font-family: "Fira Sans";
+    font-size: 13px;
+}
+SettingsDialog QPushButton:hover, QMessageBox QPushButton:hover {
+    background: #1c1c44;
+    border-color: #33335e;
+}
+SettingsDialog QPushButton:default, QMessageBox QPushButton:default {
+    background: rgba(255, 111, 242, 0.08);
+    color: #ff6ff2;
+    border-color: #ff6ff2;
+    font-weight: 600;
+}
+SettingsDialog QPushButton:default:hover, QMessageBox QPushButton:default:hover {
+    background: rgba(255, 111, 242, 0.18);
+}
+SettingsDialog QPushButton:disabled {
+    color: #4a4a70;
+    border-color: #1a1a3a;
+}
+SettingsDialog QPushButton#small {
+    padding: 5px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+}
+
+SettingsDialog QListWidget, SettingsDialog QTableWidget {
+    background: #11112a;
+    color: #e6e6f5;
+    border: 1px solid #22224a;
+    border-radius: 10px;
+    outline: none;
+    font-family: "Fira Sans";
+    font-size: 13px;
+}
+SettingsDialog QListWidget {
+    padding: 4px;
+}
+SettingsDialog QListWidget::item {
+    padding: 8px 10px;
+    border-radius: 7px;
+}
+SettingsDialog QListWidget::item:selected {
+    background: #1c1c44;
+    color: #ff6ff2;
+}
+SettingsDialog QListWidget::item:hover:!selected {
+    background: #14142e;
+}
+SettingsDialog QTableWidget {
+    font-family: "MesloLGS Nerd Font Mono";
+    font-size: 12px;
+}
+SettingsDialog QTableWidget::item {
+    padding: 0 8px;
+}
+SettingsDialog QTableWidget::item:selected {
+    background: #1c1c44;
+    color: #e6e6f5;
+}
+SettingsDialog QTableWidget QLineEdit {
+    border-radius: 0;
+    padding: 0 6px;
+    font-family: "MesloLGS Nerd Font Mono";
+    font-size: 12px;
+}
+SettingsDialog QTableWidget QComboBox {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0 8px;
+    font-size: 12px;
+}
+SettingsDialog QHeaderView::section {
+    background: #0d0d1f;
+    color: #a0a0c8;
+    border: none;
+    border-bottom: 1px solid #22224a;
+    padding: 6px 8px;
+    font-family: "Fira Sans";
+    font-size: 11px;
+}
+SettingsDialog QTableCornerButton::section {
+    background: #0d0d1f;
+    border: none;
+}
+
+SettingsDialog QCheckBox {
+    color: #e6e6f5;
+    font-family: "Fira Sans";
+    font-size: 13px;
+    spacing: 10px;
+}
+SettingsDialog QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #33335e;
+    border-radius: 4px;
+    background: #0a0a16;
+}
+SettingsDialog QCheckBox::indicator:checked {
+    background: #ff6ff2;
+    border-color: #ff6ff2;
+    image: url(:/data/check.svg);
+}
+
+SettingsDialog QScrollArea, SettingsDialog #scrollContent {
+    background: transparent;
+    border: none;
+}
+SettingsDialog QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+}
+SettingsDialog QScrollBar::handle:vertical {
+    background: #33335e;
+    border-radius: 4px;
+    min-height: 30px;
+    margin: 2px;
+}
+SettingsDialog QScrollBar::add-line, SettingsDialog QScrollBar::sub-line,
+SettingsDialog QScrollBar::add-page, SettingsDialog QScrollBar::sub-page {
+    background: none;
+    height: 0;
+}
+
+QTabWidget#settingsTabs::pane {
+    border: none;
+    border-top: 1px solid #22224a;
+}
+QTabWidget#settingsTabs QTabBar {
+    qproperty-drawBase: 0;
+}
+QTabWidget#settingsTabs QTabBar::tab {
+    background: transparent;
+    color: #a0a0c8;
+    font-family: "Fira Sans";
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 18px;
+    margin: 10px 2px 8px 0;
+    border-radius: 8px;
+    border: none;
+}
+QTabWidget#settingsTabs QTabBar::tab:first {
+    margin-left: 16px;
+}
+QTabWidget#settingsTabs QTabBar::tab:selected {
+    background: #2a1640;
+    color: #ff6ff2;
+}
+QTabWidget#settingsTabs QTabBar::tab:hover:!selected {
+    background: #1c1c44;
+}
