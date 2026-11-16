@@ -87,6 +87,7 @@ private:
     QLineEdit *m_checkoutPath;
     QLabel *m_checkoutPathWarning;
     QLineEdit *m_checkoutOffset;
+    QLineEdit *m_checkoutArgs;
     QComboBox *m_checkoutAgent;
 
     QComboBox *m_defaultAgentBox;

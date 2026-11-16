@@ -381,6 +381,8 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     m_checkoutPathWarning = hint(QString(), "warning");
     m_checkoutOffset = numberEdit(65535);
     m_checkoutAgent = new QComboBox;
+    m_checkoutArgs = lineEdit();
+    m_checkoutArgs->setPlaceholderText(QStringLiteral("--name my-checkout"));
 
     m_checkoutFields = form();
     addField(m_checkoutFields, QStringLiteral("Name"), m_checkoutName, hint(QStringLiteral("Also names the checkout's tmux session.")));
@@ -392,6 +394,9 @@ QWidget *SettingsDialog::buildCheckoutsPage()
              hint(QStringLiteral("Starts whenever X3RO Deck creates the checkout's tmux session: on the first launch, and on "
                                  "every launch after you stopped the agents when quitting. Switching agents in the session "
                                  "panel lasts until then.")));
+    addField(m_checkoutFields, QStringLiteral("Custom args"), m_checkoutArgs,
+             hint(QStringLiteral("Added to the agent's command line. A flag set here replaces the same flag in the agent's command. "
+                                 "Quote values with spaces.")));
     m_checkoutForm = new QWidget;
     auto *formLayout = new QVBoxLayout(m_checkoutForm);
     formLayout->setContentsMargins(0, 0, 0, 0);
@@ -436,6 +441,7 @@ QWidget *SettingsDialog::buildCheckoutsPage()
         }
     });
     connect(m_checkoutOffset, &QLineEdit::textEdited, this, [this](const QString &text) { editCheckout(QStringLiteral("portOffset"), text.toInt()); });
+    connect(m_checkoutArgs, &QLineEdit::textEdited, this, [this](const QString &text) { editCheckout(QStringLiteral("args"), text.trimmed()); });
     connect(m_checkoutAgent, &QComboBox::activated, this, [this](int index) {
         const QString id = m_checkoutAgent->itemData(index).toString();
         if (id != kNewAgent) {
@@ -465,6 +471,7 @@ void SettingsDialog::loadCheckout(int row)
     m_checkoutPath->setText(c.value(QStringLiteral("path")).toString());
     m_checkoutOffset->setText(QString::number(c.value(QStringLiteral("portOffset")).toInt()));
     m_checkoutAgent->setCurrentIndex(std::max(0, m_checkoutAgent->findData(c.value(QStringLiteral("agent")).toString())));
+    m_checkoutArgs->setText(c.value(QStringLiteral("args")).toString());
     m_loading = loading;
     checkPath();
 }
@@ -476,7 +483,7 @@ void SettingsDialog::editCheckout(const QString &key, const QJsonValue &value)
         return;
     }
     // No agent key means the default agent.
-    if (key == QLatin1String("agent") && value.toString().isEmpty()) {
+    if ((key == QLatin1String("agent") || key == QLatin1String("args")) && value.toString().isEmpty()) {
         m_checkouts[row].remove(key);
     } else {
         m_checkouts[row].insert(key, value);

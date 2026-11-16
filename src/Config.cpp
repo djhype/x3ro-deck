@@ -106,9 +106,65 @@ AgentProfile parseAgent(const QJsonObject &user)
     p.submitDelayMs = o.value(QStringLiteral("submitDelayMs")).toInt();
     return p;
 }
+
+// Splits on whitespace outside quotes, keeping each token's raw text so quoting survives.
+QStringList shellTokens(const QString &line)
+{
+    QStringList tokens;
+    QString cur;
+    QChar quote;
+    for (const QChar ch : line) {
+        if (!quote.isNull()) {
+            quote = ch == quote ? QChar() : quote;
+        } else if (ch == QLatin1Char('"') || ch == QLatin1Char('\'')) {
+            quote = ch;
+        } else if (ch.isSpace()) {
+            if (!cur.isEmpty()) {
+                tokens.append(std::exchange(cur, QString()));
+            }
+            continue;
+        }
+        cur.append(ch);
+    }
+    if (!cur.isEmpty()) {
+        tokens.append(cur);
+    }
+    return tokens;
+}
+
+bool isFlag(const QString &token)
+{
+    return token.size() > 1 && token.startsWith(QLatin1Char('-'));
+}
+
+QString flagName(const QString &token)
+{
+    return token.left(token.indexOf(QLatin1Char('=')) < 0 ? -1 : token.indexOf(QLatin1Char('=')));
+}
+
+// Drops every flag of `base` that `extra` also sets, together with its value token.
+QStringList withoutOverridden(const QStringList &base, const QStringList &extra)
+{
+    QSet<QString> names;
+    for (const QString &t : extra) {
+        if (isFlag(t)) {
+            names.insert(flagName(t));
+        }
+    }
+    QStringList kept;
+    for (qsizetype i = 0; i < base.size(); ++i) {
+        if (i > 0 && isFlag(base.at(i)) && names.contains(flagName(base.at(i)))) {
+            const bool hasValue = !base.at(i).contains(QLatin1Char('=')) && i + 1 < base.size() && !isFlag(base.at(i + 1));
+            i += hasValue ? 1 : 0;
+            continue;
+        }
+        kept.append(base.at(i));
+    }
+    return kept;
+}
 } // namespace
 
-QString AgentProfile::launchLine(bool resume) const
+QString AgentProfile::launchLine(bool resume, const QString &extraArgs) const
 {
     QStringList parts;
     for (const auto &[name, value] : env) {
@@ -118,10 +174,12 @@ QString AgentProfile::launchLine(bool resume) const
             .replace(QLatin1Char('`'), QStringLiteral("\\`"));
         parts.append(name + QStringLiteral("=\"") + quoted + QLatin1Char('"'));
     }
-    parts.append(command);
+    QStringList cmd = shellTokens(command);
     if (resume && !continueArgs.isEmpty()) {
-        parts.append(continueArgs);
+        cmd += shellTokens(continueArgs);
     }
+    const QStringList extra = shellTokens(extraArgs);
+    parts += withoutOverridden(cmd, extra) + extra;
     return parts.join(QLatin1Char(' '));
 }
 
@@ -238,6 +296,7 @@ Config Config::load(QString *error)
         cc.path = expandHome(o.value(QStringLiteral("path")).toString());
         cc.portOffset = o.value(QStringLiteral("portOffset")).toInt();
         cc.agent = o.value(QStringLiteral("agent")).toString();
+        cc.args = o.value(QStringLiteral("args")).toString().trimmed();
         if (!cc.name.isEmpty()) {
             c.checkouts.append(cc);
         }

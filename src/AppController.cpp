@@ -1031,7 +1031,7 @@ bool AppController::ensureAgentSession(int index)
         }
     }
     useProfile(index, c.cfg.agent);
-    return m_tmux->createSession(c.session, c.cfg.path, m_config.autostartAgents ? profile(index).launchLine(false) : QString());
+    return m_tmux->createSession(c.session, c.cfg.path, m_config.autostartAgents ? profile(index).launchLine(false, c.cfg.args) : QString());
 }
 
 bool AppController::reloadConfig()
@@ -1088,7 +1088,7 @@ void AppController::agentAction(const QString &action)
     } else if (action == QLatin1String("start") || action == QLatin1String("continue")) {
         // No autostart here: the line typed below starts the agent.
         m_tmux->ensureSession(c.session, c.cfg.path, QString());
-        m_tmux->submit(c.session, profile(m_current).launchLine(action == QLatin1String("continue")));
+        m_tmux->submit(c.session, profile(m_current).launchLine(action == QLatin1String("continue"), c.cfg.args));
     }
     Q_EMIT focusAgentTerminal(m_current);
 }

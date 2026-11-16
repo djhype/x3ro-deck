@@ -11,6 +11,7 @@ struct CheckoutConfig {
     QString path; // absolute, canonical
     int portOffset = 0;
     QString agent; // profile id; empty = Config::defaultAgent
+    QString args;  // shell fragment merged into the agent's command line; wins on flag conflicts
 };
 
 struct QuickCommand {
@@ -48,7 +49,8 @@ struct AgentProfile {
 
     // The shell line that starts (or, with `resume`, continues) the agent.
     // Env values are double-quoted, so `$VAR` expands from the shell.
-    QString launchLine(bool resume) const;
+    // `extraArgs` (a checkout's custom args) replace same-named flags in `command`.
+    QString launchLine(bool resume, const QString &extraArgs = QString()) const;
 };
 
 struct Config {
