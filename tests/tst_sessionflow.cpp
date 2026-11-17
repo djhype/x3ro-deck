@@ -58,7 +58,7 @@ void SessionFlowTest::initTestCase()
              {QStringLiteral("id"), QStringLiteral("fake")},
              {QStringLiteral("kind"), QStringLiteral("custom")},
              {QStringLiteral("command"), QStringLiteral("cat >> ") + m_log},
-             {QStringLiteral("permissionKeys"), QJsonObject{{QStringLiteral("allow"), QStringLiteral("y")}}},
+             {QStringLiteral("permissionKeys"), QJsonObject{{QStringLiteral("allow"), QStringLiteral("Enter")}}},
          }}},
         {QStringLiteral("checkouts"),
          QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("flow")}, {QStringLiteral("path"), m_repo}}}},
@@ -128,10 +128,12 @@ void SessionFlowTest::startPermissionPromptRestartStop()
         app.attentionAction(id, QStringLiteral("allow"));
         QCOMPARE(permissionRows(app), 0);
 
-        // A prompt button types the text and presses Enter; the terminal's
-        // line buffer delivers the earlier key with it.
+        // The allow key is Enter, so it shows up in the log on its own.
+        QTRY_COMPARE_WITH_TIMEOUT(readLog(), QStringLiteral("\n"), 5000);
+
+        // A prompt button types the text and presses Enter.
         app.sendToAgent(QStringLiteral("hello"));
-        QTRY_COMPARE_WITH_TIMEOUT(readLog(), QStringLiteral("yhello\n"), 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(readLog(), QStringLiteral("\nhello\n"), 5000);
     }
 
     // Restart: a new controller finds the session and its agent still running.
@@ -141,7 +143,7 @@ void SessionFlowTest::startPermissionPromptRestartStop()
         QVERIFY(app.sessions()->hasSession(session));
         QTRY_VERIFY_WITH_TIMEOUT(app.checkout(0).agent.running, 10000);
         app.sendToAgent(QStringLiteral("again"));
-        QTRY_COMPARE_WITH_TIMEOUT(readLog(), QStringLiteral("yhello\nagain\n"), 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(readLog(), QStringLiteral("\nhello\nagain\n"), 5000);
 
         // "Stop agents and quit".
         app.sessions()->killAll();
