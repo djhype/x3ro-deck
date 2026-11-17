@@ -8,8 +8,11 @@ Qt 6 / KF6 desktop app (C++20, Widgets + QML panels) for running coding agents a
 - `cmake --build --preset linux`: build both targets. The build must stay warning-free on GCC, Clang and MSVC; `x3ro_deck_set_warnings` in `CMakeLists.txt` picks the flags. Add `-DX3RO_DECK_WERROR=ON` to the configure step to turn warnings into errors (CI does).
 - `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file, notifyrc and hicolor icons. The desktop, notifyrc and icon rules apply only on `UNIX AND NOT APPLE`. The desktop file comes from `data/x3ro-deck.desktop.in` with an absolute `Exec`, because Plasma's session PATH lacks `~/.local/bin`.
 - `kbuildsycoca6`: refresh KDE's caches after changing the desktop file or icons.
+- `scripts/check-format.sh [--fix]`: check (or apply) `.clang-format` on every tracked C++ file.
+- `scripts/smoke-test.sh [binary] [out.png]`: headless screenshot in an isolated environment. It fails without a PNG or on any QML error.
+- `ctest --test-dir build`: run the registered tests.
 
-There is no test suite. Verify changes with a headless screenshot (see Workflow).
+CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks formatting, builds with `-DX3RO_DECK_WERROR=ON`, runs `ctest` and the smoke test, and uploads the screenshot. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
 
 # Architecture
 
