@@ -22,16 +22,21 @@ public:
     using Environment = QMap<QString, QString>;
 
     virtual bool hasSession(const QString &name) const = 0;
-    // A new session runs a shell in `dir` with `env` added to the app's
-    // environment, and types `startCommand` into it, so the shell survives the
-    // agent exiting.
-    virtual bool createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {}) = 0;
-    bool ensureSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {})
+    // A new session runs `shell` (an argv, resolved by SessionShell) in `dir`
+    // with `env` added to the app's environment, and types `startCommand` into
+    // it, so the shell survives the agent exiting.
+    virtual bool createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {},
+                               const QStringList &shell = {}) = 0;
+    bool ensureSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {},
+                       const QStringList &shell = {})
     {
-        return hasSession(name) || createSession(name, dir, startCommand, env);
+        return hasSession(name) || createSession(name, dir, startCommand, env, shell);
     }
     // The `env` the session was created with.
     virtual Environment sessionEnvironment(const QString &name) const = 0;
+    // The `shell` the session was created with, as requested rather than as
+    // resolved; empty for a session from a build that did not record it.
+    virtual QStringList sessionShell(const QString &name) const = 0;
     // Sessions started in `dir`, whatever their name.
     virtual QStringList sessionsIn(const QString &dir) const = 0;
     virtual bool renameSession(const QString &from, const QString &to) = 0;

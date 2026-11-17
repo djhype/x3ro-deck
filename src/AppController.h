@@ -7,6 +7,7 @@
 #include "Models.h"
 #include "PrWatcher.h"
 #include "SessionBackend.h"
+#include "TerminalSettings.h"
 
 #include <QDateTime>
 #include <QObject>
@@ -109,6 +110,9 @@ public:
     const Checkout &checkout(int i) const { return m_checkouts.at(i); }
     const AgentProfile &profile(int i) const { return m_config.agent(m_checkouts.at(i).agent.profile); }
     SessionBackend *sessions() const { return m_sessions; }
+    // The imported terminal settings. Their shell runs in new agent sessions
+    // as well as in shell tabs.
+    TerminalSettings *terminalSettings() const { return m_terminalSettings; }
 
     // The window reports whether container stats are on screen, so sampling stops when hidden.
     void setStatsVisible(bool visible);
@@ -180,6 +184,7 @@ private:
     DockerClient *m_docker;
     AgentBus *m_bus;
     SessionBackend *m_sessions;
+    TerminalSettings *m_terminalSettings;
     GitWatcher *m_git;
     PrWatcher *m_prs;
     VariantListModel *m_checkoutModel;

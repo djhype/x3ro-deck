@@ -29,8 +29,10 @@ public:
     static QByteArray keyBytes(const QString &key);
 
     bool hasSession(const QString &name) const override;
-    bool createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {}) override;
+    bool createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {},
+                       const QStringList &shell = {}) override;
     Environment sessionEnvironment(const QString &name) const override;
+    QStringList sessionShell(const QString &name) const override;
     QStringList sessionsIn(const QString &dir) const override;
     bool renameSession(const QString &from, const QString &to) override;
     void killSession(const QString &name) override;

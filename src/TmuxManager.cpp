@@ -2,9 +2,11 @@
 
 #include "Config.h"
 #include "Paths.h"
+#include "SessionShell.h"
 
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -12,6 +14,7 @@
 namespace
 {
 const char *kEnvOption = "@x3ro-deck-env";
+const char *kShellOption = "@x3ro-deck-shell";
 const char *kDefaultConfig = R"(# x3ro-deck tmux server (tmux -L x3ro-deck). x3ro-deck writes this file
 # only when it is missing, so edits here are kept.
 set -g status off
@@ -62,15 +65,28 @@ bool TmuxManager::hasSession(const QString &name) const
     return has.exitStatus() == QProcess::NormalExit && has.exitCode() == 0;
 }
 
-bool TmuxManager::createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env)
+bool TmuxManager::createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env,
+                                const QStringList &shell)
 {
-    QStringList args = baseArgs() << QStringLiteral("new-session") << QStringLiteral("-d") << QStringLiteral("-s") << name
-                                  << QStringLiteral("-c") << dir << QStringLiteral("-x") << QStringLiteral("200") << QStringLiteral("-y")
-                                  << QStringLiteral("50");
+    const SessionShell sh = SessionShell::resolve(shell);
+    QStringList args = baseArgs();
+    if (sh.login) {
+        // tmux starts default-shell as a login shell, which on a PTY reads the
+        // rc files. It is read when the pane spawns, so it is set in the same
+        // call, after the config file, and kept for panes split by hand.
+        args << QStringLiteral("set-option") << QStringLiteral("-g") << QStringLiteral("default-shell") << sh.program
+             << QStringLiteral(";");
+    }
+    args << QStringLiteral("new-session") << QStringLiteral("-d") << QStringLiteral("-s") << name << QStringLiteral("-c") << dir
+         << QStringLiteral("-x") << QStringLiteral("200") << QStringLiteral("-y") << QStringLiteral("50");
     QJsonObject tag;
     for (auto it = env.cbegin(); it != env.cend(); ++it) {
         args << QStringLiteral("-e") << it.key() + QLatin1Char('=') + it.value();
         tag.insert(it.key(), it.value());
+    }
+    if (!sh.login) {
+        // Several arguments: tmux runs them directly, not through default-shell.
+        args << sh.program << sh.argv.mid(1);
     }
     QProcess create;
     create.start(QStringLiteral("tmux"), args);
@@ -79,13 +95,18 @@ bool TmuxManager::createSession(const QString &name, const QString &dir, const Q
         qWarning("tmux new-session %s failed: %s", qPrintable(name), create.readAllStandardError().constData());
         return false;
     }
-    // The env rides along as a session option, so a later start can tell
-    // whether the session already has the profile's environment. Option
-    // commands take a pane target, hence the trailing colon.
+    // The env and shell ride along as session options, so a later start can
+    // tell whether the session already has the profile's environment and the
+    // imported shell. Option commands take a pane target, hence the trailing colon.
+    const QString target = QLatin1Char('=') + name + QLatin1Char(':');
     QProcess tagIt;
     tagIt.start(QStringLiteral("tmux"),
-                baseArgs() << QStringLiteral("set-option") << QStringLiteral("-t") << (QLatin1Char('=') + name + QLatin1Char(':'))
-                           << QString::fromLatin1(kEnvOption) << QString::fromUtf8(QJsonDocument(tag).toJson(QJsonDocument::Compact)));
+                baseArgs() << QStringLiteral("set-option") << QStringLiteral("-t") << target << QString::fromLatin1(kEnvOption)
+                           << QString::fromUtf8(QJsonDocument(tag).toJson(QJsonDocument::Compact)) << QStringLiteral(";")
+                           << QStringLiteral("set-option") << QStringLiteral("-t") << target << QString::fromLatin1(kShellOption)
+                           << QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(shell)).toJson(QJsonDocument::Compact))
+                           << QStringLiteral(";") << QStringLiteral("set-option") << QStringLiteral("-t") << target
+                           << QStringLiteral("default-shell") << sh.program);
     tagIt.waitForFinished(2000);
     if (!startCommand.isEmpty()) {
         // Typed into the shell rather than passed as the session command, so the
@@ -93,6 +114,20 @@ bool TmuxManager::createSession(const QString &name, const QString &dir, const Q
         submit(name, startCommand);
     }
     return true;
+}
+
+QStringList TmuxManager::sessionShell(const QString &name) const
+{
+    QProcess show;
+    show.start(QStringLiteral("tmux"),
+               baseArgs() << QStringLiteral("show-options") << QStringLiteral("-t") << (QLatin1Char('=') + name + QLatin1Char(':'))
+                          << QStringLiteral("-qv") << QString::fromLatin1(kShellOption));
+    show.waitForFinished(2000);
+    QStringList shell;
+    for (const QJsonValue &v : QJsonDocument::fromJson(show.readAllStandardOutput()).array()) {
+        shell.append(v.toString());
+    }
+    return shell;
 }
 
 SessionBackend::Environment TmuxManager::sessionEnvironment(const QString &name) const

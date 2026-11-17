@@ -1,6 +1,7 @@
 #include "DaemonBackend.h"
 
 #include "Paths.h"
+#include "SessionShell.h"
 #include "SessiondChannel.h"
 #include "SessiondProtocol.h"
 
@@ -189,8 +190,14 @@ bool DaemonBackend::hasSession(const QString &name) const
     return !find(name).isEmpty();
 }
 
-bool DaemonBackend::createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env)
+bool DaemonBackend::createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env,
+                                  const QStringList &shell)
 {
+    // Resolved here, against the app's PATH and $SHELL: the daemon may have
+    // been started long before.
+    const SessionShell sh = SessionShell::resolve(shell);
+    QStringList command = sh.argv;
+    command[0] = sh.program;
     QJsonObject envObject;
     for (auto it = env.cbegin(); it != env.cend(); ++it) {
         envObject.insert(it.key(), it.value());
@@ -199,6 +206,9 @@ bool DaemonBackend::createSession(const QString &name, const QString &dir, const
                                        {QStringLiteral("name"), name},
                                        {QStringLiteral("cwd"), dir},
                                        {QStringLiteral("env"), envObject},
+                                       {QStringLiteral("command"), QJsonArray::fromStringList(command)},
+                                       {QStringLiteral("login"), sh.login},
+                                       {QStringLiteral("shell"), QJsonArray::fromStringList(shell)},
                                        {QStringLiteral("cols"), 200},
                                        {QStringLiteral("rows"), 50}},
                                       true);
@@ -221,6 +231,15 @@ SessionBackend::Environment DaemonBackend::sessionEnvironment(const QString &nam
         env.insert(it.key(), it.value().toString());
     }
     return env;
+}
+
+QStringList DaemonBackend::sessionShell(const QString &name) const
+{
+    QStringList shell;
+    for (const QJsonValue &v : find(name).value(QStringLiteral("shell")).toArray()) {
+        shell.append(v.toString());
+    }
+    return shell;
 }
 
 QStringList DaemonBackend::sessionsIn(const QString &dir) const

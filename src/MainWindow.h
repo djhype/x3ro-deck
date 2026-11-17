@@ -14,7 +14,6 @@ class QStackedWidget;
 class QTabWidget;
 class SettingsDialog;
 class TerminalHost;
-class TerminalSettings;
 
 class MainWindow : public QMainWindow
 {
@@ -64,7 +63,6 @@ private:
     QHash<int, TerminalHost *> m_agentTerms;
     KStatusNotifierItem *m_tray = nullptr;
     QPointer<SettingsDialog> m_settings;
-    TerminalSettings *m_terminalSettings;
     bool m_quitting = false;
     bool m_confirmingQuit = false;
     bool m_restart = false;

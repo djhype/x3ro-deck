@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
 #include <QSet>
@@ -41,6 +42,7 @@ private:
         QString name;
         QString cwd;
         QJsonObject env;
+        QJsonArray shell;
         pid_t pid = -1;
         int fd = -1;
         int cols = 0;

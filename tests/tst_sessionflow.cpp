@@ -31,6 +31,7 @@ private Q_SLOTS:
     void envAtSpawnAndProfileSwitch();
     void hookCwdMapsToCheckout();
     void paneDrivesState();
+    void importedShell();
 
 private:
     static bool daemon() { return qEnvironmentVariable("X3RO_DECK_TEST_BACKEND") == QLatin1String("daemon"); }
@@ -48,6 +49,10 @@ private:
     QString m_envLog;
     QString m_pollRepo;
     QString m_bin;
+    QString m_shellRepo;
+    QString m_nvmLog;
+    QString m_shellA;
+    QString m_shellB;
 };
 
 void SessionFlowTest::initTestCase()
@@ -94,9 +99,49 @@ void SessionFlowTest::initTestCase()
     QVERIFY(!sleep.isEmpty());
     QVERIFY(QFile::link(sleep, m_bin + QStringLiteral("/codex")));
 
+    // Sessions run a fixture shell in a private HOME, never the user's shell
+    // or rc files: bash under names of its own, so the pane poll tells them
+    // apart. Its rc file puts an nvm-style bin directory on PATH, which the
+    // test's own PATH lacks, as a desktop-launched app's does.
+    const QString bash = QStandardPaths::findExecutable(QStringLiteral("bash"));
+    QVERIFY(!bash.isEmpty());
+    m_shellA = m_bin + QStringLiteral("/deckshell-a");
+    m_shellB = m_bin + QStringLiteral("/deckshell-b");
+    QVERIFY(QFile::link(bash, m_shellA));
+    QVERIFY(QFile::link(bash, m_shellB));
+    const QString home = m_tmp.path() + QStringLiteral("/home");
+    QVERIFY(QDir().mkpath(home + QStringLiteral("/nvm/bin")));
+    qputenv("HOME", home.toLocal8Bit());
+    qputenv("SHELL", m_shellA.toLocal8Bit());
+    qunsetenv("ENV");
+    qunsetenv("BASH_ENV");
+    auto writeFile = [](const QString &path, const QString &text, bool exec = false) {
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(text.toUtf8());
+        f.close();
+        if (exec) {
+            f.setPermissions(f.permissions() | QFileDevice::ExeOwner);
+        }
+    };
+    writeFile(home + QStringLiteral("/.bash_profile"), QStringLiteral(". \"$HOME/.bashrc\"\n"));
+    writeFile(home + QStringLiteral("/.bashrc"), QStringLiteral("export PATH=\"$HOME/nvm/bin:$PATH\"\nPS1='$ '\n"));
+    m_nvmLog = m_tmp.path() + QStringLiteral("/nvm.log");
+    // The script logs and then becomes "fakeclaude" for the pane poll, which
+    // reads argv[0] as tmux does.
+    QVERIFY(QDir().mkpath(home + QStringLiteral("/nvm/lib")));
+    QVERIFY(QFile::link(sleep, home + QStringLiteral("/nvm/lib/fakeclaude")));
+    writeFile(home + QStringLiteral("/nvm/bin/fakeclaude"),
+              QStringLiteral("#!/bin/sh\necho ran >> %1\nexec \"$HOME/nvm/lib/fakeclaude\" 300\n").arg(m_nvmLog), true);
+    QVERIFY(QStandardPaths::findExecutable(QStringLiteral("fakeclaude")).isEmpty());
+    m_shellRepo = m_tmp.path() + QStringLiteral("/shell-repo");
+    QVERIFY(QDir().mkpath(m_shellRepo));
+
     // `cat` stands in for an agent: what reaches its terminal ends up in the log.
     const QJsonObject config{
         {QStringLiteral("autostartAgents"), true},
+        // No import: the session shell is $SHELL, the fixture above.
+        {QStringLiteral("terminalSettings"), QStringLiteral("none")},
         {QStringLiteral("sessionBackend"), daemon() ? QStringLiteral("daemon") : QStringLiteral("tmux")},
         {QStringLiteral("defaultAgent"), QStringLiteral("fake")},
         {QStringLiteral("agents"),
@@ -112,6 +157,10 @@ void SessionFlowTest::initTestCase()
                     QJsonObject{{QStringLiteral("id"), QStringLiteral("poller")},
                                 {QStringLiteral("kind"), QStringLiteral("custom")},
                                 {QStringLiteral("command"), QStringLiteral("sleep 300")}},
+                    // Found only on the PATH the shell's rc file sets.
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("nvm")},
+                                {QStringLiteral("kind"), QStringLiteral("custom")},
+                                {QStringLiteral("command"), QStringLiteral("fakeclaude")}},
                     QJsonObject{{QStringLiteral("id"), QStringLiteral("cx")}, {QStringLiteral("kind"), QStringLiteral("codex")}}}},
         {QStringLiteral("checkouts"),
          QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("flow")}, {QStringLiteral("path"), m_repo}},
@@ -120,7 +169,10 @@ void SessionFlowTest::initTestCase()
                                 {QStringLiteral("agent"), QStringLiteral("envy")}},
                     QJsonObject{{QStringLiteral("name"), QStringLiteral("poll")},
                                 {QStringLiteral("path"), m_pollRepo},
-                                {QStringLiteral("agent"), QStringLiteral("poller")}}}},
+                                {QStringLiteral("agent"), QStringLiteral("poller")}},
+                    QJsonObject{{QStringLiteral("name"), QStringLiteral("shell")},
+                                {QStringLiteral("path"), m_shellRepo},
+                                {QStringLiteral("agent"), QStringLiteral("nvm")}}}},
     };
     QFile f(m_tmp.path() + QStringLiteral("/config/x3ro-deck/config.json"));
     QVERIFY(f.open(QIODevice::WriteOnly));
@@ -351,6 +403,68 @@ void SessionFlowTest::paneDrivesState()
         QCOMPARE(app.checkout(i).agent.state, QStringLiteral("offline"));
     }
     app.sessions()->killSession(session);
+}
+
+// Sessions run the imported shell as an interactive login shell, so its rc
+// files set PATH before the agent command is typed in. A changed shell
+// recreates an idle session on Start, and a missing one falls back to $SHELL.
+void SessionFlowTest::importedShell()
+{
+    AppController app;
+    app.start();
+    const int i = 3;
+    const QString session = app.checkout(i).session;
+    QSignalSpy panes(app.sessions(), &SessionBackend::foregroundProcesses);
+    auto foreground = [&panes](const QString &name) {
+        return panes.isEmpty() ? QStringList() : panes.last().at(0).value<QHash<QString, QStringList>>().value(name);
+    };
+
+    // The agent exists only on the rc file's PATH, and it runs.
+    QCOMPARE(app.terminalSettings()->current().shell, QStringList{m_shellA});
+    QVERIFY(app.ensureAgentSession(i));
+    QCOMPARE(app.sessions()->sessionShell(session), QStringList{m_shellA});
+    QTRY_COMPARE_WITH_TIMEOUT(readFile(m_nvmLog), QStringLiteral("ran\n"), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(app.checkout(i).agent.running, 10000);
+
+    // Idle, the pane poll reports the shell.
+    app.sessions()->sendKeys(session, {QStringLiteral("C-c")});
+    QTRY_VERIFY_WITH_TIMEOUT(!app.checkout(i).agent.running, 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(foreground(session).value(0), QStringLiteral("deckshell-a"), 10000);
+
+    // A new shell: Start recreates the idle session in it.
+    app.sessions()->submit(session, QStringLiteral("export KEPT=1"));
+    QTRY_VERIFY_WITH_TIMEOUT(paneText(session).contains(QStringLiteral("export KEPT=1")), 5000);
+    qputenv("SHELL", m_shellB.toLocal8Bit());
+    app.reloadConfig();
+    QCOMPARE(app.terminalSettings()->current().shell, QStringList{m_shellB});
+    app.select(i);
+    app.agentAction(QStringLiteral("start"));
+    QCOMPARE(app.sessions()->sessionShell(session), QStringList{m_shellB});
+    QTRY_VERIFY2_WITH_TIMEOUT(readFile(m_nvmLog) == QStringLiteral("ran\nran\n"), qPrintable(paneText(session)), 10000);
+    QVERIFY(!paneText(session).contains(QStringLiteral("export KEPT=1")));
+    QTRY_VERIFY_WITH_TIMEOUT(app.checkout(i).agent.running, 10000);
+    app.sessions()->sendKeys(session, {QStringLiteral("C-c")});
+    QTRY_VERIFY_WITH_TIMEOUT(!app.checkout(i).agent.running, 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(foreground(session).value(0), QStringLiteral("deckshell-b"), 10000);
+    app.sessions()->killSession(session);
+
+    // A missing shell falls back to $SHELL; the session still records the request.
+    const QString missing = QStringLiteral("missing-shell");
+    const QStringList gone{m_tmp.path() + QStringLiteral("/no/fish")};
+    QVERIFY(app.sessions()->createSession(missing, m_shellRepo, QString(), {}, gone));
+    QCOMPARE(app.sessions()->sessionShell(missing), gone);
+    QTRY_COMPARE_WITH_TIMEOUT(foreground(missing).value(0), QStringLiteral("deckshell-b"), 10000);
+    app.sessions()->killSession(missing);
+
+    // A shell with arguments runs exactly as given: --norc keeps the rc
+    // file's PATH out.
+    const QString norc = QStringLiteral("norc-shell");
+    QVERIFY(app.sessions()->createSession(norc, m_shellRepo, QStringLiteral("type fakeclaude || echo NOT-\"\"FOUND"), {},
+                                          {m_shellA, QStringLiteral("--norc"), QStringLiteral("-i")}));
+    QTRY_COMPARE_WITH_TIMEOUT(foreground(norc).value(0), QStringLiteral("deckshell-a"), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(paneText(norc).contains(QStringLiteral("NOT-FOUND")), 5000);
+    app.sessions()->killSession(norc);
+    qputenv("SHELL", m_shellA.toLocal8Bit());
 }
 
 QTEST_MAIN(SessionFlowTest)

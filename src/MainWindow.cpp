@@ -64,10 +64,8 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     resize(1600, 980);
     TerminalHost::setBuiltin(m_app->config().terminal == QLatin1String("builtin"));
     TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
-    m_terminalSettings = new TerminalSettings(this);
-    connect(m_terminalSettings, &TerminalSettings::changed, this, [](const TerminalProfile &p) { TerminalHost::setProfile(p); });
-    m_terminalSettings->select(m_app->config().terminalSettings, m_app->config().terminalProfile);
-    TerminalHost::setProfile(m_terminalSettings->current());
+    connect(m_app->terminalSettings(), &TerminalSettings::changed, this, [](const TerminalProfile &p) { TerminalHost::setProfile(p); });
+    TerminalHost::setProfile(m_app->terminalSettings()->current());
 
     QFile qss(QStringLiteral(":/data/style.qss"));
     if (qss.open(QIODevice::ReadOnly)) {
@@ -342,7 +340,6 @@ void MainWindow::applySettings(const QJsonObject &config)
     }
     const bool applied = m_app->reloadConfig();
     TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
-    m_terminalSettings->select(m_app->config().terminalSettings, m_app->config().terminalProfile);
     if (applied) {
         return;
     }

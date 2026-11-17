@@ -21,9 +21,11 @@
 //
 // Ops (version 1):
 //   hello    {version}                              → {version, pid}
-//   create   {name, cwd, env:{}, command?:[], cols?, rows?} → {session}
-//            Runs `command`, or the user's login shell, in a new PTY.
-//   list     {processes?}                           → {sessions:[{id, name, cwd, env, pid,
+//   create   {name, cwd, env:{}, command?:[], login?, shell?:[], cols?, rows?} → {session}
+//            Runs `command`, or the user's login shell, in a new PTY. With
+//            login:true, command's argv0 is "-name", as login(1) starts a
+//            shell. `shell` is kept and listed as given.
+//   list     {processes?}                           → {sessions:[{id, name, cwd, env, shell, pid,
 //                                                       cols, rows, foreground,
 //                                                       foregroundGroup?}]}
 //            foreground is what tmux shows as pane_current_command. With

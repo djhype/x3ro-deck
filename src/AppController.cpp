@@ -224,12 +224,15 @@ AppController::AppController(QObject *parent)
     , m_bus(new AgentBus(this))
     , m_sessions(m_config.sessionBackend == QLatin1String("daemon") ? static_cast<SessionBackend *>(new DaemonBackend(this))
                                                                     : new TmuxManager(this))
+    , m_terminalSettings(new TerminalSettings(this))
     , m_git(new GitWatcher(this))
     , m_prs(new PrWatcher(this))
     , m_checkoutModel(new VariantListModel(kCheckoutRoles, this))
     , m_serviceModel(new VariantListModel(kServiceRoles, this))
     , m_attention(new VariantListModel(kAttentionRoles, this))
 {
+    m_terminalSettings->select(m_config.terminalSettings, m_config.terminalProfile);
+
     // A session that survived a restart runs the profile last picked for it;
     // ensureAgentSession() switches a fresh one to the configured agent.
     QSettings settings;
@@ -1053,7 +1056,7 @@ bool AppController::ensureAgentSession(int index)
     useProfile(index, c.cfg.agent);
     const AgentProfile &p = profile(index);
     return m_sessions->createSession(c.session, c.cfg.path, m_config.autostartAgents ? p.launchLine(false, c.cfg.args) : QString(),
-                                     p.sessionEnv());
+                                     p.sessionEnv(), m_terminalSettings->current().shell);
 }
 
 bool AppController::reloadConfig()
@@ -1069,6 +1072,7 @@ bool AppController::reloadConfig()
         sameCheckouts = next.checkouts.at(i).name == m_checkouts.at(i).cfg.name && next.checkouts.at(i).path == m_checkouts.at(i).cfg.path;
     }
     const Config prev = std::exchange(m_config, next);
+    m_terminalSettings->select(m_config.terminalSettings, m_config.terminalProfile);
     m_docker->setSocketPath(resolveDockerEndpoint(m_config.dockerHost).socketPath);
     for (int i = 0; i < m_checkouts.size(); ++i) {
         Checkout &c = m_checkouts[i];
@@ -1114,13 +1118,19 @@ void AppController::agentAction(const QString &action)
     } else if (action == QLatin1String("start") || action == QLatin1String("continue")) {
         const AgentProfile &p = profile(m_current);
         const SessionBackend::Environment env = p.sessionEnv();
-        // A session's environment is fixed when it starts, so another profile's
-        // env takes a fresh session. The attached terminal reattaches by itself.
-        if (!c.agent.running && m_sessions->hasSession(c.session) && m_sessions->sessionEnvironment(c.session) != env) {
-            m_sessions->killSession(c.session);
+        const QStringList shell = m_terminalSettings->current().shell;
+        // A session's environment and shell are fixed when it starts, so
+        // another profile's env or a newly imported shell takes a fresh session.
+        // The attached terminal reattaches by itself. A session that recorded
+        // no shell predates the import and is kept.
+        if (!c.agent.running && m_sessions->hasSession(c.session)) {
+            const QStringList had = m_sessions->sessionShell(c.session);
+            if (m_sessions->sessionEnvironment(c.session) != env || (!had.isEmpty() && had != shell)) {
+                m_sessions->killSession(c.session);
+            }
         }
         // No autostart here: the line typed below starts the agent.
-        m_sessions->ensureSession(c.session, c.cfg.path, QString(), env);
+        m_sessions->ensureSession(c.session, c.cfg.path, QString(), env, shell);
         m_sessions->submit(c.session, p.launchLine(action == QLatin1String("continue"), c.cfg.args));
     }
     Q_EMIT focusAgentTerminal(m_current);

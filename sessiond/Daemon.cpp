@@ -239,10 +239,15 @@ void Daemon::handle(QLocalSocket *sock, const QJsonObject &req)
         const bool processes = req.value(QStringLiteral("processes")).toBool();
         QJsonArray list;
         for (Session *x : std::as_const(m_sessions)) {
-            QJsonObject entry{{QStringLiteral("id"), qint64(x->id)},   {QStringLiteral("name"), x->name},
-                              {QStringLiteral("cwd"), x->cwd},         {QStringLiteral("env"), x->env},
-                              {QStringLiteral("pid"), qint64(x->pid)}, {QStringLiteral("cols"), x->cols},
-                              {QStringLiteral("rows"), x->rows},       {QStringLiteral("foreground"), foregroundName(x->pid, x->fd)}};
+            QJsonObject entry{{QStringLiteral("id"), qint64(x->id)},
+                              {QStringLiteral("name"), x->name},
+                              {QStringLiteral("cwd"), x->cwd},
+                              {QStringLiteral("env"), x->env},
+                              {QStringLiteral("shell"), x->shell},
+                              {QStringLiteral("pid"), qint64(x->pid)},
+                              {QStringLiteral("cols"), x->cols},
+                              {QStringLiteral("rows"), x->rows},
+                              {QStringLiteral("foreground"), foregroundName(x->pid, x->fd)}};
             if (processes) {
                 entry.insert(QStringLiteral("foregroundGroup"), QJsonArray::fromStringList(ProcessInfo::foregroundNames(x->pid, x->fd)));
             }
@@ -413,6 +418,9 @@ QJsonObject Daemon::create(const QJsonObject &req, QString *error)
         for (const QString &a : std::as_const(command)) {
             args.append(a.toLocal8Bit());
         }
+        if (req.value(QStringLiteral("login")).toBool()) {
+            args[0] = '-' + QFile::encodeName(QFileInfo(exe).fileName());
+        }
     }
 
     // Everything the child touches is built before fork: between fork and
@@ -468,6 +476,7 @@ QJsonObject Daemon::create(const QJsonObject &req, QString *error)
     s->name = name;
     s->cwd = cwd;
     s->env = env;
+    s->shell = req.value(QStringLiteral("shell")).toArray();
     s->pid = pid;
     s->fd = fd;
     s->cols = cols;
