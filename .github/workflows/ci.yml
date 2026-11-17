@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            runner: ubuntu-latest
+            container: archlinux:latest
+            preset: linux
+          # The bring-up tickets enable these:
+          # - name: macos
+          #   runner: macos-latest
+          #   container: ''
+          #   preset: macos
+          # - name: windows
+          #   runner: windows-latest
+          #   container: ''
+          #   preset: windows
+    steps:
+      # Without git, actions/checkout downloads a tarball with no .git, and
+      # check-format.sh lists files with git ls-files.
+      - name: Install git
+        if: matrix.name == 'linux'
+        run: pacman -Syu --noconfirm --needed git
+
+      - uses: actions/checkout@v4
+
+      - name: Mark the checkout safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install dependencies
+        if: matrix.name == 'linux'
+        run: scripts/ci-linux-deps.sh
+
+      - name: Check formatting
+        run: scripts/check-format.sh
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} -DX3RO_DECK_WERROR=ON
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=ignore
+
+      - name: Smoke test
+        if: matrix.name == 'linux'
+        run: scripts/smoke-test.sh build/x3ro-deck smoke-${{ matrix.name }}.png
+
+      - name: Upload screenshot
+        if: always() && matrix.name == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-${{ matrix.name }}
+          path: smoke-${{ matrix.name }}.png
+          if-no-files-found: warn

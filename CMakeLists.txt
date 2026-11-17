@@ -23,6 +23,8 @@ function(x3ro_deck_set_warnings target)
     set_target_properties(${target} PROPERTIES COMPILE_WARNING_AS_ERROR ${X3RO_DECK_WERROR})
 endfunction()
 
+enable_testing()
+
 find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets Network Quick QuickWidgets Qml DBus)
 find_package(KF6Parts REQUIRED)
 find_package(KF6CoreAddons REQUIRED)
