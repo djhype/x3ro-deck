@@ -26,6 +26,7 @@ private Q_SLOTS:
     void cleanupTestCase();
     void startPermissionPromptRestartStop();
     void envAtSpawnAndProfileSwitch();
+    void hookCwdMapsToCheckout();
 
 private:
     static QString readFile(const QString &path);
@@ -227,6 +228,31 @@ void SessionFlowTest::envAtSpawnAndProfileSwitch()
     app.agentAction(QStringLiteral("start"));
     QTRY_COMPARE_WITH_TIMEOUT(readFile(m_envLog), expected + QStringLiteral("unset\nunset\n"), 5000);
     QVERIFY(paneText(session).contains(QStringLiteral("export KEPT=1")));
+}
+
+void SessionFlowTest::hookCwdMapsToCheckout()
+{
+    AppController app;
+    app.start();
+    const QString sibling = m_repo + QStringLiteral("x");
+    QVERIFY(QDir().mkpath(sibling));
+    QVERIFY(QDir().mkpath(m_repo + QStringLiteral("/src/deep")));
+    auto ask = [this](const QString &cwd) {
+        sendHook({{QStringLiteral("hook_event_name"), QStringLiteral("PermissionRequest")},
+                  {QStringLiteral("cwd"), cwd},
+                  {QStringLiteral("tool_name"), QStringLiteral("Bash")},
+                  {QStringLiteral("tool_input"), QJsonObject{{QStringLiteral("command"), QStringLiteral("ls")}}}});
+    };
+
+    // A sibling whose name merely starts with the checkout's is not inside it.
+    ask(sibling);
+    QTest::qWait(300);
+    QCOMPARE(permissionRows(app), 0);
+
+    // A subdirectory, spelled with a trailing slash and a "..", maps to the checkout.
+    ask(m_repo + QStringLiteral("/src/deep/../deep/"));
+    QTRY_COMPARE_WITH_TIMEOUT(permissionRows(app), 1, 5000);
+    QCOMPARE(app.checkout(0).agent.state, QStringLiteral("permission"));
 }
 
 QTEST_MAIN(SessionFlowTest)

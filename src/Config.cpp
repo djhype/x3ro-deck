@@ -1,5 +1,7 @@
 #include "Config.h"
 
+#include "Paths.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -12,16 +14,6 @@
 
 namespace
 {
-QString expandHome(QString path)
-{
-    if (path == QLatin1String("~") || path.startsWith(QLatin1String("~/"))) {
-        path.replace(0, 1, QDir::homePath());
-    }
-    QFileInfo info(path);
-    const QString canonical = info.canonicalFilePath();
-    return canonical.isEmpty() ? info.absoluteFilePath() : canonical;
-}
-
 QJsonArray defaultAgents()
 {
     auto agent = [](const char *id, const char *label, const char *kind) {
@@ -303,7 +295,7 @@ Config Config::load(QString *error)
         const QJsonObject o = v.toObject();
         CheckoutConfig cc;
         cc.name = o.value(QStringLiteral("name")).toString();
-        cc.path = expandHome(o.value(QStringLiteral("path")).toString());
+        cc.path = Paths::normalize(o.value(QStringLiteral("path")).toString());
         cc.portOffset = o.value(QStringLiteral("portOffset")).toInt();
         cc.agent = o.value(QStringLiteral("agent")).toString();
         cc.args = o.value(QStringLiteral("args")).toString().trimmed();

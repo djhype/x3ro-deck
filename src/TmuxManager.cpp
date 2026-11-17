@@ -1,6 +1,7 @@
 #include "TmuxManager.h"
 
 #include "Config.h"
+#include "Paths.h"
 
 #include <QDir>
 #include <QFile>
@@ -117,7 +118,7 @@ QStringList TmuxManager::sessionsIn(const QString &dir) const
     list.waitForFinished(2000);
     QStringList out;
     for (const QString &line : QString::fromUtf8(list.readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        if (line.section(QLatin1Char('\t'), 0, 0) == dir) {
+        if (Paths::same(line.section(QLatin1Char('\t'), 0, 0), dir)) {
             out.append(line.section(QLatin1Char('\t'), 1));
         }
     }

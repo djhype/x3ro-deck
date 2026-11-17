@@ -44,6 +44,7 @@ add_library(x3ro-deck-core STATIC
     src/GitWatcher.cpp
     src/PrWatcher.cpp
     src/Models.cpp
+    src/Paths.cpp
     src/AppController.cpp
     src/TerminalHost.cpp
     src/MainWindow.cpp

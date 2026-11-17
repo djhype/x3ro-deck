@@ -1,5 +1,6 @@
 #include "AppController.h"
 
+#include "Paths.h"
 #include "TmuxManager.h"
 
 #include <QDesktopServices>
@@ -64,12 +65,6 @@ QString formatMem(qint64 bytes)
     if (bytes < 0) return {};
     const double mb = bytes / (1024.0 * 1024.0);
     return mb >= 1024 ? QStringLiteral("%1G").arg(mb / 1024.0, 0, 'f', 1) : QStringLiteral("%1M").arg(qRound(mb));
-}
-
-QString canonical(const QString &path)
-{
-    const QString c = QFileInfo(path).canonicalFilePath();
-    return c.isEmpty() ? path : c;
 }
 
 QString sessionName(const QString &checkout)
@@ -307,7 +302,7 @@ QVariantMap AppController::current() const
     }
     return {
         {QStringLiteral("name"), c.cfg.name},
-        {QStringLiteral("path"), QString(c.cfg.path).replace(QDir::homePath(), QStringLiteral("~"))},
+        {QStringLiteral("path"), Paths::tilde(c.cfg.path)},
         {QStringLiteral("branch"), c.git.branch.isEmpty() ? QStringLiteral("(detached)") : c.git.branch},
         {QStringLiteral("ticket"), c.ticket},
         {QStringLiteral("title"), c.title},
@@ -425,7 +420,7 @@ int AppController::checkoutForPath(const QString &path) const
     qsizetype bestLen = -1;
     for (int i = 0; i < m_checkouts.size(); ++i) {
         const QString &root = m_checkouts.at(i).cfg.path;
-        if ((path == root || path.startsWith(root + QLatin1Char('/'))) && root.size() > bestLen) {
+        if (root.size() > bestLen && Paths::isWithin(path, root)) {
             best = i;
             bestLen = root.size();
         }
@@ -443,7 +438,7 @@ void AppController::onContainers(const QList<ContainerInfo> &containers)
     }
     QSet<QString> liveIssues;
     for (const ContainerInfo &ci : containers) {
-        const QString dir = canonical(ci.workingDir);
+        const QString dir = Paths::normalize(ci.workingDir);
         const int idx = checkoutForPath(dir);
         // Only compose projects rooted exactly at a checkout, not ones in subdirectories.
         if (idx < 0 || m_checkouts[idx].cfg.path != dir) {
@@ -593,7 +588,7 @@ void AppController::onPaneCommands(const QHash<QString, QString> &commands)
 // event, names its file edits apply_patch and has no Notification event.
 void AppController::onHookEvent(const QJsonObject &p)
 {
-    const int idx = checkoutForPath(canonical(p.value(QStringLiteral("cwd")).toString()));
+    const int idx = checkoutForPath(Paths::normalize(p.value(QStringLiteral("cwd")).toString()));
     if (idx < 0) {
         return;
     }

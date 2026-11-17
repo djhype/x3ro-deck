@@ -1,6 +1,7 @@
 #include "SettingsDialog.h"
 
 #include "Config.h"
+#include "Paths.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -201,17 +202,6 @@ void setLinkRow(QTableWidget *t, int row, const QJsonObject &o)
     t->setItem(row, 1, new QTableWidgetItem(o.value(QStringLiteral("service")).toString()));
     const int port = o.value(QStringLiteral("containerPort")).toInt();
     t->setItem(row, 2, new QTableWidgetItem(port > 0 ? QString::number(port) : QString()));
-}
-
-QString tildePath(const QString &path)
-{
-    const QString home = QDir::homePath();
-    return path == home || path.startsWith(home + QLatin1Char('/')) ? QLatin1Char('~') + path.mid(home.size()) : path;
-}
-
-QString expandedPath(const QString &path)
-{
-    return path == QLatin1String("~") || path.startsWith(QLatin1String("~/")) ? QDir::homePath() + path.mid(1) : path;
 }
 
 // "Claude Opus" → "claude-opus", unique among `taken`.
@@ -436,9 +426,9 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     });
     connect(browse, &QPushButton::clicked, this, [this] {
         const QString dir = QFileDialog::getExistingDirectory(parentWidget(), QStringLiteral("Checkout folder"),
-                                                              expandedPath(m_checkoutPath->text().trimmed()));
+                                                              Paths::expandTilde(m_checkoutPath->text().trimmed()));
         if (!dir.isEmpty()) {
-            m_checkoutPath->setText(tildePath(dir));
+            m_checkoutPath->setText(Paths::tilde(dir));
             editCheckout(QStringLiteral("path"), m_checkoutPath->text());
             checkPath();
         }
@@ -499,7 +489,7 @@ void SettingsDialog::addCheckout()
 {
     const QString start = m_checkouts.isEmpty()
         ? QDir::homePath()
-        : QFileInfo(expandedPath(m_checkouts.last().value(QStringLiteral("path")).toString())).path();
+        : QFileInfo(Paths::expandTilde(m_checkouts.last().value(QStringLiteral("path")).toString())).path();
     // Parented past this dialog, whose stylesheet would otherwise restyle the system file dialog.
     const QString dir = QFileDialog::getExistingDirectory(parentWidget(), QStringLiteral("Add checkout"), start);
     if (dir.isEmpty()) {
@@ -517,7 +507,7 @@ void SettingsDialog::addCheckout()
         name = QStringLiteral("%1-%2").arg(base).arg(n);
     }
     m_checkouts.append(
-        QJsonObject{{QStringLiteral("name"), name}, {QStringLiteral("path"), tildePath(dir)}, {QStringLiteral("portOffset"), offset}});
+        QJsonObject{{QStringLiteral("name"), name}, {QStringLiteral("path"), Paths::tilde(dir)}, {QStringLiteral("portOffset"), offset}});
     m_checkoutList->addItem(name);
     m_checkoutList->setCurrentRow(static_cast<int>(m_checkouts.size()) - 1);
     m_checkoutName->setFocus();
@@ -543,7 +533,7 @@ void SettingsDialog::moveCheckout(int delta)
 void SettingsDialog::checkPath()
 {
     const QString path = m_checkoutPath->text().trimmed();
-    const bool missing = !path.isEmpty() && !QFileInfo(expandedPath(path)).isDir();
+    const bool missing = !path.isEmpty() && !QFileInfo(Paths::expandTilde(path)).isDir();
     m_checkoutPathWarning->setText(missing ? QStringLiteral("This folder does not exist.") : QString());
     m_checkoutPathWarning->setVisible(missing);
 }

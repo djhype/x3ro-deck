@@ -23,7 +23,8 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
   - `reloadConfig` applies saved settings while running. A changed checkout list (names, paths or order) takes a restart.
   - `onHookEvent` maps hook payloads to the agent state machine: `offline | ready | working | permission | question | done`.
   - `publishAttention` builds the NEEDS YOU items. Priority order: permission, question, docker, done.
-  - Each hook payload's `cwd` is matched to a checkout by longest canonical path prefix.
+  - Each hook payload's `cwd` is matched to a checkout by the longest checkout path that contains it, with `Paths::isWithin`, so `/a/bc` never matches `/a/b`.
+- `src/Paths.{h,cpp}`: path normalization (`~`, symlinks, separators, Windows drive letters) and comparison. It is case-insensitive on macOS and Windows. Checkout paths, hook cwds, tmux session paths and the Settings path fields all go through it.
 - `src/Config.{h,cpp}`: `~/.config/x3ro-deck/config.json`, written with defaults on first run. User keys override defaults at the top level.
   - `agents` is an ordered list of `AgentProfile`s. `kind` (`claude`, `codex` or `custom`) selects `kindDefaults`: command, resume args, process name, permission keys, prompt buttons and submit delay. Profile keys override them.
   - `custom` runs any CLI. It sends no hooks, so only the pane poll tracks it, and its `process` defaults to the command's first word.
