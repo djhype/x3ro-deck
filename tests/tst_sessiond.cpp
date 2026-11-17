@@ -3,6 +3,7 @@
 // private temporary directory.
 
 #include "DaemonBackend.h"
+#include "ProcessInfo.h"
 #include "SessionScreen.h"
 #include "SessiondProtocol.h"
 #include "TerminalScreen.h"
@@ -12,6 +13,7 @@
 #include <QLocalSocket>
 #include <QProcess>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -210,12 +212,14 @@ private Q_SLOTS:
     void initTestCase();
     void cleanup();
     void keyBytes();
+    void commandName();
     void screenRedraw();
     void screenModes();
     void screenAltScreen();
     void screenResize();
     void protocol();
     void backend();
+    void foregroundJob();
     void attachClient();
 
 private:
@@ -295,6 +299,22 @@ void SessiondTest::keyBytes()
     QCOMPARE(DaemonBackend::keyBytes(QStringLiteral("1")), QByteArray("1"));
     QCOMPARE(DaemonBackend::keyBytes(QStringLiteral("y")), QByteArray("y"));
     QCOMPARE(DaemonBackend::keyBytes(QStringLiteral("hello")), QByteArray("hello"));
+}
+
+void SessiondTest::commandName()
+{
+    using ProcessInfo::commandName;
+    QCOMPARE(commandName({QStringLiteral("/usr/bin/sleep"), QStringLiteral("30")}, QStringLiteral("sleep")), QStringLiteral("sleep"));
+    // A login shell, and a title a program set over its argv.
+    QCOMPARE(commandName({QStringLiteral("-zsh")}, QStringLiteral("zsh")), QStringLiteral("zsh"));
+    QCOMPARE(commandName({QStringLiteral("claude --resume")}, QStringLiteral("node")), QStringLiteral("claude"));
+    QCOMPARE(commandName({QStringLiteral("exec /opt/x/codex")}, QString()), QStringLiteral("codex"));
+    QCOMPARE(commandName({QStringLiteral("\"/opt/x/agent\" --flag")}, QString()), QStringLiteral("agent"));
+    QCOMPARE(commandName({QStringLiteral("./run.sh")}, QString()), QStringLiteral("run.sh"));
+    // Zombies and kernel threads have no argv.
+    QCOMPARE(commandName({}, QStringLiteral("kworker/0:1")), QStringLiteral("kworker/0:1"));
+    QCOMPARE(commandName({}, QStringLiteral("defunct")), QStringLiteral("defunct"));
+    QCOMPARE(commandName({}, QString()), QString());
 }
 
 void SessiondTest::screenRedraw()
@@ -535,11 +555,11 @@ void SessiondTest::backend()
 
     QSignalSpy spy(&backend, &SessionBackend::foregroundProcesses);
     backend.startPolling(200);
-    using Commands = QHash<QString, QString>;
+    using Commands = QHash<QString, QStringList>;
     auto polledCommand = [&spy] {
-        return spy.isEmpty() ? QString() : spy.last().at(0).value<Commands>().value(QStringLiteral("b"));
+        return spy.isEmpty() ? QStringList() : spy.last().at(0).value<Commands>().value(QStringLiteral("b"));
     };
-    QTRY_COMPARE_WITH_TIMEOUT(polledCommand(), QStringLiteral("cat"), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(polledCommand(), QStringList{QStringLiteral("cat")}, 5000);
 
     // Permission keys and prompt buttons.
     backend.sendKeys(QStringLiteral("b"), {QStringLiteral("1")});
@@ -572,6 +592,74 @@ void SessiondTest::backend()
     backend.killAll();
     QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(m_socket), 3000);
     QVERIFY(!backend.hasSession(QStringLiteral("d")));
+}
+
+void SessiondTest::foregroundJob()
+{
+    QVERIFY(startForeground());
+    Client c;
+    QVERIFY(c.connectTo(m_socket));
+    quint32 id = 0;
+    QCOMPARE(shellCommandSession(c, QStringLiteral("fg"), &id), QString());
+    auto job = [&c] {
+        const QJsonObject s = sessionNamed(c.request(op("list", {{QStringLiteral("processes"), true}})), QStringLiteral("fg"));
+        // Merged as DaemonBackend does, so the moment between a job ending
+        // and the shell taking the terminal back looks like the idle shell.
+        QStringList names{s.value(QStringLiteral("foreground")).toString()};
+        for (const QJsonValue &v : s.value(QStringLiteral("foregroundGroup")).toArray()) {
+            if (!names.contains(v.toString())) {
+                names.append(v.toString());
+            }
+        }
+        return names;
+    };
+    auto type = [&c](const QString &text) {
+        c.request(op("write", {{QStringLiteral("name"), QStringLiteral("fg")}, {QStringLiteral("data"), text}}));
+    };
+
+    // The idle shell; a plain list leaves the job out.
+    QTRY_COMPARE_WITH_TIMEOUT(job(), QStringList{QStringLiteral("sh")}, 5000);
+    QVERIFY(!sessionNamed(c.request(op("list")), QStringLiteral("fg")).contains(QStringLiteral("foregroundGroup")));
+
+    // A program in the foreground, then the shell again once it ends.
+    type(QStringLiteral("sleep 30\r"));
+    QTRY_COMPARE_WITH_TIMEOUT(job(), QStringList{QStringLiteral("sleep")}, 5000);
+
+    // The tree has the shell and the program, which leads the foreground group.
+    const QJsonObject tree = c.request(op("processes", {{QStringLiteral("name"), QStringLiteral("fg")}}));
+    QVERIFY(tree.value(QStringLiteral("ok")).toBool());
+    const QJsonArray procs = tree.value(QStringLiteral("processes")).toArray();
+    QCOMPARE(procs.size(), 2);
+    const qint64 shell = sessionNamed(c.request(op("list")), QStringLiteral("fg")).value(QStringLiteral("pid")).toInteger();
+    QCOMPARE(procs.at(0)[QStringLiteral("pid")].toInteger(), shell);
+    QCOMPARE(procs.at(1)[QStringLiteral("ppid")].toInteger(), shell);
+    QCOMPARE(procs.at(1)[QStringLiteral("name")].toString(), QStringLiteral("sleep"));
+    QCOMPARE(procs.at(1)[QStringLiteral("args")].toArray().last().toString(), QStringLiteral("30"));
+    QCOMPARE(procs.at(1)[QStringLiteral("pgid")].toInteger(), tree.value(QStringLiteral("foreground")).toInteger());
+    QCOMPARE(procs.at(1)[QStringLiteral("pid")].toInteger(), tree.value(QStringLiteral("foreground")).toInteger());
+    QVERIFY(!c.request(op("processes", {{QStringLiteral("name"), QStringLiteral("nope")}})).value(QStringLiteral("ok")).toBool());
+
+    type(QStringLiteral("\x03"));
+    QTRY_COMPARE_WITH_TIMEOUT(job(), QStringList{QStringLiteral("sh")}, 5000);
+
+    // An agent behind a wrapper: the leader is the wrapper, and the agent
+    // follows it in the group.
+    const QString bin = m_tmp.path() + QStringLiteral("/bin");
+    QVERIFY(QDir().mkpath(bin));
+    QVERIFY(QFile::link(QStandardPaths::findExecutable(QStringLiteral("sleep")), bin + QStringLiteral("/fakeagent")));
+    type(QStringLiteral("sh -c '%1/fakeagent 30; true'\r").arg(bin));
+    QTRY_COMPARE_WITH_TIMEOUT(job(), (QStringList{QStringLiteral("sh"), QStringLiteral("fakeagent")}), 5000);
+    type(QStringLiteral("\x03"));
+    QTRY_COMPARE_WITH_TIMEOUT(job(), QStringList{QStringLiteral("sh")}, 5000);
+
+    // DaemonBackend's poll reports the whole job, the leader first.
+    DaemonBackend backend;
+    QSignalSpy spy(&backend, &SessionBackend::foregroundProcesses);
+    backend.startPolling(200);
+    type(QStringLiteral("sh -c '%1/fakeagent 30; true'\r").arg(bin));
+    using Commands = QHash<QString, QStringList>;
+    QTRY_COMPARE_WITH_TIMEOUT(spy.isEmpty() ? QStringList() : spy.last().at(0).value<Commands>().value(QStringLiteral("fg")),
+                              (QStringList{QStringLiteral("sh"), QStringLiteral("fakeagent")}), 5000);
 }
 
 void SessiondTest::attachClient()

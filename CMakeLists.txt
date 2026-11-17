@@ -40,6 +40,18 @@ x3ro_deck_set_warnings(x3ro-deck-sessionproto)
 target_include_directories(x3ro-deck-sessionproto PUBLIC src attach common)
 target_link_libraries(x3ro-deck-sessionproto PUBLIC Qt6::Core)
 
+# What runs in a session's terminal, for the daemon's pane poll. One platform
+# file per OS; the others report nothing for now.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoLinux.cpp)
+else()
+    set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoNone.cpp)
+endif()
+add_library(x3ro-deck-processinfo STATIC src/ProcessInfo.cpp ${X3RO_DECK_PROCESSINFO_PLATFORM})
+x3ro_deck_set_warnings(x3ro-deck-processinfo)
+target_include_directories(x3ro-deck-processinfo PUBLIC src)
+target_link_libraries(x3ro-deck-processinfo PUBLIC Qt6::Core)
+
 # The daemon's per-session screen model, which redraws a session on attach.
 add_library(x3ro-deck-sessionscreen STATIC src/SessionScreen.cpp)
 x3ro_deck_set_warnings(x3ro-deck-sessionscreen)
@@ -49,7 +61,7 @@ target_link_libraries(x3ro-deck-sessionscreen PUBLIC Qt6::Core PkgConfig::vterm)
 # Owns agent PTYs so agents outlive the GUI (sessionBackend "daemon").
 add_executable(x3ro-deck-sessiond sessiond/main.cpp sessiond/Daemon.cpp)
 x3ro_deck_set_warnings(x3ro-deck-sessiond)
-target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto x3ro-deck-sessionscreen Qt6::Network util)
+target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Network util)
 
 # `x3ro-deck attach` without the GUI's libraries; the agent terminals run it.
 add_executable(x3ro-deck-attach attach/main.cpp)
@@ -82,7 +94,7 @@ add_library(x3ro-deck-base STATIC
 )
 x3ro_deck_set_warnings(x3ro-deck-base)
 target_include_directories(x3ro-deck-base PUBLIC src common)
-target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util)
+target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util)
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)

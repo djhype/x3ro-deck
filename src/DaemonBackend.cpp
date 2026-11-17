@@ -300,11 +300,18 @@ void DaemonBackend::startPolling(int intervalMs)
 
 void DaemonBackend::poll()
 {
-    QHash<QString, QString> out;
-    const QJsonObject reply = request({{QStringLiteral("op"), QStringLiteral("list")}});
+    QHash<QString, QStringList> out;
+    const QJsonObject reply = request({{QStringLiteral("op"), QStringLiteral("list")}, {QStringLiteral("processes"), true}});
     for (const QJsonValue &v : reply.value(QStringLiteral("sessions")).toArray()) {
         const QJsonObject s = v.toObject();
-        out.insert(s.value(QStringLiteral("name")).toString(), s.value(QStringLiteral("foreground")).toString());
+        QStringList names{s.value(QStringLiteral("foreground")).toString()};
+        for (const QJsonValue &n : s.value(QStringLiteral("foregroundGroup")).toArray()) {
+            if (!names.contains(n.toString())) {
+                names.append(n.toString());
+            }
+        }
+        names.removeAll(QString());
+        out.insert(s.value(QStringLiteral("name")).toString(), names);
     }
     Q_EMIT foregroundProcesses(out);
 }

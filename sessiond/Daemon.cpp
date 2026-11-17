@@ -1,5 +1,6 @@
 #include "Daemon.h"
 
+#include "ProcessInfo.h"
 #include "SessionScreen.h"
 #include "SessiondProtocol.h"
 
@@ -48,37 +49,20 @@ void onSigchld(int)
     errno = saved;
 }
 
-// What tmux shows as pane_current_command: the foreground process group's
-// argv[0], without its directory.
-QString foregroundName(int fd)
+// What tmux shows as pane_current_command. Like tmux, it falls back to the
+// shell for the moment between a job ending and the shell taking the terminal back.
+QString foregroundName(pid_t shell, int fd)
 {
-#if defined(__linux__)
-    const pid_t pg = tcgetpgrp(fd);
-    if (pg <= 0) {
-        return {};
-    }
-    QByteArray name;
-    QFile cmdline(QStringLiteral("/proc/%1/cmdline").arg(pg));
-    if (cmdline.open(QIODevice::ReadOnly)) {
-        name = cmdline.readAll();
-        if (const qsizetype nul = name.indexOf('\0'); nul >= 0) {
-            name.truncate(nul);
-        }
+    QString name;
+    if (const std::optional<ProcessInfo::Process> p = ProcessInfo::process(ProcessInfo::foregroundGroup(fd))) {
+        name = ProcessInfo::commandName(*p);
     }
     if (name.isEmpty()) {
-        QFile comm(QStringLiteral("/proc/%1/comm").arg(pg));
-        if (comm.open(QIODevice::ReadOnly)) {
-            name = comm.readAll().trimmed();
+        if (const std::optional<ProcessInfo::Process> p = ProcessInfo::process(shell)) {
+            name = ProcessInfo::commandName(*p);
         }
     }
-    while (name.startsWith('-')) {
-        name.remove(0, 1);
-    }
-    return QString::fromLocal8Bit(name.mid(name.lastIndexOf('/') + 1));
-#else
-    Q_UNUSED(fd);
-    return {};
-#endif
+    return name;
 }
 
 int clampSize(const QJsonValue &v, int fallback)
@@ -250,16 +234,19 @@ void Daemon::handle(QLocalSocket *sock, const QJsonObject &req)
     } else if (op == QLatin1String("create")) {
         reply = create(req, &error);
     } else if (op == QLatin1String("list")) {
+        // The whole foreground job only on request: it walks the session's
+        // process tree, which the pane poll wants and a lookup does not.
+        const bool processes = req.value(QStringLiteral("processes")).toBool();
         QJsonArray list;
         for (Session *x : std::as_const(m_sessions)) {
-            list.append(QJsonObject{{QStringLiteral("id"), qint64(x->id)},
-                                    {QStringLiteral("name"), x->name},
-                                    {QStringLiteral("cwd"), x->cwd},
-                                    {QStringLiteral("env"), x->env},
-                                    {QStringLiteral("pid"), qint64(x->pid)},
-                                    {QStringLiteral("cols"), x->cols},
-                                    {QStringLiteral("rows"), x->rows},
-                                    {QStringLiteral("foreground"), foregroundName(x->fd)}});
+            QJsonObject entry{{QStringLiteral("id"), qint64(x->id)},   {QStringLiteral("name"), x->name},
+                              {QStringLiteral("cwd"), x->cwd},         {QStringLiteral("env"), x->env},
+                              {QStringLiteral("pid"), qint64(x->pid)}, {QStringLiteral("cols"), x->cols},
+                              {QStringLiteral("rows"), x->rows},       {QStringLiteral("foreground"), foregroundName(x->pid, x->fd)}};
+            if (processes) {
+                entry.insert(QStringLiteral("foregroundGroup"), QJsonArray::fromStringList(ProcessInfo::foregroundNames(x->pid, x->fd)));
+            }
+            list.append(entry);
         }
         reply.insert(QStringLiteral("sessions"), list);
     } else if (op == QLatin1String("write")) {
@@ -316,6 +303,21 @@ void Daemon::handle(QLocalSocket *sock, const QJsonObject &req)
                     signalGroup(tcgetpgrp(x->fd), SIGWINCH);
                 }
             };
+        } else {
+            error = noSession;
+        }
+    } else if (op == QLatin1String("processes")) {
+        if (s) {
+            QJsonArray list;
+            for (const ProcessInfo::Process &p : ProcessInfo::tree(s->pid)) {
+                list.append(QJsonObject{{QStringLiteral("pid"), p.pid},
+                                        {QStringLiteral("ppid"), p.ppid},
+                                        {QStringLiteral("pgid"), p.pgid},
+                                        {QStringLiteral("name"), ProcessInfo::commandName(p)},
+                                        {QStringLiteral("args"), QJsonArray::fromStringList(p.args)}});
+            }
+            reply.insert(QStringLiteral("foreground"), ProcessInfo::foregroundGroup(s->fd));
+            reply.insert(QStringLiteral("processes"), list);
         } else {
             error = noSession;
         }

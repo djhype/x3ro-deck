@@ -13,6 +13,7 @@
 #include <QJsonObject>
 #include <QLocalSocket>
 #include <QProcess>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 #include <SessiondProtocol.h>
@@ -29,6 +30,7 @@ private Q_SLOTS:
     void startPermissionPromptRestartStop();
     void envAtSpawnAndProfileSwitch();
     void hookCwdMapsToCheckout();
+    void paneDrivesState();
 
 private:
     static bool daemon() { return qEnvironmentVariable("X3RO_DECK_TEST_BACKEND") == QLatin1String("daemon"); }
@@ -44,6 +46,8 @@ private:
     QString m_log;
     QString m_envRepo;
     QString m_envLog;
+    QString m_pollRepo;
+    QString m_bin;
 };
 
 void SessionFlowTest::initTestCase()
@@ -81,6 +85,15 @@ void SessionFlowTest::initTestCase()
     };
     QVERIFY(QDir().mkpath(m_tmp.path() + QStringLiteral("/config/x3ro-deck")));
 
+    // `codex` here is sleep under another name: the pane poll sees "codex".
+    m_pollRepo = m_tmp.path() + QStringLiteral("/poll-repo");
+    QVERIFY(QDir().mkpath(m_pollRepo));
+    m_bin = m_tmp.path() + QStringLiteral("/bin");
+    QVERIFY(QDir().mkpath(m_bin));
+    const QString sleep = QStandardPaths::findExecutable(QStringLiteral("sleep"));
+    QVERIFY(!sleep.isEmpty());
+    QVERIFY(QFile::link(sleep, m_bin + QStringLiteral("/codex")));
+
     // `cat` stands in for an agent: what reaches its terminal ends up in the log.
     const QJsonObject config{
         {QStringLiteral("autostartAgents"), true},
@@ -94,12 +107,20 @@ void SessionFlowTest::initTestCase()
                         {QStringLiteral("permissionKeys"), QJsonObject{{QStringLiteral("allow"), QStringLiteral("Enter")}}},
                     },
                     scriptAgent("envy", {{QStringLiteral("X3RO_TEST"), QStringLiteral("${HOME}/deck|$X3RO_UNSET_VAR|$")}}),
-                    scriptAgent("plain", {})}},
+                    scriptAgent("plain", {}),
+                    // No hooks: only the pane poll tracks it.
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("poller")},
+                                {QStringLiteral("kind"), QStringLiteral("custom")},
+                                {QStringLiteral("command"), QStringLiteral("sleep 300")}},
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("cx")}, {QStringLiteral("kind"), QStringLiteral("codex")}}}},
         {QStringLiteral("checkouts"),
          QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("flow")}, {QStringLiteral("path"), m_repo}},
                     QJsonObject{{QStringLiteral("name"), QStringLiteral("envy")},
                                 {QStringLiteral("path"), m_envRepo},
-                                {QStringLiteral("agent"), QStringLiteral("envy")}}}},
+                                {QStringLiteral("agent"), QStringLiteral("envy")}},
+                    QJsonObject{{QStringLiteral("name"), QStringLiteral("poll")},
+                                {QStringLiteral("path"), m_pollRepo},
+                                {QStringLiteral("agent"), QStringLiteral("poller")}}}},
     };
     QFile f(m_tmp.path() + QStringLiteral("/config/x3ro-deck/config.json"));
     QVERIFY(f.open(QIODevice::WriteOnly));
@@ -283,6 +304,53 @@ void SessionFlowTest::hookCwdMapsToCheckout()
     ask(m_repo + QStringLiteral("/src/deep/../deep/"));
     QTRY_COMPARE_WITH_TIMEOUT(permissionRows(app), 1, 5000);
     QCOMPARE(app.checkout(0).agent.state, QStringLiteral("permission"));
+}
+
+// The pane poll alone, with no hook events: an agent starting and exiting in
+// the session moves the checkout between ready and offline, and an agent of
+// another profile started by hand switches the checkout to that profile.
+void SessionFlowTest::paneDrivesState()
+{
+    AppController app;
+    app.start();
+    const int i = 2;
+    const QString session = app.checkout(i).session;
+    QCOMPARE(app.profile(i).id, QStringLiteral("poller"));
+    QCOMPARE(app.checkout(i).agent.state, QStringLiteral("offline"));
+
+    QVERIFY(app.ensureAgentSession(i));
+    QTRY_VERIFY_WITH_TIMEOUT(app.checkout(i).agent.running, 10000);
+    QCOMPARE(app.checkout(i).agent.state, QStringLiteral("ready"));
+
+    // The agent exits; the shell stays.
+    app.sessions()->sendKeys(session, {QStringLiteral("C-c")});
+    QTRY_VERIFY_WITH_TIMEOUT(!app.checkout(i).agent.running, 10000);
+    QCOMPARE(app.checkout(i).agent.state, QStringLiteral("offline"));
+    QVERIFY(app.sessions()->hasSession(session));
+
+    // Codex started by hand in the session.
+    app.sessions()->submit(session, m_bin + QStringLiteral("/codex 300"));
+    QTRY_VERIFY_WITH_TIMEOUT(app.checkout(i).agent.running, 10000);
+    QCOMPARE(app.profile(i).id, QStringLiteral("cx"));
+    QCOMPARE(app.checkout(i).agent.state, QStringLiteral("ready"));
+    app.sessions()->sendKeys(session, {QStringLiteral("C-c")});
+    QTRY_VERIFY_WITH_TIMEOUT(!app.checkout(i).agent.running, 10000);
+    QCOMPARE(app.checkout(i).agent.state, QStringLiteral("offline"));
+
+    // The same agent behind a wrapper, as `node codex.js` or a launcher
+    // script runs it. tmux sees only the wrapper.
+    if (daemon()) {
+        app.select(i);
+        app.setAgentProfile(QStringLiteral("poller"));
+        QCOMPARE(app.profile(i).id, QStringLiteral("poller"));
+        app.sessions()->submit(session, QStringLiteral("sh -c '%1/codex 300; true'").arg(m_bin));
+        QTRY_VERIFY_WITH_TIMEOUT(app.checkout(i).agent.running, 10000);
+        QCOMPARE(app.profile(i).id, QStringLiteral("cx"));
+        app.sessions()->sendKeys(session, {QStringLiteral("C-c")});
+        QTRY_VERIFY_WITH_TIMEOUT(!app.checkout(i).agent.running, 10000);
+        QCOMPARE(app.checkout(i).agent.state, QStringLiteral("offline"));
+    }
+    app.sessions()->killSession(session);
 }
 
 QTEST_MAIN(SessionFlowTest)

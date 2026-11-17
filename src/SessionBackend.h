@@ -52,6 +52,8 @@ public:
     virtual void startPolling(int intervalMs) = 0;
 
 Q_SIGNALS:
-    // session name → foreground command of the session
-    void foregroundProcesses(const QHash<QString, QString> &commands);
+    // session name → names of the session's foreground job. The first is
+    // tmux's pane_current_command; a backend that sees the whole job adds the
+    // other processes in it, so an agent behind a wrapper is found as well.
+    void foregroundProcesses(const QHash<QString, QStringList> &commands);
 };

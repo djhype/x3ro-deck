@@ -155,7 +155,7 @@ private:
     void onContainers(const QList<ContainerInfo> &containers);
     void onStats(const QHash<QString, ContainerStats> &stats);
     void onHookEvent(const QJsonObject &payload);
-    void onPaneCommands(const QHash<QString, QString> &commands);
+    void onPaneCommands(const QHash<QString, QStringList> &commands);
     void onGit(const QString &key, const GitInfo &info);
     void onPr(const QString &key, const PrInfo &info);
 

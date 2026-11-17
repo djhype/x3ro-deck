@@ -202,7 +202,7 @@ void TmuxManager::poll()
     auto *proc = new QProcess(this);
     connect(proc, &QProcess::finished, this, [this, proc] {
         m_pollInFlight = false;
-        QHash<QString, QString> out;
+        QHash<QString, QStringList> out;
         const QList<QByteArray> lines = proc->readAllStandardOutput().split('\n');
         for (const QByteArray &line : lines) {
             // "name:1:command". Only the active pane of each session counts;
@@ -210,7 +210,7 @@ void TmuxManager::poll()
             const qsizetype first = line.indexOf(':');
             const qsizetype second = first < 0 ? -1 : line.indexOf(':', first + 1);
             if (second == first + 2 && line.at(first + 1) == '1') {
-                out.insert(QString::fromUtf8(line.left(first)), QString::fromUtf8(line.mid(second + 1)));
+                out.insert(QString::fromUtf8(line.left(first)), {QString::fromUtf8(line.mid(second + 1))});
             }
         }
         Q_EMIT foregroundProcesses(out);

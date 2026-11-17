@@ -160,9 +160,24 @@ QString hookHint(const QString &kind)
     return QStringLiteral("No hook events from Claude Code yet. Check that x3ro-deck-hook is registered in ~/.claude/settings.json.");
 }
 
-bool runs(const AgentProfile &p, const QString &paneCommand)
+bool runs(const AgentProfile &p, const QStringList &paneCommands)
 {
-    return !p.process.isEmpty() && paneCommand.startsWith(p.process);
+    return !p.process.isEmpty()
+        && std::any_of(paneCommands.begin(), paneCommands.end(), [&p](const QString &c) { return c.startsWith(p.process); });
+}
+
+// The profile whose agent the foreground job runs. The job's leader decides
+// before the processes it started.
+QString profileRunning(const QList<AgentProfile> &profiles, const QStringList &paneCommands)
+{
+    for (const QString &cmd : paneCommands) {
+        for (const AgentProfile &p : profiles) {
+            if (runs(p, {cmd})) {
+                return p.id;
+            }
+        }
+    }
+    return {};
 }
 
 QVariantMap prMap(const PrInfo &pr)
@@ -548,21 +563,18 @@ void AppController::onGit(const QString &key, const GitInfo &info)
     Q_EMIT currentChanged();
 }
 
-void AppController::onPaneCommands(const QHash<QString, QString> &commands)
+void AppController::onPaneCommands(const QHash<QString, QStringList> &commands)
 {
     for (int i = 0; i < m_checkouts.size(); ++i) {
         Checkout &c = m_checkouts[i];
-        const QString cmd = commands.value(c.session);
+        const QStringList cmds = commands.value(c.session);
         // Someone may start a different agent by hand in the session; follow it.
-        if (!runs(profile(i), cmd)) {
-            for (const AgentProfile &p : std::as_const(m_config.agents)) {
-                if (runs(p, cmd)) {
-                    useProfile(i, p.id);
-                    break;
-                }
+        if (!runs(profile(i), cmds)) {
+            if (const QString id = profileRunning(m_config.agents, cmds); !id.isEmpty()) {
+                useProfile(i, id);
             }
         }
-        const bool running = runs(profile(i), cmd);
+        const bool running = runs(profile(i), cmds);
         const bool wasRunning = c.agent.running;
         c.agent.running = running;
         if (running && !wasRunning) {

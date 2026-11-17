@@ -23,8 +23,12 @@
 //   hello    {version}                              → {version, pid}
 //   create   {name, cwd, env:{}, command?:[], cols?, rows?} → {session}
 //            Runs `command`, or the user's login shell, in a new PTY.
-//   list     {}                                     → {sessions:[{id, name, cwd, env, pid,
-//                                                       cols, rows, foreground}]}
+//   list     {processes?}                           → {sessions:[{id, name, cwd, env, pid,
+//                                                       cols, rows, foreground,
+//                                                       foregroundGroup?}]}
+//            foreground is what tmux shows as pane_current_command. With
+//            processes:true, foregroundGroup names the whole foreground job,
+//            leader first (see ProcessInfo::foregroundNames).
 //   write    {name|session, data}                   data is a UTF-8 string
 //   resize   {name|session, cols, rows}             at most 1000 each; the last one wins
 //   rename   {name, to}
@@ -36,6 +40,9 @@
 //   screen   {name|session}                         → {cols, rows, cursor:{row, col},
 //                                                       cursorVisible, altScreen, title,
 //                                                       lines:[text]}
+//   processes {name|session}                        → {foreground: pgid, processes:[{pid, ppid,
+//                                                       pgid, name, args:[]}]}
+//            The session's shell and its descendants, parents first.
 //   detach   {session}
 //   shutdown {}                                     ends every session, then the daemon
 // Events:
