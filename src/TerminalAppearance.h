@@ -14,6 +14,7 @@ struct TerminalAppearance
     QColor foreground;
     QColor background;
     QColor cursor;
+    QColor selection; // background of selected cells; their text keeps its color
     // ANSI colors 0–7, then their bright variants 8–15. Colors 16–255 are the
     // standard xterm cube and grey ramp.
     std::array<QColor, 16> palette;

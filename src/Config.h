@@ -82,6 +82,7 @@ struct Config
     bool autostartAgents = true; // a newly created agent session runs its profile's command
     QString sessionBackend = QStringLiteral("tmux"); // "tmux" or "daemon" (x3ro-deck-sessiond); takes a restart
     QString terminal = QStringLiteral("konsole"); // "konsole" (konsolepart) or "builtin" (TerminalView); takes a restart
+    int terminalScrollback = 10000; // history lines per built-in terminal, for terminals opened afterwards
 
     // The profile with this id, else the default one.
     const AgentProfile &agent(const QString &id) const;

@@ -53,6 +53,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     setWindowIcon(QIcon::fromTheme(QStringLiteral("x3ro-deck"), QIcon(QStringLiteral(":/data/icons/x3ro-deck.svg"))));
     resize(1600, 980);
     TerminalHost::setBuiltin(m_app->config().terminal == QLatin1String("builtin"));
+    TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
 
     QFile qss(QStringLiteral(":/data/style.qss"));
     if (qss.open(QIODevice::ReadOnly)) {
@@ -325,7 +326,9 @@ void MainWindow::applySettings(const QJsonObject &config)
         QMessageBox::warning(this, QStringLiteral("Settings"), QStringLiteral("Could not save the settings.\n\n%1").arg(error));
         return;
     }
-    if (m_app->reloadConfig()) {
+    const bool applied = m_app->reloadConfig();
+    TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
+    if (applied) {
         return;
     }
     QMessageBox box(this);

@@ -3,6 +3,8 @@
 #include "ConfigMigrations.h"
 #include "Paths.h"
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -57,6 +59,7 @@ QJsonObject defaults()
         {QStringLiteral("autostartAgents"), true},
         {QStringLiteral("sessionBackend"), QStringLiteral("tmux")},
         {QStringLiteral("terminal"), QStringLiteral("konsole")},
+        {QStringLiteral("terminalScrollback"), 10000},
     };
 }
 
@@ -383,5 +386,6 @@ Config Config::load(QString *error)
     c.autostartAgents = root.value(QStringLiteral("autostartAgents")).toBool(true);
     c.sessionBackend = root.value(QStringLiteral("sessionBackend")).toString(c.sessionBackend).trimmed();
     c.terminal = root.value(QStringLiteral("terminal")).toString(c.terminal).trimmed();
+    c.terminalScrollback = std::clamp(root.value(QStringLiteral("terminalScrollback")).toInt(c.terminalScrollback), 0, 1000000);
     return c;
 }

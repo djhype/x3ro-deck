@@ -27,6 +27,12 @@ bool &builtinDefault()
     static bool builtin = false;
     return builtin;
 }
+
+int &scrollbackDefault()
+{
+    static int lines = 10000;
+    return lines;
+}
 } // namespace
 
 TerminalHost::TerminalHost(QWidget *parent)
@@ -82,6 +88,11 @@ void TerminalHost::setAppShortcuts(const QList<QKeySequence> &shortcuts)
     appShortcuts() = shortcuts;
 }
 
+void TerminalHost::setScrollbackLines(int lines)
+{
+    scrollbackDefault() = lines;
+}
+
 void TerminalHost::setBuiltin(bool builtin)
 {
     builtinDefault() = builtin;
@@ -115,6 +126,7 @@ void TerminalHost::spawnBuiltin()
     if (!m_view) {
         m_view = new TerminalView(this);
         m_view->setReservedShortcuts(appShortcuts());
+        m_view->screen()->setScrollbackLimit(scrollbackDefault());
         m_layout->addWidget(m_view);
         setFocusProxy(m_view);
     }
@@ -124,7 +136,7 @@ void TerminalHost::spawnBuiltin()
         argv = {shell.isEmpty() ? QStringLiteral("/bin/sh") : shell};
     }
     // A reattach redraws everything; start from a clean screen and modes.
-    m_view->screen()->reset();
+    m_view->reset();
     m_pty = new PtyChannel(this);
     QString error;
     if (!m_pty->start(argv, m_dir, m_view->rows(), m_view->cols(), {}, &error)) {

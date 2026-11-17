@@ -7,6 +7,9 @@
 #include <QRect>
 #include <QString>
 
+#include <memory>
+#include <utility>
+
 #include "TerminalAppearance.h"
 
 struct VTerm;
@@ -17,6 +20,10 @@ struct VTermState;
 // prints into a grid of cells, and turns keystrokes into the bytes the
 // program expects (honoring its modes, such as application cursor keys and
 // bracketed paste). TerminalView paints it; tests read it directly.
+//
+// Lines that scroll off the top of the primary screen go to a scrollback
+// buffer. "Line" coordinates cover both: lines 0 to scrollbackSize() - 1 are
+// the history, oldest first, and the screen's rows follow.
 class TerminalScreen : public QObject
 {
     Q_OBJECT
@@ -69,9 +76,35 @@ public:
     Cell cell(int row, int col) const;
     // The row's characters, trailing blanks removed.
     QString rowText(int row) const;
+
+    // Lines kept at most; older ones are dropped. 0 keeps none.
+    void setScrollbackLimit(int lines);
+    int scrollbackLimit() const { return m_scrollbackLimit; }
+    int scrollbackSize() const;
+    void clearScrollback();
+    // Lines dropped from the top of the scrollback since the start. Adding it
+    // to a line number gives a position that stays put as the history grows.
+    qint64 droppedLines() const { return m_dropped; }
+    int lineCount() const { return scrollbackSize() + m_rows; }
+    Cell lineCell(int line, int col) const;
+    // Columns the line holds: the screen width, or the width it had when it
+    // scrolled off.
+    int lineCols(int line) const;
+    // The line ran out of columns and continues on the next one.
+    bool lineWrapped(int line) const;
+    // The text from `from` to `to`, both included (x = column, y = line).
+    // Soft-wrapped lines join without a break; trailing blanks of the other
+    // lines are dropped, and wide characters count once.
+    QString text(QPoint from, QPoint to) const;
+    // The word around a cell, which may run across wrapped lines.
+    std::pair<QPoint, QPoint> wordAt(QPoint pos) const;
+    // The first and last line of the wrapped line that holds `line`.
+    std::pair<int, int> logicalLine(int line) const;
     QPoint cursor() const { return m_cursor; } // x = column, y = row
     bool cursorVisible() const { return m_cursorVisible; }
     bool altScreen() const { return m_altScreen; }
+    // The program asked for mouse events (any tracking mode).
+    bool mouseReporting() const { return m_mouseMode != 0; }
     QString title() const { return m_title; }
 
     // Keystrokes; the bytes come out through output().
@@ -80,6 +113,8 @@ public:
     // One paste: bracketed when the program asked for it, line breaks as Enter.
     void paste(const QString &text);
     void setFocused(bool focused);
+    // One wheel step at a screen cell, encoded as the program's mouse mode asks.
+    void sendWheel(int row, int col, bool up, Qt::KeyboardModifiers mods = Qt::NoModifier);
 
 Q_SIGNALS:
     // Bytes for the program: keystrokes, pastes and replies to its queries.
@@ -89,9 +124,13 @@ Q_SIGNALS:
     void cursorMoved(const QPoint &from, const QPoint &to);
     void titleChanged(const QString &title);
     void bell();
+    // The scrollback grew by `pushed` lines (possibly dropping old ones), or
+    // shrank or was cleared (pushed = 0).
+    void scrollbackChanged(int pushed);
 
 private:
     friend struct TerminalScreenCallbacks;
+    struct Scrollback;
     void flush();
 
     VTerm *m_vt = nullptr;
@@ -106,6 +145,13 @@ private:
     bool m_cursorVisible = true;
     bool m_altScreen = false;
     bool m_reverseScreen = false;
+    int m_mouseMode = 0;
+    std::unique_ptr<Scrollback> m_sb;
+    int m_scrollbackLimit = 10000;
+    qint64 m_dropped = 0;
+    int m_pushed = 0;
+    bool m_sbChanged = false;
+    bool m_resizing = false;
     QString m_title;
     QByteArray m_titleBuf;
     QRect m_damage;

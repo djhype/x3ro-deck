@@ -32,6 +32,8 @@ public:
     static void setAppShortcuts(const QList<QKeySequence> &shortcuts);
     // Whether terminals created from now on are built-in instead of konsolepart.
     static void setBuiltin(bool builtin);
+    // History lines a built-in terminal created from now on keeps.
+    static void setScrollbackLines(int lines);
     ~TerminalHost() override;
 
     void sendInput(const QString &text);

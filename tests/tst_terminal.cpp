@@ -5,6 +5,8 @@
 #include "TerminalView.h"
 #include "TmuxManager.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QDir>
 #include <QFile>
 #include <QProcess>
@@ -29,6 +31,53 @@ public:
     QByteArray written;
     QSize size;
 };
+
+QByteArray numberedLines(int from, int to)
+{
+    QByteArray out;
+    for (int i = from; i <= to; ++i) {
+        out += "\r\nline " + QByteArray::number(i);
+    }
+    return out;
+}
+
+// The view's text, row by row.
+QStringList visibleRows(const TerminalView &view)
+{
+    QStringList rows;
+    for (int r = 0; r < view.rows(); ++r) {
+        QString text;
+        for (int c = 0; c < view.cols(); ++c) {
+            const TerminalScreen::Cell cell = view.screen()->lineCell(view.topLine() + r, c);
+            if (cell.width != 0) {
+                text += cell.text.isEmpty() ? QStringLiteral(" ") : cell.text;
+            }
+        }
+        rows << text.trimmed();
+    }
+    return rows;
+}
+
+QPoint cellCenter(const TerminalView &view, int col, int row)
+{
+    const QSize cell = view.cellSize();
+    const int pad = view.appearance().padding;
+    return QPoint(pad + col * cell.width() + cell.width() / 2, pad + row * cell.height() + cell.height() / 2);
+}
+
+void sizeView(TerminalView &view, int cols, int rows)
+{
+    const QSize cell = view.cellSize();
+    const int pad = view.appearance().padding;
+    view.resize(cell.width() * cols + 2 * pad, cell.height() * rows + 2 * pad);
+}
+
+void wheel(TerminalView &view, int delta, Qt::KeyboardModifiers mods = Qt::NoModifier)
+{
+    const QPointF pos = cellCenter(view, 1, 1);
+    QWheelEvent e(pos, view.mapToGlobal(pos), QPoint(), QPoint(0, delta), Qt::NoButton, mods, Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(&view, &e);
+}
 
 QByteArray collect(TerminalScreen &screen, const std::function<void()> &fn)
 {
@@ -151,6 +200,256 @@ private Q_SLOTS:
         QCOMPARE(collect(s, [&] { s.paste(QStringLiteral("one\ntwo\x1b[201~")); }), QByteArray("\x1b[200~one\rtwo\x1b[201~"));
     }
 
+    void scrollbackPushPopAndLimit()
+    {
+        TerminalScreen s(3, 10);
+        QSignalSpy changed(&s, &TerminalScreen::scrollbackChanged);
+        s.feed("line 1" + numberedLines(2, 5));
+        QCOMPARE(s.scrollbackSize(), 2);
+        QCOMPARE(s.lineCount(), 5);
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(changed.first().first().toInt(), 2);
+        QCOMPARE(s.text(QPoint(0, 0), QPoint(9, 4)), QStringLiteral("line 1\nline 2\nline 3\nline 4\nline 5"));
+        // Colors survive the trip into the history.
+        s.feed("\r\n\x1b[31mred\x1b[0m" + numberedLines(7, 9));
+        const int red = s.scrollbackSize() - 1;
+        QCOMPARE(s.lineCell(red, 0).text, QStringLiteral("r"));
+        QCOMPARE(s.lineCell(red, 0).fg, TerminalAppearance::fallback().palette[1]);
+        QVERIFY(s.lineCell(red, 8).text.isEmpty());
+
+        // Growing the screen takes lines back from the history.
+        const int before = s.scrollbackSize();
+        s.resize(5, 10);
+        QCOMPARE(s.scrollbackSize(), before - 2);
+        QCOMPARE(s.rowText(4), QStringLiteral("line 9"));
+        QCOMPARE(s.rowText(1), QStringLiteral("red"));
+
+        s.setScrollbackLimit(3);
+        QCOMPARE(s.scrollbackSize(), 3);
+        const qint64 dropped = s.droppedLines();
+        QVERIFY(dropped > 0);
+        s.feed(numberedLines(10, 19));
+        QCOMPARE(s.scrollbackSize(), 3);
+        QCOMPARE(s.droppedLines(), dropped + 10);
+        QCOMPARE(s.text(QPoint(0, 0), QPoint(9, 0)), QStringLiteral("line 12"));
+
+        s.feed("\x1b[3J"); // clear scrollback
+        QCOMPARE(s.scrollbackSize(), 0);
+        QCOMPARE(s.droppedLines(), dropped + 13);
+
+        s.setScrollbackLimit(0);
+        s.feed(numberedLines(20, 30));
+        QCOMPARE(s.scrollbackSize(), 0);
+    }
+
+    void scrollbackSkipsAltScreen()
+    {
+        TerminalScreen s(3, 10);
+        s.feed("\x1b[?1049h" + numberedLines(1, 10));
+        QCOMPARE(s.scrollbackSize(), 0);
+    }
+
+    void selectionTextWrapsAndWideChars()
+    {
+        TerminalScreen s(3, 5);
+        // "abcdefgh" wraps after five columns; "xy" has trailing blanks; 日本z
+        // fills the row with two wide characters.
+        s.feed("abcdefgh\r\nxy   \r\n\xe6\x97\xa5\xe6\x9c\xac"
+               "z\r\nlast");
+        QCOMPARE(s.scrollbackSize(), 2);
+        QVERIFY(s.lineWrapped(0));
+        QVERIFY(!s.lineWrapped(1));
+        QCOMPARE(s.text(QPoint(0, 0), QPoint(4, 4)), QStringLiteral("abcdefgh\nxy\n日本z\nlast"));
+        // Starting on the right half of a wide character takes all of it.
+        QCOMPARE(s.text(QPoint(1, 3), QPoint(3, 3)), QStringLiteral("日本"));
+        // Reversed ends give the same text.
+        QCOMPARE(s.text(QPoint(2, 1), QPoint(1, 0)), QStringLiteral("bcdefgh"));
+        QCOMPARE(s.text(QPoint(1, 0), QPoint(4, 2)), QStringLiteral("bcdefgh\nxy"));
+        QCOMPARE(s.logicalLine(1), std::make_pair(0, 1));
+        QCOMPARE(s.logicalLine(2), std::make_pair(2, 2));
+
+        // A soft wrap on the screen joins too.
+        TerminalScreen t(4, 6);
+        t.feed("hello world\r\nnext");
+        QVERIFY(t.lineWrapped(0));
+        QCOMPARE(t.text(QPoint(0, 0), QPoint(5, 2)), QStringLiteral("hello world\nnext"));
+    }
+
+    void selectionWords()
+    {
+        TerminalScreen s(3, 40);
+        s.feed("ls /usr/local/bin foo, bar");
+        auto word = [&s](int col) {
+            const auto [from, to] = s.wordAt(QPoint(col, 0));
+            return s.text(from, to);
+        };
+        QCOMPARE(word(8), QStringLiteral("/usr/local/bin"));
+        QCOMPARE(word(0), QStringLiteral("ls"));
+        QCOMPARE(word(21), QStringLiteral(","));
+        // A URL that wraps selects whole.
+        TerminalScreen u(3, 10);
+        u.feed("see https://ex.com/a/b c");
+        const auto [from, to] = u.wordAt(QPoint(6, 0));
+        QCOMPARE(u.text(from, to), QStringLiteral("https://ex.com/a/b"));
+    }
+
+    void viewStaysPutWhileOutputArrives()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 20, 5);
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        channel.print("line 1" + numberedLines(2, 3000));
+        QCOMPARE(view.scrollOffset(), 0);
+        QCOMPARE(visibleRows(view).last(), QStringLiteral("line 3000"));
+
+        view.scrollBy(2000);
+        QCOMPARE(view.scrollOffset(), 2000);
+        const QStringList shown = visibleRows(view);
+        QCOMPARE(shown.first(), QStringLiteral("line 996"));
+        channel.print(numberedLines(3001, 3500));
+        QCOMPARE(visibleRows(view), shown);
+        QCOMPARE(view.scrollOffset(), 2500);
+
+        // Shift+PgUp/PgDn page through it; the wheel moves three lines a notch.
+        QTest::keyClick(&view, Qt::Key_PageUp, Qt::ShiftModifier);
+        QCOMPARE(view.scrollOffset(), 2504);
+        QTest::keyClick(&view, Qt::Key_PageDown, Qt::ShiftModifier);
+        wheel(view, -120);
+        QCOMPARE(view.scrollOffset(), 2497);
+        QVERIFY(channel.written.isEmpty());
+
+        // Typing goes back to the bottom.
+        QTest::keyClick(&view, Qt::Key_A);
+        QCOMPARE(view.scrollOffset(), 0);
+        QCOMPARE(channel.written, QByteArray("a"));
+        channel.print(numberedLines(3501, 3502));
+        QCOMPARE(view.scrollOffset(), 0);
+        QCOMPARE(visibleRows(view).last(), QStringLiteral("line 3502"));
+
+        // Scrolling stops at the top of the history.
+        view.scrollBy(1000000);
+        QCOMPARE(view.scrollOffset(), view.screen()->scrollbackSize());
+        QCOMPARE(view.topLine(), 0);
+    }
+
+    void viewWheelInFullScreenPrograms()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 20, 5);
+        channel.print(numberedLines(1, 20));
+        // Alternate screen without mouse reporting: arrow keys.
+        channel.print("\x1b[?1049h");
+        wheel(view, 120);
+        QCOMPARE(view.scrollOffset(), 0);
+        QCOMPARE(channel.written, QByteArray("\x1b[A\x1b[A\x1b[A"));
+        // With mouse reporting (tmux's "mouse on"): wheel reports, one per notch.
+        channel.written.clear();
+        channel.print("\x1b[?1000h\x1b[?1006h");
+        wheel(view, 120);
+        wheel(view, -120);
+        QCOMPARE(channel.written, QByteArray("\x1b[<64;2;2M\x1b[<65;2;2M"));
+        // Shift keeps the wheel local.
+        channel.written.clear();
+        wheel(view, 120, Qt::ShiftModifier);
+        QVERIFY(!channel.written.contains("\x1b[<"));
+    }
+
+    void viewMouseSelection()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 20, 6);
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        // A long answer that wraps over three rows, then a short line.
+        channel.print("Here is a long answer that wraps\r\nsecond line\r\n");
+
+        QTest::mousePress(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 8, 0));
+        QTest::mouseMove(&view, cellCenter(view, 5, 2));
+        QTest::mouseRelease(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 5, 2));
+        QCOMPARE(view.selectedText(), QStringLiteral("a long answer that wraps\nsecond"));
+
+        QTest::keyClick(&view, Qt::Key_C, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(QApplication::clipboard()->text(), QStringLiteral("a long answer that wraps\nsecond"));
+        QVERIFY(channel.written.isEmpty());
+
+        // A plain click clears it.
+        QTest::mouseClick(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 3, 4));
+        QVERIFY(!view.hasSelection());
+
+        // Double-click: a word. A third click: the wrapped line.
+        QTest::mouseDClick(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 11, 0));
+        QCOMPARE(view.selectedText(), QStringLiteral("long"));
+        QTest::mousePress(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 11, 0));
+        QTest::mouseRelease(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 11, 0));
+        QCOMPARE(view.selectedText(), QStringLiteral("Here is a long answer that wraps"));
+
+        // The selection follows its text into the history.
+        channel.print(numberedLines(1, 10));
+        QCOMPARE(view.selectedText(), QStringLiteral("Here is a long answer that wraps"));
+    }
+
+    void viewPastes()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 20, 5);
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        channel.print("\x1b[?2004h" + numberedLines(1, 20));
+        view.scrollBy(5);
+        QApplication::clipboard()->setText(QStringLiteral("one\ntwo\nthree"));
+        QTest::keyClick(&view, Qt::Key_V, Qt::ControlModifier | Qt::ShiftModifier);
+        QCOMPARE(channel.written, QByteArray("\x1b[200~one\rtwo\rthree\x1b[201~"));
+        QCOMPARE(view.scrollOffset(), 0);
+        // Middle-click pastes the primary selection, or the clipboard where
+        // the platform has none.
+        channel.written.clear();
+        QClipboard *clip = QApplication::clipboard();
+        clip->setText(QStringLiteral("x\ny"), clip->supportsSelection() ? QClipboard::Selection : QClipboard::Clipboard);
+        QTest::mouseClick(&view, Qt::MiddleButton, Qt::NoModifier, cellCenter(view, 1, 1));
+        QCOMPARE(channel.written, QByteArray("\x1b[200~x\ry\x1b[201~"));
+    }
+
+    void viewPaintsSelectionAndHistory()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 40, 8);
+        channel.print("\x1b[1;35mx3ro-deck\x1b[0m scrollback demo" + numberedLines(1, 40)
+                      + "\r\n\xe6\x97\xa5\xe6\x9c\xac wide and a long line that wraps around the edge");
+        view.scrollBy(30);
+        view.setSelection(QPoint(5, view.topLine() + 2), QPoint(3, view.topLine() + 4));
+        const QImage img = view.grab().toImage();
+        const QString shot = qEnvironmentVariable("X3RO_DECK_TERMINAL_SHOT");
+        if (!shot.isEmpty()) {
+            img.save(shot);
+        }
+        const QSize cell = view.cellSize();
+        const int pad = view.appearance().padding;
+        auto at = [&](int col, int row) {
+            return img.pixelColor(pad + col * cell.width() + 1, pad + row * cell.height() + 1);
+        };
+        QCOMPARE(at(10, 3), view.appearance().selection);
+        QCOMPARE(at(4, 2), view.appearance().background);
+        QCOMPARE(at(2, 4), view.appearance().selection);
+        QCOMPARE(at(4, 4), view.appearance().background);
+        // The position bar sits in the right padding.
+        bool bar = false;
+        for (int y = 0; y < img.height(); ++y) {
+            bar |= img.pixelColor(img.width() - 1, y) != view.appearance().background;
+        }
+        QVERIFY(bar);
+    }
+
     void ptyRunsAndResizes()
     {
         PtyChannel pty;
@@ -211,7 +510,8 @@ private Q_SLOTS:
         FakeChannel channel;
         view.setChannel(&channel);
         view.show();
-        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        view.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&view));
         QTest::keyClicks(&view, QStringLiteral("hi"));
         QTest::keyClick(&view, Qt::Key_Return);
         QTest::keyClick(&view, Qt::Key_Down);
