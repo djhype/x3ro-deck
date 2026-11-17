@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-mapfile -t files < <(git ls-files '*.cpp' '*.h')
+mapfile -t files < <(git ls-files --cached --others --exclude-standard '*.cpp' '*.h')
 if [[ ${1:-} == --fix ]]; then
     clang-format -i "${files[@]}"
 else

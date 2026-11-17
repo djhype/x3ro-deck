@@ -24,7 +24,8 @@ namespace x3ro_deck
 // sun_path is 108 bytes on Linux and 104 on macOS, NUL included.
 constexpr std::size_t kMaxSocketPath = sizeof(sockaddr_un::sun_path) - 1;
 
-struct SocketPath {
+struct SocketPath
+{
     std::string path;
     // Set when `path` lives in the /tmp fallback directory, which the app
     // creates and checks before listening.
