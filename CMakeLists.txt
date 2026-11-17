@@ -23,18 +23,14 @@ function(x3ro_deck_set_warnings target)
     set_target_properties(${target} PROPERTIES COMPILE_WARNING_AS_ERROR ${X3RO_DECK_WERROR})
 endfunction()
 
-find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets Network Quick QuickWidgets Qml DBus)
-find_package(KF6Parts REQUIRED)
-find_package(KF6CoreAddons REQUIRED)
-find_package(KF6XmlGui REQUIRED)
-find_package(KF6Notifications REQUIRED)
-find_package(KF6StatusNotifierItem 6.5 REQUIRED) # quitRequested/abortQuit
-find_package(KF6GlobalAccel REQUIRED)
-find_package(KF6DBusAddons REQUIRED)
-find_package(KF6WindowSystem REQUIRED)
+option(X3RO_DECK_CORE_ONLY "Build without KF6: the controller, backends, hook and tests, but not the app" OFF)
 
-# Everything but main(), so tests can link the app's classes.
-add_library(x3ro-deck-core STATIC
+# 6.4 is what Ubuntu 24.04 and Debian 12 ship.
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network)
+
+# The app minus its KF6-dependent window and terminal, so tests and older
+# distros can build it.
+add_library(x3ro-deck-base STATIC
     src/Config.cpp
     src/ConfigMigrations.cpp
     src/DockerClient.cpp
@@ -48,21 +44,37 @@ add_library(x3ro-deck-core STATIC
     src/Models.cpp
     src/Paths.cpp
     src/AppController.cpp
-    src/TerminalHost.cpp
-    src/MainWindow.cpp
     src/SettingsDialog.cpp
 )
-x3ro_deck_set_warnings(x3ro-deck-core)
-target_include_directories(x3ro-deck-core PUBLIC src common)
-target_link_libraries(x3ro-deck-core PUBLIC
-    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
-    KF6::Parts KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::StatusNotifierItem
-    KF6::GlobalAccel KF6::DBusAddons KF6::WindowSystem
-)
+x3ro_deck_set_warnings(x3ro-deck-base)
+target_include_directories(x3ro-deck-base PUBLIC src common)
+target_link_libraries(x3ro-deck-base PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
 
-add_executable(x3ro-deck src/main.cpp resources.qrc)
-x3ro_deck_set_warnings(x3ro-deck)
-target_link_libraries(x3ro-deck PRIVATE x3ro-deck-core)
+if(NOT X3RO_DECK_CORE_ONLY)
+    find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)
+    find_package(KF6Parts REQUIRED)
+    find_package(KF6CoreAddons REQUIRED)
+    find_package(KF6XmlGui REQUIRED)
+    find_package(KF6Notifications REQUIRED)
+    find_package(KF6StatusNotifierItem 6.5 REQUIRED) # quitRequested/abortQuit
+    find_package(KF6GlobalAccel REQUIRED)
+    find_package(KF6DBusAddons REQUIRED)
+    find_package(KF6WindowSystem REQUIRED)
+
+    add_executable(x3ro-deck
+        src/main.cpp
+        src/MainWindow.cpp
+        src/TerminalHost.cpp
+        resources.qrc
+    )
+    x3ro_deck_set_warnings(x3ro-deck)
+    target_link_libraries(x3ro-deck PRIVATE
+        x3ro-deck-base
+        Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
+        KF6::Parts KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::StatusNotifierItem
+        KF6::GlobalAccel KF6::DBusAddons KF6::WindowSystem
+    )
+endif()
 
 # The hook runs on every agent tool call, so it is plain C++ with no Qt
 # dependency: it starts in about a millisecond and never blocks the agent.
@@ -77,7 +89,10 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-install(TARGETS x3ro-deck x3ro-deck-hook RUNTIME DESTINATION bin)
+if(NOT X3RO_DECK_CORE_ONLY)
+    install(TARGETS x3ro-deck RUNTIME DESTINATION bin)
+endif()
+install(TARGETS x3ro-deck-hook RUNTIME DESTINATION bin)
 if(UNIX AND NOT APPLE)
     # Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually
     # comes from a shell rc file that only terminals read.

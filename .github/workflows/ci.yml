@@ -65,3 +65,31 @@ jobs:
           name: screenshot-${{ matrix.name }}
           path: smoke-${{ matrix.name }}.png
           if-no-files-found: warn
+
+  # Guards the Qt 6.4 floor with Ubuntu 24.04's distro Qt and tmux 3.4.
+  # Ubuntu 24.04 has no KF6, so this builds everything but the window and
+  # terminal (X3RO_DECK_CORE_ONLY) until PE-150 drops KF6.
+  linux-qt64:
+    name: linux (Ubuntu 24.04, Qt 6.4)
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            build-essential cmake ninja-build git tmux ca-certificates libgl-dev \
+            qt6-base-dev qt6-declarative-dev qml6-module-qtquick qml6-module-qtqml-workerscript
+
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DX3RO_DECK_CORE_ONLY=ON -DX3RO_DECK_WERROR=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen

@@ -8,11 +8,12 @@ Qt 6 / KF6 desktop app (C++20, Widgets + QML panels) for running coding agents a
 - `cmake --build --preset linux`: build both targets. The build must stay warning-free on GCC, Clang and MSVC; `x3ro_deck_set_warnings` in `CMakeLists.txt` picks the flags. Add `-DX3RO_DECK_WERROR=ON` to the configure step to turn warnings into errors (CI does).
 - `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file, notifyrc and hicolor icons. The desktop, notifyrc and icon rules apply only on `UNIX AND NOT APPLE`. The desktop file comes from `data/x3ro-deck.desktop.in` with an absolute `Exec`, because Plasma's session PATH lacks `~/.local/bin`.
 - `kbuildsycoca6`: refresh KDE's caches after changing the desktop file or icons.
+- `-DX3RO_DECK_CORE_ONLY=ON`: build without KF6, which leaves out the app itself but keeps the hook and every test. The Qt floor is 6.4 (Ubuntu 24.04 and Debian 12). KF6 needs Qt 6.5+, so the full app can't build on those distros until KF6 is gone.
 - `scripts/check-format.sh [--fix]`: check (or apply) `.clang-format` on every tracked C++ file.
 - `scripts/smoke-test.sh [binary] [out.png]`: headless screenshot in an isolated environment. It fails without a PNG or on any QML error.
-- `ctest --test-dir build`: run the QtTest suites in `tests/`. They link `x3ro-deck-core`, the static library holding everything except `main.cpp`. `tst_sessionflow` drives AppController against a private tmux server.
+- `ctest --test-dir build`: run the QtTest suites in `tests/`. They link `x3ro-deck-base`, the static library holding everything except the KF6-dependent `main.cpp`, `MainWindow` and `TerminalHost`. `tst_qml` compiles every panel in `qml/`. `tst_sessionflow` drives AppController against a private tmux server.
 
-CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks formatting, builds with `-DX3RO_DECK_WERROR=ON`, runs `ctest` and the smoke test, and uploads the screenshot. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
+CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-only job on `ubuntu:24.04` with its distro Qt 6.4 and tmux 3.4. It checks formatting, builds with `-DX3RO_DECK_WERROR=ON`, runs `ctest` and the smoke test, and uploads the screenshot. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
 
 # Architecture
 
@@ -50,7 +51,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
 - `src/GitWatcher.cpp`: watches `HEAD` and `logs/HEAD` with `QFileSystemWatcher`.
 - `src/PrWatcher.cpp`: polls `gh pr view <branch> --json …` per checkout.
 - `qml/`: `Theme.qml` holds every color and font. Use its tokens and helpers (`agentColor`, `healthColor`, `elapsed`) and do not hardcode colors.
-- New QML files and data files must be added to `resources.qrc`. New C++ sources must be added to the `x3ro-deck-core` library in `CMakeLists.txt`, and new tests to `tests/CMakeLists.txt`.
+- New QML files and data files must be added to `resources.qrc`. New C++ sources must be added to `CMakeLists.txt`, to `x3ro-deck-base` unless they need KF6, and new tests to `tests/CMakeLists.txt`.
 
 # Code style
 
@@ -91,6 +92,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
 - Codex treats Enter within 120 ms of fast input as a newline, so its profiles wait `submitDelayMs` (300) before pressing Enter.
 - A profile that points Claude Code at another server must set `ANTHROPIC_AUTH_TOKEN`; otherwise Claude Code sends the claude.ai login to that server.
 - The pane poll (`onPaneCommands`) changes agent state only on transitions of an agent process inside our own tmux session. All other state comes from hooks. When the pane runs another profile's `process`, the checkout switches to that profile.
+- tmux before 3.5 prints tabs in `-F` output as `_`, so `TmuxManager` separates fields with `:`. Session names never contain `:`.
 - Exited containers with exit code 0 count as `completed`. They are excluded from up/total counts and never raise NEEDS YOU items.
 - `PrWatcher` skips `main`, `master` and `develop`. A closed, unmerged PR turns "View PR" back into the profile's `prPrompt`.
 - `KStatusNotifierItem` and `KGlobalAccel` log errors under `dbus-run-session`. These are expected in headless tests.
