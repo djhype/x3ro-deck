@@ -1,5 +1,6 @@
 #include "Config.h"
 
+#include "ConfigMigrations.h"
 #include "Paths.h"
 
 #include <QDir>
@@ -40,6 +41,7 @@ QJsonArray defaultAgents()
 QJsonObject defaults()
 {
     return QJsonObject{
+        {QStringLiteral("configVersion"), ConfigMigrations::currentVersion()},
         {QStringLiteral("checkouts"), QJsonArray{}},
         {QStringLiteral("quickCommands"), QJsonArray{}},
         {QStringLiteral("links"), QJsonArray{}},
@@ -250,6 +252,27 @@ QString Config::configPath()
     return configDir() + QStringLiteral("/config.json");
 }
 
+namespace
+{
+// Keeps the original bytes as config.json.v<from>.bak, then writes the
+// migrated file. Without a backup it writes nothing.
+bool writeMigrated(const QByteArray &original, int from, const QJsonObject &migrated, QString *error)
+{
+    const QString backup = Config::configPath() + QStringLiteral(".v%1.bak").arg(from);
+    QSaveFile bak(backup);
+    if (!bak.open(QIODevice::WriteOnly) || bak.write(original) < 0 || !bak.commit()) {
+        *error = QStringLiteral("Could not back up %1 before upgrading it: %2").arg(Config::configPath(), bak.errorString());
+        return false;
+    }
+    QSaveFile file(Config::configPath());
+    if (!file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(migrated).toJson(QJsonDocument::Indented)) < 0 || !file.commit()) {
+        *error = QStringLiteral("Could not save the upgraded %1: %2").arg(Config::configPath(), file.errorString());
+        return false;
+    }
+    return true;
+}
+} // namespace
+
 QJsonObject Config::readJson(QString *error)
 {
     QDir().mkpath(configDir());
@@ -261,10 +284,27 @@ QJsonObject Config::readJson(QString *error)
 
     QJsonObject root = defaults();
     if (file.open(QIODevice::ReadOnly)) {
+        const QByteArray raw = file.readAll();
+        file.close();
         QJsonParseError parseError;
-        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
+        const QJsonDocument doc = QJsonDocument::fromJson(raw, &parseError);
         if (doc.isObject()) {
-            const QJsonObject user = doc.object();
+            QJsonObject user = doc.object();
+            const ConfigMigrations::Result migration = ConfigMigrations::run(user);
+            if (migration.tooNew && error) {
+                // Settings refuse to open while `error` is set, so nothing overwrites it.
+                *error = QStringLiteral("%1 is version %2, newer than this X3RO Deck understands (%3). It is left as is; update X3RO "
+                                        "Deck before changing settings.")
+                             .arg(Paths::tilde(configPath()))
+                             .arg(migration.from)
+                             .arg(ConfigMigrations::currentVersion());
+            } else if (migration.migrated) {
+                user = migration.config;
+                QString writeError;
+                if (!writeMigrated(raw, migration.from, user, &writeError) && error) {
+                    *error = writeError;
+                }
+            }
             for (auto it = user.begin(); it != user.end(); ++it) {
                 root.insert(it.key(), it.value());
             }
@@ -277,8 +317,10 @@ QJsonObject Config::readJson(QString *error)
 
 bool Config::writeJson(const QJsonObject &root, QString *error)
 {
+    QJsonObject stamped = root;
+    stamped.insert(QStringLiteral("configVersion"), ConfigMigrations::currentVersion());
     QSaveFile file(configPath());
-    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) >= 0 && file.commit()) {
+    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(stamped).toJson(QJsonDocument::Indented)) >= 0 && file.commit()) {
         return true;
     }
     if (error) {

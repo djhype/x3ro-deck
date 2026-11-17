@@ -1,0 +1,9 @@
+{
+    "autostartAgents": false,
+    "checkouts": [
+        { "name": "alpha", "path": "/tmp", "portOffset": 0, "agent": "codex" },
+        { "name": "beta", "path": "/tmp", "portOffset": 10000 }
+    ],
+    "customKeyFromTheUser": { "kept": true },
+    "defaultAgent": "codex"
+}

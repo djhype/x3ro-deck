@@ -1,0 +1,8 @@
+{
+    "configVersion": 999,
+    "autostartAgents": false,
+    "checkouts": [
+        { "name": "alpha", "path": "/tmp" }
+    ],
+    "someFutureLayout": [1, 2, 3]
+}

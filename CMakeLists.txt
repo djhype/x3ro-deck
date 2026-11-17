@@ -36,6 +36,7 @@ find_package(KF6WindowSystem REQUIRED)
 # Everything but main(), so tests can link the app's classes.
 add_library(x3ro-deck-core STATIC
     src/Config.cpp
+    src/ConfigMigrations.cpp
     src/DockerClient.cpp
     src/AgentBus.cpp
     common/x3ro-deck-socket.h
