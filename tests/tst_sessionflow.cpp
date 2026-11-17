@@ -1,6 +1,7 @@
 // End-to-end agent flow through AppController and the session backend, the
 // same calls the QML buttons make. It runs a private tmux server, so it never
-// touches a live instance's sessions.
+// touches a live instance's sessions. With X3RO_DECK_TEST_BACKEND=daemon it
+// runs the same flow against a private x3ro-deck-sessiond instead.
 
 #include "AgentBus.h"
 #include "AppController.h"
@@ -14,6 +15,7 @@
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <SessiondProtocol.h>
 
 #include <memory>
 
@@ -29,6 +31,7 @@ private Q_SLOTS:
     void hookCwdMapsToCheckout();
 
 private:
+    static bool daemon() { return qEnvironmentVariable("X3RO_DECK_TEST_BACKEND") == QLatin1String("daemon"); }
     static QString readFile(const QString &path);
     QString readLog() const { return readFile(m_log); }
     QString paneText(const QString &session) const;
@@ -81,6 +84,7 @@ void SessionFlowTest::initTestCase()
     // `cat` stands in for an agent: what reaches its terminal ends up in the log.
     const QJsonObject config{
         {QStringLiteral("autostartAgents"), true},
+        {QStringLiteral("sessionBackend"), daemon() ? QStringLiteral("daemon") : QStringLiteral("tmux")},
         {QStringLiteral("defaultAgent"), QStringLiteral("fake")},
         {QStringLiteral("agents"),
          QJsonArray{QJsonObject{
@@ -117,6 +121,32 @@ QString SessionFlowTest::readFile(const QString &path)
 
 QString SessionFlowTest::paneText(const QString &session) const
 {
+    if (daemon()) {
+        // The session's recent output, as an attaching client gets it replayed.
+        QLocalSocket sock;
+        sock.connectToServer(Sessiond::socketPath());
+        if (!sock.waitForConnected(2000)) {
+            return {};
+        }
+        sock.write(Sessiond::encodeControl(
+            {{QStringLiteral("op"), QStringLiteral("attach")}, {QStringLiteral("id"), 1}, {QStringLiteral("name"), session}}));
+        QByteArray buffer;
+        QByteArray out;
+        QDeadlineTimer deadline(500);
+        while (!deadline.hasExpired()) {
+            sock.waitForReadyRead(50);
+            buffer.append(sock.readAll());
+            Sessiond::Frame f;
+            quint32 id = 0;
+            QByteArray bytes;
+            while (Sessiond::takeFrame(buffer, f)) {
+                if (f.type == Sessiond::Output && Sessiond::splitData(f.payload, id, bytes)) {
+                    out.append(bytes);
+                }
+            }
+        }
+        return QString::fromUtf8(out);
+    }
     QProcess capture;
     capture.start(QStringLiteral("tmux"),
                   {QStringLiteral("-L"), QStringLiteral("x3ro-deck"), QStringLiteral("capture-pane"), QStringLiteral("-p"),

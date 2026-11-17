@@ -1,5 +1,6 @@
 #include "AppController.h"
 
+#include "DaemonBackend.h"
 #include "DockerEndpoint.h"
 #include "Paths.h"
 #include "TmuxManager.h"
@@ -206,7 +207,8 @@ AppController::AppController(QObject *parent)
     , m_config(Config::load(&m_configError))
     , m_docker(new DockerClient(this))
     , m_bus(new AgentBus(this))
-    , m_sessions(new TmuxManager(this))
+    , m_sessions(m_config.sessionBackend == QLatin1String("daemon") ? static_cast<SessionBackend *>(new DaemonBackend(this))
+                                                                    : new TmuxManager(this))
     , m_git(new GitWatcher(this))
     , m_prs(new PrWatcher(this))
     , m_checkoutModel(new VariantListModel(kCheckoutRoles, this))
@@ -1047,7 +1049,8 @@ bool AppController::reloadConfig()
     QString error;
     Config next = Config::load(&error);
     m_configError = error;
-    bool sameCheckouts = next.checkouts.size() == m_checkouts.size();
+    // Agents run in the backend picked at startup, so switching it takes a restart.
+    bool sameCheckouts = next.checkouts.size() == m_checkouts.size() && next.sessionBackend == m_config.sessionBackend;
     for (int i = 0; sameCheckouts && i < m_checkouts.size(); ++i) {
         sameCheckouts = next.checkouts.at(i).name == m_checkouts.at(i).cfg.name && next.checkouts.at(i).path == m_checkouts.at(i).cfg.path;
     }

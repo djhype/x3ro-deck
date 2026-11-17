@@ -135,7 +135,7 @@ public:
     // the checkout's configured agent and, with autostartAgents, starts it.
     bool ensureAgentSession(int index);
     // Re-reads config.json and applies what can change at runtime. Returns
-    // false when the checkout list changed, which takes a restart.
+    // false when the checkout list or the session backend changed, which takes a restart.
     bool reloadConfig();
 
 Q_SIGNALS:

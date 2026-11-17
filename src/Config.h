@@ -80,6 +80,7 @@ struct Config
     QString composeRestart = QStringLiteral("{compose} restart");
     bool notifyOnDone = true;
     bool autostartAgents = true; // a newly created agent session runs its profile's command
+    QString sessionBackend = QStringLiteral("tmux"); // "tmux" or "daemon" (x3ro-deck-sessiond); takes a restart
 
     // The profile with this id, else the default one.
     const AgentProfile &agent(const QString &id) const;

@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "AttachClient.h"
 #include "MainWindow.h"
 
 #include <KDBusService>
@@ -9,6 +10,12 @@
 
 int main(int argc, char *argv[])
 {
+    // `x3ro-deck attach <checkout>` is a terminal client: no window, no
+    // single-instance guard.
+    if (argc > 1 && qstrcmp(argv[1], "attach") == 0) {
+        return runAttach(argc - 1, argv + 1);
+    }
+
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("x3ro-deck"));
     QApplication::setApplicationDisplayName(QStringLiteral("X3RO Deck"));

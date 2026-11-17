@@ -28,6 +28,25 @@ option(X3RO_DECK_CORE_ONLY "Build without KF6: the controller, backends, hook an
 # 6.4 is what Ubuntu 24.04 and Debian 12 ship.
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network)
 
+# The x3ro-deck-sessiond wire protocol and the attach client: QtCore only.
+add_library(x3ro-deck-sessionproto STATIC
+    src/SessiondProtocol.cpp
+    attach/AttachClient.cpp
+)
+x3ro_deck_set_warnings(x3ro-deck-sessionproto)
+target_include_directories(x3ro-deck-sessionproto PUBLIC src attach common)
+target_link_libraries(x3ro-deck-sessionproto PUBLIC Qt6::Core)
+
+# Owns agent PTYs so agents outlive the GUI (sessionBackend "daemon").
+add_executable(x3ro-deck-sessiond sessiond/main.cpp sessiond/Daemon.cpp)
+x3ro_deck_set_warnings(x3ro-deck-sessiond)
+target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto Qt6::Network util)
+
+# `x3ro-deck attach` without the GUI's libraries; the agent terminals run it.
+add_executable(x3ro-deck-attach attach/main.cpp)
+x3ro_deck_set_warnings(x3ro-deck-attach)
+target_link_libraries(x3ro-deck-attach PRIVATE x3ro-deck-sessionproto)
+
 # The app minus its KF6-dependent window and terminal, so tests and older
 # distros can build it.
 add_library(x3ro-deck-base STATIC
@@ -39,6 +58,7 @@ add_library(x3ro-deck-base STATIC
     common/x3ro-deck-socket.h
     src/SessionBackend.h
     src/TmuxManager.cpp
+    src/DaemonBackend.cpp
     src/GitWatcher.cpp
     src/PrWatcher.cpp
     src/Models.cpp
@@ -48,7 +68,7 @@ add_library(x3ro-deck-base STATIC
 )
 x3ro_deck_set_warnings(x3ro-deck-base)
 target_include_directories(x3ro-deck-base PUBLIC src common)
-target_link_libraries(x3ro-deck-base PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
+target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)
@@ -92,7 +112,7 @@ endif()
 if(NOT X3RO_DECK_CORE_ONLY)
     install(TARGETS x3ro-deck RUNTIME DESTINATION bin)
 endif()
-install(TARGETS x3ro-deck-hook RUNTIME DESTINATION bin)
+install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
 if(UNIX AND NOT APPLE)
     # Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually
     # comes from a shell rc file that only terminals read.

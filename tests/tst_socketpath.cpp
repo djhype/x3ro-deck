@@ -21,6 +21,7 @@ private Q_SLOTS:
     void runtimeDir();
     void fallbackWithoutRuntimeDir();
     void overLongOverride();
+    void sessiondSocket();
     void hookDeliversPayload();
     void hookIsSilentOnOverLongPath();
 
@@ -73,6 +74,22 @@ void SocketPathTest::overLongOverride()
     QString error;
     QVERIFY(!bus.listen(&error));
     QVERIFY2(error.contains(QStringLiteral("platform limit")), qPrintable(error));
+}
+
+void SocketPathTest::sessiondSocket()
+{
+#if defined(__APPLE__)
+    QSKIP("macOS resolves from $TMPDIR");
+#endif
+    qunsetenv("X3RO_DECK_SESSIOND_SOCKET");
+    // The hook override leaves the daemon's socket alone.
+    qputenv("X3RO_DECK_SOCKET", "/tmp/elsewhere.sock");
+    QCOMPARE(x3ro_deck::sessiondSocketPath().path, std::string("/run/user/1000/x3ro-deck-sessiond.sock"));
+    qputenv("X3RO_DECK_SESSIOND_SOCKET", "/tmp/d.sock");
+    QCOMPARE(x3ro_deck::sessiondSocketPath().path, std::string("/tmp/d.sock"));
+    qunsetenv("X3RO_DECK_SESSIOND_SOCKET");
+    qunsetenv("XDG_RUNTIME_DIR");
+    QCOMPARE(x3ro_deck::sessiondSocketPath().path, "/tmp/x3ro-deck-" + std::to_string(getuid()) + "/x3ro-deck-sessiond.sock");
 }
 
 QProcess *SocketPathTest::runHook(const QByteArray &payload)

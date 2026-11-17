@@ -1,7 +1,8 @@
 #pragma once
 
-// The hook socket's path, shared by the app (AgentBus) and x3ro-deck-hook.
-// Plain C++ and libc only, because the hook links nothing else.
+// The hook socket's path, shared by the app (AgentBus) and x3ro-deck-hook,
+// and the session daemon's (x3ro-deck-sessiond). Plain C++ and libc only,
+// because the hook links nothing else.
 //
 // Resolution:
 //   1. $X3RO_DECK_SOCKET, so a test instance and its hooks can pair up
@@ -39,11 +40,12 @@ inline std::string envVar(const char *name)
     return v ? std::string(v) : std::string();
 }
 
-inline SocketPath hookSocketPath()
+// `file` lives in the per-user runtime directory unless `overrideVar` names
+// a path.
+inline SocketPath socketPathFor(const char *overrideVar, const std::string &file)
 {
-    static const std::string kFile = "/x3ro-deck.sock";
     SocketPath r;
-    if (std::string over = envVar("X3RO_DECK_SOCKET"); !over.empty()) {
+    if (std::string over = envVar(overrideVar); !over.empty()) {
         r.path = over;
         return r;
     }
@@ -55,13 +57,25 @@ inline SocketPath hookSocketPath()
     while (dir.size() > 1 && dir.back() == '/') {
         dir.pop_back();
     }
-    if (!dir.empty() && dir.size() + kFile.size() <= kMaxSocketPath) {
-        r.path = dir + kFile;
+    if (!dir.empty() && dir.size() + 1 + file.size() <= kMaxSocketPath) {
+        r.path = dir + "/" + file;
         return r;
     }
     r.privateDir = "/tmp/x3ro-deck-" + std::to_string(getuid());
-    r.path = r.privateDir + kFile;
+    r.path = r.privateDir + "/" + file;
     return r;
+}
+
+inline SocketPath hookSocketPath()
+{
+    return socketPathFor("X3RO_DECK_SOCKET", "x3ro-deck.sock");
+}
+
+// x3ro-deck-sessiond's socket, resolved the same way with its own override,
+// $X3RO_DECK_SESSIOND_SOCKET.
+inline SocketPath sessiondSocketPath()
+{
+    return socketPathFor("X3RO_DECK_SESSIOND_SOCKET", "x3ro-deck-sessiond.sock");
 }
 
 } // namespace x3ro_deck

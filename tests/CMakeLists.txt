@@ -2,10 +2,23 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 
 # Drives AppController against a private tmux server, so it needs tmux.
 add_executable(tst_sessionflow tst_sessionflow.cpp)
+add_dependencies(tst_sessionflow x3ro-deck-sessiond)
 x3ro_deck_set_warnings(tst_sessionflow)
 target_link_libraries(tst_sessionflow PRIVATE x3ro-deck-base Qt6::Test)
 add_test(NAME sessionflow COMMAND tst_sessionflow)
 set_tests_properties(sessionflow PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
+# The same flow on x3ro-deck-sessiond.
+add_test(NAME sessionflow-daemon COMMAND tst_sessionflow)
+set_tests_properties(sessionflow-daemon PROPERTIES TIMEOUT 120 ENVIRONMENT
+    "QT_QPA_PLATFORM=offscreen;X3RO_DECK_TEST_BACKEND=daemon;X3RO_DECK_SESSIOND_BIN=$<TARGET_FILE:x3ro-deck-sessiond>")
+
+add_executable(tst_sessiond tst_sessiond.cpp)
+x3ro_deck_set_warnings(tst_sessiond)
+target_link_libraries(tst_sessiond PRIVATE x3ro-deck-base Qt6::Test util)
+target_compile_definitions(tst_sessiond PRIVATE X3RO_DECK_ATTACH_PATH="$<TARGET_FILE:x3ro-deck-attach>")
+add_dependencies(tst_sessiond x3ro-deck-sessiond x3ro-deck-attach)
+add_test(NAME sessiond COMMAND tst_sessiond)
+set_tests_properties(sessiond PROPERTIES TIMEOUT 120 ENVIRONMENT "X3RO_DECK_SESSIOND_BIN=$<TARGET_FILE:x3ro-deck-sessiond>")
 
 add_executable(tst_socketpath tst_socketpath.cpp)
 x3ro_deck_set_warnings(tst_socketpath)

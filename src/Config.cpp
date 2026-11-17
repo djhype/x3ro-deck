@@ -55,6 +55,7 @@ QJsonObject defaults()
         {QStringLiteral("composeRestart"), QStringLiteral("{compose} restart")},
         {QStringLiteral("notifyOnDone"), true},
         {QStringLiteral("autostartAgents"), true},
+        {QStringLiteral("sessionBackend"), QStringLiteral("tmux")},
     };
 }
 
@@ -379,5 +380,6 @@ Config Config::load(QString *error)
     c.composeRestart = root.value(QStringLiteral("composeRestart")).toString(c.composeRestart);
     c.notifyOnDone = root.value(QStringLiteral("notifyOnDone")).toBool(true);
     c.autostartAgents = root.value(QStringLiteral("autostartAgents")).toBool(true);
+    c.sessionBackend = root.value(QStringLiteral("sessionBackend")).toString(c.sessionBackend).trimmed();
     return c;
 }
