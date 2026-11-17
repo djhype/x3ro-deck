@@ -5,6 +5,7 @@
 #include "DaemonBackend.h"
 #include "ProcessInfo.h"
 #include "SessionScreen.h"
+#include "SessiondChannel.h"
 #include "SessiondProtocol.h"
 #include "TerminalScreen.h"
 
@@ -18,6 +19,7 @@
 #include <QtTest>
 
 #include <csignal>
+#include <memory>
 
 #include <poll.h>
 
@@ -197,6 +199,36 @@ struct RoundTrip
     SessionScreen model;
 };
 
+QString screenText(const TerminalScreen &screen)
+{
+    QStringList rows;
+    for (int row = 0; row < screen.rows(); ++row) {
+        rows.append(screen.rowText(row));
+    }
+    return rows.join(QLatin1Char('\n'));
+}
+
+// A SessiondChannel feeding a terminal screen, as TerminalView does.
+struct Viewer
+{
+    Viewer(int rows, int cols)
+        : channel(std::make_unique<SessiondChannel>())
+        , screen(rows, cols)
+        , closed(channel.get(), &TerminalChannel::closed)
+    {
+        QObject::connect(channel.get(), &TerminalChannel::received, &screen, [this](const QByteArray &bytes) {
+            raw.append(bytes);
+            screen.feed(bytes);
+        });
+    }
+    bool shows(const QString &text) const { return screenText(screen).contains(text); }
+
+    std::unique_ptr<SessiondChannel> channel;
+    TerminalScreen screen;
+    QSignalSpy closed;
+    QByteArray raw;
+};
+
 QString readFile(const QString &path)
 {
     QFile f(path);
@@ -221,6 +253,8 @@ private Q_SLOTS:
     void backend();
     void foregroundJob();
     void attachClient();
+    void directChannel();
+    void directChannelLosesDaemon();
 
 private:
     // Runs the daemon in the foreground on the test socket.
@@ -480,7 +514,9 @@ void SessiondTest::protocol()
                 .toBool());
     QVERIFY(sessionNamed(c.request(op("list")), QStringLiteral("p")).isEmpty());
     c.request(op("write", {{QStringLiteral("name"), QStringLiteral("q")}, {QStringLiteral("data"), QStringLiteral("renamed\r")}}));
-    QVERIFY(c.waitFor(id, "renamed"));
+    // The terminal's echo and then cat's copy: only once both arrived is the
+    // session quiet, so nothing reaches the late client below as live output.
+    QVERIFY2(c.waitFor(id, "renamed\r\nrenamed\r\n"), c.output.value(id).constData());
 
     // A second client attaching at another size gets the screen redrawn at
     // that size, not the raw output written at the old one.
@@ -791,6 +827,124 @@ void SessiondTest::attachClient()
     QVERIFY2(readUntil(master, seen, "[session my_checkout ended]"), seen.constData());
     QCOMPARE(exitCode(pid), 0);
     ::close(master);
+}
+
+void SessiondTest::directChannel()
+{
+    QVERIFY(startForeground());
+    Client c;
+    QVERIFY(c.connectTo(m_socket));
+    quint32 id = 0;
+    QCOMPARE(shellCommandSession(c, QStringLiteral("dc"), &id), QString());
+    auto cols = [&c] {
+        return sessionNamed(c.request(op("list")), QStringLiteral("dc")).value(QStringLiteral("cols")).toInt();
+    };
+    auto rows = [&c] {
+        return sessionNamed(c.request(op("list")), QStringLiteral("dc")).value(QStringLiteral("rows")).toInt();
+    };
+    c.request(
+        op("write", {{QStringLiteral("name"), QStringLiteral("dc")}, {QStringLiteral("data"), QStringLiteral("echo before-attach\r")}}));
+    QTRY_VERIFY_WITH_TIMEOUT(c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("dc")}}))
+                                 .value(QStringLiteral("lines"))
+                                 .toArray()
+                                 .contains(QStringLiteral("before-attach")),
+                             5000);
+
+    // Attaching redraws what the session shows, at the viewer's size; typing
+    // before the daemon answered still arrives. The size the view had before
+    // its layout ran never reaches the session, whose screen would lose its
+    // contents to a single row.
+    Viewer v(20, 90);
+    v.channel->open(QStringLiteral("dc"), 1, 13, m_socket);
+    v.channel->resize(20, 90);
+    QVERIFY(v.channel->isOpen());
+    v.channel->write("echo early-$((1+1))\r");
+    QTRY_VERIFY2_WITH_TIMEOUT(v.shows(QStringLiteral("before-attach")), v.raw.constData(), 5000);
+    QTRY_VERIFY2_WITH_TIMEOUT(v.shows(QStringLiteral("early-2")), v.raw.constData(), 5000);
+    QVERIFY(v.channel->session() == id);
+    QCOMPARE(cols(), 90);
+    QCOMPARE(rows(), 20);
+
+    // Live output and typing.
+    v.channel->write("echo typed-$((40+2))\r");
+    QTRY_VERIFY2_WITH_TIMEOUT(v.shows(QStringLiteral("typed-42")), v.raw.constData(), 5000);
+
+    // The session's size follows the view.
+    v.channel->resize(25, 70);
+    v.screen.resize(25, 70);
+    QTRY_COMPARE_WITH_TIMEOUT(cols(), 70, 5000);
+    QCOMPARE(rows(), 25);
+    v.channel->write("stty size\r");
+    QTRY_VERIFY2_WITH_TIMEOUT(v.shows(QStringLiteral("25 70")), v.raw.constData(), 5000);
+
+    // A second viewer, as with x3ro-deck attach in another terminal: both see
+    // the output, and the last size wins.
+    Viewer w(10, 50);
+    w.channel->open(QStringLiteral("dc"), 10, 50, m_socket);
+    QTRY_VERIFY2_WITH_TIMEOUT(w.shows(QStringLiteral("typed-42")), w.raw.constData(), 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(cols(), 50, 5000);
+    w.channel->write("echo both-$((2*3))\r");
+    QTRY_VERIFY2_WITH_TIMEOUT(v.raw.contains("both-6"), v.raw.constData(), 5000);
+    QTRY_VERIFY2_WITH_TIMEOUT(w.shows(QStringLiteral("both-6")), w.raw.constData(), 5000);
+
+    // A rename while attached changes nothing for the viewers.
+    QVERIFY(c.request(op("rename", {{QStringLiteral("name"), QStringLiteral("dc")}, {QStringLiteral("to"), QStringLiteral("dc2")}}))
+                .value(QStringLiteral("ok"))
+                .toBool());
+    v.channel->write("echo renamed\r");
+    QTRY_VERIFY2_WITH_TIMEOUT(v.raw.contains("renamed\r\n"), v.raw.constData(), 5000);
+
+    // Detaching one viewer leaves the session and the other viewer.
+    w.channel.reset();
+    QTest::qWait(100);
+    QVERIFY(!sessionNamed(c.request(op("list")), QStringLiteral("dc2")).isEmpty());
+    QVERIFY(v.closed.isEmpty());
+
+    // The session ending closes the channel, after a note.
+    v.channel->write("exit\r");
+    QTRY_COMPARE_WITH_TIMEOUT(v.closed.size(), 1, 5000);
+    QVERIFY(!v.channel->isOpen());
+    QVERIFY2(v.raw.contains("[session dc2 ended]"), v.raw.constData());
+    v.channel->write("ignored");
+    QTest::qWait(100);
+    QCOMPARE(v.closed.size(), 1);
+
+    // No such session: closed, never attached.
+    Viewer missing(10, 40);
+    missing.channel->open(QStringLiteral("nope"), 10, 40, m_socket);
+    QVERIFY(missing.closed.isEmpty()); // never from inside open()
+    QTRY_COMPARE_WITH_TIMEOUT(missing.closed.size(), 1, 5000);
+    QVERIFY2(missing.raw.contains("no such session"), missing.raw.constData());
+    QCOMPARE(missing.channel->session(), quint32(0));
+}
+
+void SessiondTest::directChannelLosesDaemon()
+{
+    // No daemon at all.
+    Viewer none(10, 40);
+    none.channel->open(QStringLiteral("x"), 10, 40, m_socket);
+    QVERIFY(none.closed.isEmpty());
+    QTRY_COMPARE_WITH_TIMEOUT(none.closed.size(), 1, 5000);
+    QVERIFY2(none.raw.contains("no session daemon"), none.raw.constData());
+
+    QVERIFY(startForeground());
+    Client c;
+    QVERIFY(c.connectTo(m_socket));
+    quint32 id = 0;
+    QCOMPARE(shellCommandSession(c, QStringLiteral("dl"), &id), QString());
+    Viewer v(20, 80);
+    v.channel->open(QStringLiteral("dl"), 20, 80, m_socket);
+    v.channel->write("echo alive\r");
+    QTRY_VERIFY2_WITH_TIMEOUT(v.shows(QStringLiteral("alive")), v.raw.constData(), 5000);
+
+    // The daemon dying (not shutting down, which ends the sessions first).
+    m_daemon.kill();
+    QVERIFY(m_daemon.waitForFinished(5000));
+    QTRY_COMPARE_WITH_TIMEOUT(v.closed.size(), 1, 5000);
+    QVERIFY2(v.raw.contains("[lost the session daemon]"), v.raw.constData());
+    QVERIFY(!v.channel->isOpen());
+    // Its socket stays behind; the next daemon replaces it.
+    QFile::remove(m_socket);
 }
 
 QTEST_GUILESS_MAIN(SessiondTest)

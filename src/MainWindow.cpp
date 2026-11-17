@@ -488,7 +488,12 @@ TerminalHost *MainWindow::agentTerminal(int checkout)
     const Checkout &c = m_app->checkout(checkout);
     // Konsole's startProgram takes the full argv, program name included.
     const QStringList argv = m_app->sessions()->attachCommand(c.session);
-    auto *term = TerminalHost::program(argv.first(), argv, m_app->config().konsoleProfile, m_agentStack);
+    // The built-in terminal reads the session's stream directly when the
+    // backend has one, by the session's name at the time it (re)attaches.
+    auto direct = [this, checkout](int rows, int cols, QObject *parent) {
+        return m_app->sessions()->attachChannel(m_app->checkout(checkout).session, rows, cols, parent);
+    };
+    auto *term = TerminalHost::program(argv.first(), argv, m_app->config().konsoleProfile, m_agentStack, direct);
     m_agentStack->addWidget(term);
     m_agentTerms.insert(checkout, term);
     // The attached client exits when the session is killed or detached: recreate

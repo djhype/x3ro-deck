@@ -37,6 +37,8 @@ public:
     void killAll() override;
     QStringList attachCommand(const QString &name) const override;
     QString attachHint(const QString &name) const override;
+    // A SessiondChannel, so GUI terminals need no x3ro-deck-attach process.
+    TerminalChannel *attachChannel(const QString &name, int rows, int cols, QObject *parent) const override;
     void sendKeys(const QString &name, const QStringList &keys, bool literal = false) override;
     void submit(const QString &name, const QString &text, int enterDelayMs = 0) override;
     void startPolling(int intervalMs) override;

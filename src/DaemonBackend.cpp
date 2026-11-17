@@ -1,6 +1,7 @@
 #include "DaemonBackend.h"
 
 #include "Paths.h"
+#include "SessiondChannel.h"
 #include "SessiondProtocol.h"
 
 #include <QCoreApplication>
@@ -263,6 +264,13 @@ QStringList DaemonBackend::attachCommand(const QString &name) const
 QString DaemonBackend::attachHint(const QString &name) const
 {
     return QStringLiteral("x3ro-deck attach %1").arg(name);
+}
+
+TerminalChannel *DaemonBackend::attachChannel(const QString &name, int rows, int cols, QObject *parent) const
+{
+    auto *channel = new SessiondChannel(parent);
+    channel->open(name, rows, cols);
+    return channel;
 }
 
 QJsonObject DaemonBackend::write(const QString &name, const QByteArray &bytes) const

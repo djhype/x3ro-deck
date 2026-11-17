@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QStringList>
 
+class TerminalChannel;
+
 // Keeps agent sessions alive outside the app, so agents survive restarts.
 // AppController and MainWindow talk only to this interface; TmuxManager is the
 // first implementation.
@@ -41,6 +43,17 @@ public:
     virtual QStringList attachCommand(const QString &name) const = 0;
     // The same as a line a user can type into any terminal.
     virtual QString attachHint(const QString &name) const = 0;
+    // A built-in terminal's direct stream to the session, owned by `parent`,
+    // or null when the backend has none and the terminal runs
+    // attachCommand() in a local PTY instead.
+    virtual TerminalChannel *attachChannel(const QString &name, int rows, int cols, QObject *parent) const
+    {
+        Q_UNUSED(name)
+        Q_UNUSED(rows)
+        Q_UNUSED(cols)
+        Q_UNUSED(parent)
+        return nullptr;
+    }
 
     // Sends key names, or literal text when `literal` is set.
     virtual void sendKeys(const QString &name, const QStringList &keys, bool literal = false) = 0;

@@ -5,10 +5,12 @@
 #include <QPointer>
 #include <QStringList>
 
+#include <functional>
+
 class QKeyEvent;
 class QLabel;
 class QVBoxLayout;
-class PtyChannel;
+class TerminalChannel;
 class TerminalInterface;
 class TerminalView;
 namespace KParts
@@ -17,16 +19,22 @@ class ReadOnlyPart;
 }
 
 // Hosts one terminal: an embedded Konsole (konsolepart), which uses your
-// Konsole profile, or the built-in TerminalView running the program in a
-// local PTY (config "terminal": "builtin").
+// Konsole profile, or the built-in TerminalView (config "terminal":
+// "builtin") running the program in a local PTY or reading a direct channel.
 class TerminalHost : public QFrame
 {
     Q_OBJECT
 public:
     // A login shell in `dir`.
     static TerminalHost *shell(const QString &dir, const QString &profile, QWidget *parent = nullptr);
-    // `args` includes argv[0], as TerminalInterface::startProgram expects.
-    static TerminalHost *program(const QString &program, const QStringList &args, const QString &profile, QWidget *parent = nullptr);
+    // Opens a direct channel at the given grid size, or returns null to run
+    // the program instead.
+    using ChannelFactory = std::function<TerminalChannel *(int rows, int cols, QObject *parent)>;
+
+    // `args` includes argv[0], as TerminalInterface::startProgram expects. A
+    // built-in terminal reads `direct`'s channel instead when it gives one.
+    static TerminalHost *program(const QString &program, const QStringList &args, const QString &profile, QWidget *parent = nullptr,
+                                 ChannelFactory direct = {});
 
     // Keys the window handles itself; the terminal lets them through.
     static void setAppShortcuts(const QList<QKeySequence> &shortcuts);
@@ -65,7 +73,8 @@ private:
     TerminalInterface *m_term = nullptr;
     bool m_builtin = false;
     TerminalView *m_view = nullptr;
-    PtyChannel *m_pty = nullptr;
+    ChannelFactory m_direct;
+    TerminalChannel *m_channel = nullptr;
     QVBoxLayout *m_layout;
     QLabel *m_placeholder;
 };

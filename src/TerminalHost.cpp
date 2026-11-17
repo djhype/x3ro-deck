@@ -54,8 +54,8 @@ TerminalHost::TerminalHost(QWidget *parent)
 
 TerminalHost::~TerminalHost()
 {
-    delete m_pty; // hangs up the program; agent sessions survive
-    m_pty = nullptr;
+    delete m_channel; // hangs up the program or detaches; agent sessions survive
+    m_channel = nullptr;
     // The part is our child; detach first so its destroyed() does not reach a
     // half-destroyed host. Deleting it hangs up the terminal (agent sessions survive).
     if (m_part) {
@@ -73,12 +73,14 @@ TerminalHost *TerminalHost::shell(const QString &dir, const QString &profile, QW
     return t;
 }
 
-TerminalHost *TerminalHost::program(const QString &program, const QStringList &args, const QString &profile, QWidget *parent)
+TerminalHost *TerminalHost::program(const QString &program, const QStringList &args, const QString &profile, QWidget *parent,
+                                    ChannelFactory direct)
 {
     auto *t = new TerminalHost(parent);
     t->m_program = program;
     t->m_args = args;
     t->m_profile = profile;
+    t->m_direct = std::move(direct);
     t->spawn();
     return t;
 }
@@ -100,7 +102,7 @@ void TerminalHost::setBuiltin(bool builtin)
 
 bool TerminalHost::isAlive() const
 {
-    return m_builtin ? m_pty != nullptr : !m_part.isNull();
+    return m_builtin ? m_channel != nullptr : !m_part.isNull();
 }
 
 void TerminalHost::showError(const QString &text)
@@ -130,28 +132,31 @@ void TerminalHost::spawnBuiltin()
         m_layout->addWidget(m_view);
         setFocusProxy(m_view);
     }
-    QStringList argv = m_args;
-    if (m_program.isEmpty()) {
-        const QString shell = qEnvironmentVariable("SHELL");
-        argv = {shell.isEmpty() ? QStringLiteral("/bin/sh") : shell};
-    }
     // A reattach redraws everything; start from a clean screen and modes.
     m_view->reset();
-    m_pty = new PtyChannel(this);
-    QString error;
-    if (!m_pty->start(argv, m_dir, m_view->rows(), m_view->cols(), {}, &error)) {
-        delete m_pty;
-        m_pty = nullptr;
-        showError(QStringLiteral("Could not start the terminal:\n%1").arg(error));
-        return;
+    m_channel = m_direct ? m_direct(m_view->rows(), m_view->cols(), this) : nullptr;
+    if (!m_channel) {
+        QStringList argv = m_args;
+        if (m_program.isEmpty()) {
+            const QString shell = qEnvironmentVariable("SHELL");
+            argv = {shell.isEmpty() ? QStringLiteral("/bin/sh") : shell};
+        }
+        auto *pty = new PtyChannel(this);
+        QString error;
+        if (!pty->start(argv, m_dir, m_view->rows(), m_view->cols(), {}, &error)) {
+            delete pty;
+            showError(QStringLiteral("Could not start the terminal:\n%1").arg(error));
+            return;
+        }
+        m_channel = pty;
     }
     m_placeholder->hide();
     m_view->show();
-    m_view->setChannel(m_pty);
-    connect(m_pty, &PtyChannel::closed, this, [this] {
+    m_view->setChannel(m_channel);
+    connect(m_channel, &TerminalChannel::closed, this, [this] {
         m_view->setChannel(nullptr);
-        m_pty->deleteLater();
-        m_pty = nullptr;
+        m_channel->deleteLater();
+        m_channel = nullptr;
         Q_EMIT exited();
     });
 }
@@ -216,8 +221,8 @@ void TerminalHost::onOverrideShortcut(QKeyEvent *event, bool &override)
 
 void TerminalHost::sendInput(const QString &text)
 {
-    if (m_pty) {
-        m_pty->write(text.toUtf8());
+    if (m_channel) {
+        m_channel->write(text.toUtf8());
     } else if (m_term) {
         m_term->sendInput(text);
     }
@@ -225,8 +230,8 @@ void TerminalHost::sendInput(const QString &text)
 
 QString TerminalHost::foregroundProcessName() const
 {
-    if (m_pty) {
-        return m_pty->foregroundProcessName();
+    if (auto *pty = qobject_cast<PtyChannel *>(m_channel)) {
+        return pty->foregroundProcessName();
     }
     return m_term ? m_term->foregroundProcessName() : QString();
 }
