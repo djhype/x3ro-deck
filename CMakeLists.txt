@@ -90,6 +90,10 @@ add_library(x3ro-deck-base STATIC
     src/PtyChannel.cpp
     src/SessiondChannel.cpp
     src/TerminalAppearance.cpp
+    src/TerminalProfile.cpp
+    src/TerminalSettingsSource.cpp
+    src/TerminalSettings.cpp
+    src/KonsoleSettings.cpp
     src/TerminalScreen.cpp
     src/TerminalView.cpp
 )

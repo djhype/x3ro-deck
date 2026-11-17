@@ -15,6 +15,7 @@ class QPlainTextEdit;
 class QPushButton;
 class QTabWidget;
 class QTableWidget;
+class TerminalSettings;
 
 // config.json as a form. It edits the JSON itself, so keys it has no field
 // for survive a save.
@@ -125,4 +126,8 @@ private:
     QCheckBox *m_autostart;
     QCheckBox *m_notifyDone;
     QComboBox *m_konsoleProfile;
+    TerminalSettings *m_terminals;
+    QComboBox *m_terminalSource;
+    QComboBox *m_terminalProfile;
+    void fillTerminalProfiles(const QString &selected);
 };

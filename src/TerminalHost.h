@@ -7,6 +7,7 @@
 
 #include <functional>
 
+struct TerminalProfile;
 class QKeyEvent;
 class QLabel;
 class QVBoxLayout;
@@ -40,8 +41,12 @@ public:
     static void setAppShortcuts(const QList<QKeySequence> &shortcuts);
     // Whether terminals created from now on are built-in instead of konsolepart.
     static void setBuiltin(bool builtin);
-    // History lines a built-in terminal created from now on keeps.
+    // History lines a built-in terminal keeps when the profile sets none.
     static void setScrollbackLines(int lines);
+    // Imported terminal settings: built-in terminals take the appearance and
+    // scrollback at once, and new shells run the profile's shell.
+    static void setProfile(const TerminalProfile &profile);
+    static const TerminalProfile &profile();
     ~TerminalHost() override;
 
     void sendInput(const QString &text);
@@ -64,6 +69,7 @@ private:
     void spawnKonsole();
     void spawnBuiltin();
     void showError(const QString &text);
+    void applyProfile();
 
     QString m_dir;
     QString m_program;

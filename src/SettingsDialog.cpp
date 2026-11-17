@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "DockerEndpoint.h"
 #include "Paths.h"
+#include "TerminalSettings.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -1030,8 +1031,42 @@ QWidget *SettingsDialog::buildGeneralPage()
     m_konsoleProfile->lineEdit()->setPlaceholderText(QStringLiteral("Konsole's default profile"));
     m_konsoleProfile->setCurrentText(m_root.value(QStringLiteral("konsoleProfile")).toString());
     m_konsoleProfile->setMinimumWidth(280);
+
+    // Probing the sources reads a few small files; the dialog keeps its own
+    // registry and never watches them.
+    m_terminals = new TerminalSettings(this);
+    m_terminalSource = new QComboBox;
+    m_terminalSource->setMinimumWidth(280);
+    const TerminalSettingsSource *detected = m_terminals->desktopDefault();
+    m_terminalSource->addItem(detected ? QStringLiteral("Automatic (%1)").arg(detected->displayName())
+                                       : QStringLiteral("Automatic (no supported terminal found)"),
+                              QString());
+    const QString source = m_root.value(QStringLiteral("terminalSettings")).toString().trimmed();
+    for (const TerminalSettingsSource *s : m_terminals->sources()) {
+        const bool found = s->detect();
+        if (found || s->id() == source) {
+            m_terminalSource->addItem(found ? s->displayName() : QStringLiteral("%1 (not found)").arg(s->displayName()), s->id());
+        }
+    }
+    m_terminalSource->addItem(QStringLiteral("None (X3RO Deck's colors and your login shell)"), TerminalSettings::none());
+    int sourceIndex = m_terminalSource->findData(source);
+    if (sourceIndex < 0) {
+        m_terminalSource->addItem(QStringLiteral("%1 (unknown)").arg(source), source);
+        sourceIndex = m_terminalSource->count() - 1;
+    }
+    m_terminalSource->setCurrentIndex(sourceIndex);
+    m_terminalProfile = new QComboBox;
+    m_terminalProfile->setMinimumWidth(280);
+    fillTerminalProfiles(m_root.value(QStringLiteral("terminalProfile")).toString().trimmed());
+    connect(m_terminalSource, &QComboBox::currentIndexChanged, this, [this] { fillTerminalProfiles(QString()); });
+
     auto *terminals = form();
-    addField(terminals, QStringLiteral("Konsole profile"), m_konsoleProfile, hint(QStringLiteral("Used by terminals opened from now on.")));
+    addField(terminals, QStringLiteral("Import settings from"), m_terminalSource,
+             hint(QStringLiteral("The built-in terminal takes the colors, font, cursor, scrollback and shell from this terminal's "
+                                 "profile, and follows changes to it.")));
+    addField(terminals, QStringLiteral("Profile"), m_terminalProfile);
+    addField(terminals, QStringLiteral("Konsole profile"), m_konsoleProfile,
+             hint(QStringLiteral("Used by embedded Konsole terminals opened from now on.")));
 
     auto *page = new QWidget;
     auto *layout = new QVBoxLayout(page);
@@ -1048,6 +1083,37 @@ QWidget *SettingsDialog::buildGeneralPage()
     layout->addLayout(terminals);
     layout->addStretch();
     return page;
+}
+
+void SettingsDialog::fillTerminalProfiles(const QString &selected)
+{
+    m_terminalProfile->clear();
+    const QString id = m_terminalSource->currentData().toString();
+    const TerminalSettingsSource *s = id.isEmpty() ? m_terminals->desktopDefault() : m_terminals->source(id);
+    if (!s || !s->detect()) {
+        m_terminalProfile->addItem(QStringLiteral("—"), QString());
+        m_terminalProfile->setEnabled(false);
+        return;
+    }
+    m_terminalProfile->setEnabled(true);
+    const QList<TerminalSettingsSource::ProfileRef> profiles = s->profiles();
+    const QString def = s->defaultProfile();
+    QString defName = def;
+    for (const auto &p : profiles) {
+        if (p.id == def) {
+            defName = p.name;
+        }
+    }
+    m_terminalProfile->addItem(QStringLiteral("Default (%1)").arg(defName), QString());
+    for (const auto &p : profiles) {
+        m_terminalProfile->addItem(p.name, p.id);
+    }
+    int index = m_terminalProfile->findData(selected);
+    if (index < 0) {
+        m_terminalProfile->addItem(QStringLiteral("%1 (not found)").arg(selected), selected);
+        index = m_terminalProfile->count() - 1;
+    }
+    m_terminalProfile->setCurrentIndex(index);
 }
 
 // ───────────────────────── result ─────────────────────────
@@ -1127,6 +1193,8 @@ QJsonObject SettingsDialog::config() const
     root.insert(QStringLiteral("autostartAgents"), m_autostart->isChecked());
     root.insert(QStringLiteral("notifyOnDone"), m_notifyDone->isChecked());
     root.insert(QStringLiteral("konsoleProfile"), m_konsoleProfile->currentText().trimmed());
+    root.insert(QStringLiteral("terminalSettings"), m_terminalSource->currentData().toString());
+    root.insert(QStringLiteral("terminalProfile"), m_terminalProfile->currentData().toString());
     return root;
 }
 

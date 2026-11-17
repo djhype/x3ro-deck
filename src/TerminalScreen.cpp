@@ -338,17 +338,21 @@ TerminalScreen::TerminalScreen(int rows, int cols, QObject *parent)
     vterm_screen_enable_altscreen(m_screen, 1);
     vterm_screen_enable_reflow(m_screen, true);
     vterm_screen_reset(m_screen, 1);
+    m_appearance = TerminalAppearance::fallback();
     resetCursorStyle();
-    setAppearance(TerminalAppearance::fallback());
+    setAppearance(m_appearance);
 }
 
 void TerminalScreen::resetCursorStyle()
 {
-    // libvterm's reset turns blinking on; like Konsole, the cursor stays
-    // steady until the program asks otherwise.
-    VTermValue steady;
-    steady.boolean = 0;
-    vterm_state_set_termprop(m_state, VTERM_PROP_CURSORBLINK, &steady);
+    // libvterm's reset turns blinking on; like Konsole, the cursor keeps the
+    // profile's style until the program asks otherwise.
+    VTermValue blink;
+    blink.boolean = m_appearance.cursorBlink ? 1 : 0;
+    vterm_state_set_termprop(m_state, VTERM_PROP_CURSORBLINK, &blink);
+    VTermValue shape;
+    shape.number = m_appearance.cursorShape;
+    vterm_state_set_termprop(m_state, VTERM_PROP_CURSORSHAPE, &shape);
 }
 
 TerminalScreen::~TerminalScreen()
@@ -358,7 +362,12 @@ TerminalScreen::~TerminalScreen()
 
 void TerminalScreen::setAppearance(const TerminalAppearance &appearance)
 {
+    // A cursor the program has not restyled follows the new profile.
+    const bool profileCursor = m_cursorShape == CursorShape(m_appearance.cursorShape) && m_cursorBlink == m_appearance.cursorBlink;
     m_appearance = appearance;
+    if (profileCursor) {
+        resetCursorStyle();
+    }
     m_fg = appearance.foreground;
     m_bg = appearance.background;
     const VTermColor fg = toVTerm(m_fg);

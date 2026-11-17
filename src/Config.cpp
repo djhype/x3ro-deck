@@ -60,6 +60,8 @@ QJsonObject defaults()
         {QStringLiteral("sessionBackend"), QStringLiteral("tmux")},
         {QStringLiteral("terminal"), QStringLiteral("konsole")},
         {QStringLiteral("terminalScrollback"), 10000},
+        {QStringLiteral("terminalSettings"), QString()},
+        {QStringLiteral("terminalProfile"), QString()},
     };
 }
 
@@ -387,5 +389,7 @@ Config Config::load(QString *error)
     c.sessionBackend = root.value(QStringLiteral("sessionBackend")).toString(c.sessionBackend).trimmed();
     c.terminal = root.value(QStringLiteral("terminal")).toString(c.terminal).trimmed();
     c.terminalScrollback = std::clamp(root.value(QStringLiteral("terminalScrollback")).toInt(c.terminalScrollback), 0, 1000000);
+    c.terminalSettings = root.value(QStringLiteral("terminalSettings")).toString().trimmed();
+    c.terminalProfile = root.value(QStringLiteral("terminalProfile")).toString().trimmed();
     return c;
 }

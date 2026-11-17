@@ -209,6 +209,31 @@ private Q_SLOTS:
         s.reset();
         QCOMPARE(s.cursorShape(), TerminalScreen::Block);
         QVERIFY(!s.cursorBlink());
+
+        // The profile's cursor is the default until a program picks its own.
+        TerminalAppearance a = TerminalAppearance::fallback();
+        a.cursorShape = TerminalAppearance::Underline;
+        a.cursorBlink = true;
+        s.setAppearance(a);
+        QCOMPARE(s.cursorShape(), TerminalScreen::Underline);
+        QVERIFY(s.cursorBlink());
+        s.feed("\x1b[6 q");
+        a.cursorShape = TerminalAppearance::Block;
+        s.setAppearance(a);
+        QCOMPARE(s.cursorShape(), TerminalScreen::Bar);
+        s.reset();
+        QCOMPARE(s.cursorShape(), TerminalScreen::Block);
+        QVERIFY(s.cursorBlink());
+    }
+
+    void viewLineSpacing()
+    {
+        TerminalView v;
+        const int before = v.cellSize().height();
+        TerminalAppearance a = v.appearance();
+        a.lineSpacing = 3;
+        v.setAppearance(a);
+        QCOMPARE(v.cellSize().height(), before + 3);
     }
 
     void screenMouseReports()

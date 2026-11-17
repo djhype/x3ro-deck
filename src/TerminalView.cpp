@@ -151,8 +151,9 @@ void TerminalView::setAppearance(const TerminalAppearance &appearance)
 void TerminalView::updateCellSize()
 {
     const QFontMetrics fm(m_fonts[0]);
-    m_cell = QSize(std::max(1, fm.horizontalAdvance(QLatin1Char('W'))), std::max(1, fm.height()));
-    m_ascent = fm.ascent();
+    const int spacing = std::max(0, m_appearance.lineSpacing);
+    m_cell = QSize(std::max(1, fm.horizontalAdvance(QLatin1Char('W'))), std::max(1, fm.height() + spacing));
+    m_ascent = fm.ascent() + spacing / 2;
 }
 
 int TerminalView::rows() const

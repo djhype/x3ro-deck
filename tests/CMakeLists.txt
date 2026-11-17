@@ -44,6 +44,13 @@ target_link_libraries(tst_configmigrations PRIVATE x3ro-deck-base Qt6::Test)
 target_compile_definitions(tst_configmigrations PRIVATE X3RO_DECK_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_test(NAME configmigrations COMMAND tst_configmigrations)
 
+add_executable(tst_terminalsettings tst_terminalsettings.cpp)
+x3ro_deck_set_warnings(tst_terminalsettings)
+target_link_libraries(tst_terminalsettings PRIVATE x3ro-deck-base Qt6::Test)
+target_compile_definitions(tst_terminalsettings PRIVATE X3RO_DECK_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+add_test(NAME terminalsettings COMMAND tst_terminalsettings)
+set_tests_properties(terminalsettings PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_executable(tst_dockerendpoint tst_dockerendpoint.cpp)
 x3ro_deck_set_warnings(tst_dockerendpoint)
 target_link_libraries(tst_dockerendpoint PRIVATE x3ro-deck-base Qt6::Test)

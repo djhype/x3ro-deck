@@ -3,6 +3,8 @@
 #include "AppController.h"
 #include "SettingsDialog.h"
 #include "TerminalHost.h"
+#include "TerminalProfile.h"
+#include "TerminalSettings.h"
 
 #include <KGlobalAccel>
 #include <KNotification>
@@ -14,6 +16,7 @@
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QFile>
+#include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
@@ -42,6 +45,13 @@ QString stateText(const QString &state)
     if (state == QLatin1String("done")) return QStringLiteral("done, waiting for you");
     return QStringLiteral("ready");
 }
+
+// A new shell tab's title: the imported shell's name.
+QString shellTitle()
+{
+    const QString name = QFileInfo(TerminalHost::profile().shell.value(0)).fileName();
+    return name.isEmpty() ? QStringLiteral("shell") : name;
+}
 } // namespace
 
 MainWindow::MainWindow(AppController *app, QWidget *parent)
@@ -54,6 +64,10 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     resize(1600, 980);
     TerminalHost::setBuiltin(m_app->config().terminal == QLatin1String("builtin"));
     TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
+    m_terminalSettings = new TerminalSettings(this);
+    connect(m_terminalSettings, &TerminalSettings::changed, this, [](const TerminalProfile &p) { TerminalHost::setProfile(p); });
+    m_terminalSettings->select(m_app->config().terminalSettings, m_app->config().terminalProfile);
+    TerminalHost::setProfile(m_terminalSettings->current());
 
     QFile qss(QStringLiteral(":/data/style.qss"));
     if (qss.open(QIODevice::ReadOnly)) {
@@ -214,7 +228,7 @@ void MainWindow::buildShortcuts()
     add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_R), [this] { m_app->toggleRail(); });
     add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_T), [this] {
         m_app->setTab(QStringLiteral("docker"));
-        addShellTab(m_app->currentIndex(), QStringLiteral("zsh"))->focusTerminal();
+        addShellTab(m_app->currentIndex(), shellTitle())->focusTerminal();
     });
     add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_N), [this] {
         if (m_app->attentionModel()->rowCount() > 0) {
@@ -328,6 +342,7 @@ void MainWindow::applySettings(const QJsonObject &config)
     }
     const bool applied = m_app->reloadConfig();
     TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
+    m_terminalSettings->select(m_app->config().terminalSettings, m_app->config().terminalProfile);
     if (applied) {
         return;
     }
@@ -419,7 +434,7 @@ QTabWidget *MainWindow::shellTabs(int checkout)
     plus->setObjectName(QStringLiteral("newTab"));
     plus->setText(QStringLiteral("+"));
     plus->setToolTip(QStringLiteral("New shell (Ctrl+Alt+T)"));
-    connect(plus, &QToolButton::clicked, this, [this, checkout] { addShellTab(checkout, QStringLiteral("zsh"))->focusTerminal(); });
+    connect(plus, &QToolButton::clicked, this, [this, checkout] { addShellTab(checkout, shellTitle())->focusTerminal(); });
     tabs->setCornerWidget(plus, Qt::TopRightCorner);
     connect(tabs, &QTabWidget::tabCloseRequested, this, [tabs](int i) {
         QWidget *w = tabs->widget(i);
@@ -428,7 +443,7 @@ QTabWidget *MainWindow::shellTabs(int checkout)
     });
     m_shellStack->addWidget(tabs);
     m_shellTabs.insert(checkout, tabs);
-    addShellTab(checkout, QStringLiteral("zsh"));
+    addShellTab(checkout, shellTitle());
     return tabs;
 }
 
@@ -449,7 +464,7 @@ TerminalHost *MainWindow::addShellTab(int checkout, const QString &title)
         }
         term->deleteLater();
         if (tabs->count() == 0) {
-            addShellTab(checkout, QStringLiteral("zsh"));
+            addShellTab(checkout, shellTitle());
         }
     });
     return term;

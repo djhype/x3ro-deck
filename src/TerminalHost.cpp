@@ -1,6 +1,7 @@
 #include "TerminalHost.h"
 
 #include "PtyChannel.h"
+#include "TerminalProfile.h"
 #include "TerminalScreen.h"
 #include "TerminalView.h"
 
@@ -33,6 +34,22 @@ int &scrollbackDefault()
     static int lines = 10000;
     return lines;
 }
+
+TerminalProfile &currentProfile()
+{
+    static TerminalProfile profile = TerminalProfile::fallback();
+    return profile;
+}
+
+// Every live host, so a new profile reaches the open terminals.
+QList<TerminalHost *> &hosts()
+{
+    static QList<TerminalHost *> list;
+    return list;
+}
+
+// What "unlimited" history means here: each line holds its cells in memory.
+constexpr int kUnlimitedScrollback = 100000;
 } // namespace
 
 TerminalHost::TerminalHost(QWidget *parent)
@@ -50,10 +67,12 @@ TerminalHost::TerminalHost(QWidget *parent)
     m_placeholder->setWordWrap(true);
     m_placeholder->hide();
     m_layout->addWidget(m_placeholder);
+    hosts().append(this);
 }
 
 TerminalHost::~TerminalHost()
 {
+    hosts().removeOne(this);
     delete m_channel; // hangs up the program or detaches; agent sessions survive
     m_channel = nullptr;
     // The part is our child; detach first so its destroyed() does not reach a
@@ -92,7 +111,37 @@ void TerminalHost::setAppShortcuts(const QList<QKeySequence> &shortcuts)
 
 void TerminalHost::setScrollbackLines(int lines)
 {
+    if (scrollbackDefault() == lines) {
+        return;
+    }
     scrollbackDefault() = lines;
+    for (TerminalHost *h : std::as_const(hosts())) {
+        h->applyProfile();
+    }
+}
+
+void TerminalHost::setProfile(const TerminalProfile &profile)
+{
+    currentProfile() = profile;
+    for (TerminalHost *h : std::as_const(hosts())) {
+        h->applyProfile();
+    }
+}
+
+const TerminalProfile &TerminalHost::profile()
+{
+    return currentProfile();
+}
+
+void TerminalHost::applyProfile()
+{
+    if (!m_view) {
+        return;
+    }
+    const TerminalProfile &p = currentProfile();
+    m_view->setAppearance(p.appearance);
+    const int lines = p.scrollback ? (*p.scrollback < 0 ? kUnlimitedScrollback : *p.scrollback) : scrollbackDefault();
+    m_view->screen()->setScrollbackLimit(lines);
 }
 
 void TerminalHost::setBuiltin(bool builtin)
@@ -128,9 +177,9 @@ void TerminalHost::spawnBuiltin()
     if (!m_view) {
         m_view = new TerminalView(this);
         m_view->setReservedShortcuts(appShortcuts());
-        m_view->screen()->setScrollbackLimit(scrollbackDefault());
         m_layout->addWidget(m_view);
         setFocusProxy(m_view);
+        applyProfile();
     }
     // A reattach redraws everything; start from a clean screen and modes.
     m_view->reset();
@@ -138,8 +187,7 @@ void TerminalHost::spawnBuiltin()
     if (!m_channel) {
         QStringList argv = m_args;
         if (m_program.isEmpty()) {
-            const QString shell = qEnvironmentVariable("SHELL");
-            argv = {shell.isEmpty() ? QStringLiteral("/bin/sh") : shell};
+            argv = currentProfile().shell;
         }
         auto *pty = new PtyChannel(this);
         QString error;
