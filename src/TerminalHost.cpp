@@ -38,7 +38,7 @@ TerminalHost::TerminalHost(QWidget *parent)
 TerminalHost::~TerminalHost()
 {
     // The part is our child; detach first so its destroyed() does not reach a
-    // half-destroyed host. Deleting it hangs up the terminal (tmux sessions survive).
+    // half-destroyed host. Deleting it hangs up the terminal (agent sessions survive).
     if (m_part) {
         disconnect(m_part, nullptr, this, nullptr);
         delete m_part.data();

@@ -387,13 +387,13 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     m_checkoutArgs->setPlaceholderText(QStringLiteral("--name my-checkout"));
 
     m_checkoutFields = form();
-    addField(m_checkoutFields, QStringLiteral("Name"), m_checkoutName, hint(QStringLiteral("Also names the checkout's tmux session.")));
+    addField(m_checkoutFields, QStringLiteral("Name"), m_checkoutName, hint(QStringLiteral("Also names the checkout's agent session.")));
     addField(m_checkoutFields, QStringLiteral("Folder"), pathRow, hint(QStringLiteral("Where the agent and the compose commands run.")));
     m_checkoutFields->addWidget(m_checkoutPathWarning, nextRow(m_checkoutFields), 1);
     m_checkoutPathWarning->setContentsMargins(0, 0, 0, 8);
     addField(m_checkoutFields, QStringLiteral("Port offset"), m_checkoutOffset, hint(QStringLiteral("Shown on the checkout's card.")));
     addField(m_checkoutFields, QStringLiteral("Agent"), m_checkoutAgent,
-             hint(QStringLiteral("Starts whenever X3RO Deck creates the checkout's tmux session: on the first launch, and on "
+             hint(QStringLiteral("Starts whenever X3RO Deck creates the checkout's agent session: on the first launch, and on "
                                  "every launch after you stopped the agents when quitting. Switching agents in the session "
                                  "panel lasts until then.")));
     addField(m_checkoutFields, QStringLiteral("Custom args"), m_checkoutArgs,
@@ -626,7 +626,8 @@ QWidget *SettingsDialog::buildAgentsPage()
     m_agentFields = form();
     addField(m_agentFields, QStringLiteral("Name"), m_agentLabel);
     addField(m_agentFields, QStringLiteral("Runs"), m_agentKind, m_agentKindHint);
-    addField(m_agentFields, QStringLiteral("Command"), m_agentCommand, hint(QStringLiteral("Typed into the checkout's tmux shell.")));
+    addField(m_agentFields, QStringLiteral("Command"), m_agentCommand,
+             hint(QStringLiteral("Typed into the shell of the checkout's agent session.")));
     addField(m_agentFields, QStringLiteral("Resume arguments"), m_agentResume,
              hint(QStringLiteral("Added to the command by Continue; empty hides that button.")));
     addField(m_agentFields, QStringLiteral("Environment"), envBox,
@@ -636,8 +637,9 @@ QWidget *SettingsDialog::buildAgentsPage()
     addField(m_agentFields, QStringLiteral("PR prompt"), m_agentPrPrompt,
              hint(QStringLiteral("Sent by the PR button while the branch has no PR; empty hides the button.")));
     m_agentFields->addWidget(section(QStringLiteral("Advanced")), nextRow(m_agentFields), 0, 1, 2);
-    addField(m_agentFields, QStringLiteral("Process"), m_agentProcess,
-             hint(QStringLiteral("tmux's pane_current_command while the agent runs, which tells a running agent from an idle shell.")));
+    addField(
+        m_agentFields, QStringLiteral("Process"), m_agentProcess,
+        hint(QStringLiteral("The session's foreground process while the agent runs, which tells a running agent from an idle shell.")));
     addField(m_agentFields, QStringLiteral("Permission keys"), m_agentKeys, m_agentKeysHint);
     addField(m_agentFields, QStringLiteral("Submit delay"), delayRow,
              hint(QStringLiteral("Pause between typing a prompt and pressing Enter, for CLIs that read fast input as a paste.")));
@@ -999,7 +1001,7 @@ QWidget *SettingsDialog::buildDockerPage()
 
 QWidget *SettingsDialog::buildGeneralPage()
 {
-    m_autostart = new QCheckBox(QStringLiteral("Start the agent when a checkout's tmux session is created"));
+    m_autostart = new QCheckBox(QStringLiteral("Start the agent when a checkout's agent session is created"));
     m_autostart->setChecked(m_root.value(QStringLiteral("autostartAgents")).toBool(true));
     m_notifyDone = new QCheckBox(QStringLiteral("Notify when an agent finishes and waits for you"));
     m_notifyDone->setChecked(m_root.value(QStringLiteral("notifyOnDone")).toBool(true));

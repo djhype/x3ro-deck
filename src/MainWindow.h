@@ -48,7 +48,7 @@ private:
     void updateStatsVisibility();
     void saveLayout();
     void applySettings(const QJsonObject &config);
-    // Quits after asking whether the agents' tmux server should stop too.
+    // Quits after asking whether the agent sessions should stop too.
     void confirmQuit();
     void restart();
 

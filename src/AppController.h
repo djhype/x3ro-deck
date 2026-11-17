@@ -6,7 +6,7 @@
 #include "GitWatcher.h"
 #include "Models.h"
 #include "PrWatcher.h"
-#include "TmuxManager.h"
+#include "SessionBackend.h"
 
 #include <QDateTime>
 #include <QObject>
@@ -52,7 +52,7 @@ struct ServiceRow
 struct Checkout
 {
     CheckoutConfig cfg;
-    QString session; // tmux session name
+    QString session; // session backend name
     GitInfo git;
     QString ticket;
     QString title;
@@ -108,7 +108,7 @@ public:
     int checkoutCount() const { return static_cast<int>(m_checkouts.size()); }
     const Checkout &checkout(int i) const { return m_checkouts.at(i); }
     const AgentProfile &profile(int i) const { return m_config.agent(m_checkouts.at(i).agent.profile); }
-    TmuxManager *tmux() const { return m_tmux; }
+    SessionBackend *sessions() const { return m_sessions; }
 
     // The window reports whether container stats are on screen, so sampling stops when hidden.
     void setStatsVisible(bool visible);
@@ -131,7 +131,7 @@ public:
     Q_INVOKABLE void openPr(int index = -1);
     Q_INVOKABLE void refreshPr();
 
-    // Makes sure the checkout's tmux session exists. Creating it switches to
+    // Makes sure the checkout's agent session exists. Creating it switches to
     // the checkout's configured agent and, with autostartAgents, starts it.
     bool ensureAgentSession(int index);
     // Re-reads config.json and applies what can change at runtime. Returns
@@ -178,7 +178,7 @@ private:
 
     DockerClient *m_docker;
     AgentBus *m_bus;
-    TmuxManager *m_tmux;
+    SessionBackend *m_sessions;
     GitWatcher *m_git;
     PrWatcher *m_prs;
     VariantListModel *m_checkoutModel;

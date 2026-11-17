@@ -106,7 +106,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     dockerPage->setStretchFactor(1, 2);
     m_pages->addWidget(dockerPage);
 
-    // Agents page: the agent's tmux session beside its session details.
+    // Agents page: the agent's session beside its session details.
     auto *agentsPage = new QSplitter(Qt::Horizontal, m_pages);
     agentsPage->setObjectName(QStringLiteral("agentsSplit"));
     agentsPage->setChildrenCollapsible(false);
@@ -263,8 +263,8 @@ void MainWindow::confirmQuit()
     box.setText(QStringLiteral("Stop the agents too?"));
     box.setInformativeText(
         (running.isEmpty() ? QStringLiteral("No agent is running.") : QStringLiteral("Running now:\n") + running.join(QLatin1Char('\n')))
-        + QStringLiteral("\n\nStopping shuts down X3RO Deck's tmux server and every session on it, so the next launch starts "
-                         "each checkout's agent fresh. Kept agents carry on, and the next launch reattaches to them."));
+        + QStringLiteral("\n\nStopping ends every agent session, so the next launch starts each checkout's agent fresh. "
+                         "Kept agents carry on, and the next launch reattaches to them."));
     QPushButton *stop = box.addButton(QStringLiteral("Stop agents and quit"), QMessageBox::DestructiveRole);
     QPushButton *keep = box.addButton(QStringLiteral("Quit, keep agents"), QMessageBox::AcceptRole);
     box.setEscapeButton(box.addButton(QMessageBox::Cancel));
@@ -274,10 +274,10 @@ void MainWindow::confirmQuit()
     if (box.clickedButton() != stop && box.clickedButton() != keep) {
         return;
     }
-    // Set before the tmux clients exit, so no terminal recreates its session.
+    // Set before the attached terminals exit, so none recreates its session.
     m_quitting = true;
     if (box.clickedButton() == stop) {
-        m_app->tmux()->killServer();
+        m_app->sessions()->killAll();
     }
     qApp->quit();
 }
@@ -331,7 +331,7 @@ void MainWindow::applySettings(const QJsonObject &config)
     box.setIcon(QMessageBox::Question);
     box.setWindowTitle(QStringLiteral("Restart X3RO Deck"));
     box.setText(QStringLiteral("The checkout list changed. It takes effect when X3RO Deck restarts."));
-    box.setInformativeText(QStringLiteral("Agents keep running in tmux through the restart. Shell tabs close."));
+    box.setInformativeText(QStringLiteral("Agents keep running through the restart. Shell tabs close."));
     QPushButton *now = box.addButton(QStringLiteral("Restart now"), QMessageBox::AcceptRole);
     box.addButton(QStringLiteral("Later"), QMessageBox::RejectRole);
     box.setDefaultButton(now);
@@ -373,7 +373,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     saveLayout();
     // Closing hides to the tray so hook events and notifications keep flowing.
-    // Ctrl+Q or the tray menu quits; agents keep running in tmux either way.
+    // Ctrl+Q or the tray menu quits; agents keep running either way.
     if (!m_quitting) {
         hide();
         event->ignore();
@@ -482,11 +482,12 @@ TerminalHost *MainWindow::agentTerminal(int checkout)
         return nullptr;
     }
     const Checkout &c = m_app->checkout(checkout);
-    const QStringList args = m_app->tmux()->attachArgs(c.session);
-    auto *term = TerminalHost::program(QStringLiteral("tmux"), args, m_app->config().konsoleProfile, m_agentStack);
+    // Konsole's startProgram takes the full argv, program name included.
+    const QStringList argv = m_app->sessions()->attachCommand(c.session);
+    auto *term = TerminalHost::program(argv.first(), argv, m_app->config().konsoleProfile, m_agentStack);
     m_agentStack->addWidget(term);
     m_agentTerms.insert(checkout, term);
-    // The tmux client exits when the session is killed or detached: recreate
+    // The attached client exits when the session is killed or detached: recreate
     // the session if needed and reattach.
     connect(term, &TerminalHost::exited, this, [this, term, checkout] {
         if (m_quitting) {

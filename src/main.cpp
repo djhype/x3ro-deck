@@ -9,11 +9,6 @@
 
 int main(int argc, char *argv[])
 {
-    // Agent terminals run `tmux attach`, which refuses to nest inside another
-    // tmux client; x3ro-deck may itself be launched from a tmux pane.
-    qunsetenv("TMUX");
-    qunsetenv("TMUX_PANE");
-
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("x3ro-deck"));
     QApplication::setApplicationDisplayName(QStringLiteral("X3RO Deck"));

@@ -228,7 +228,7 @@ Rectangle {
             Text {
                 width: parent.width
                 wrapMode: Text.Wrap
-                text: "Agents live in tmux and outlive this window. From any terminal: tmux -L x3ro-deck attach -t " + (cur.session || "")
+                text: "Agents outlive this window. From any terminal: " + (cur.attachHint || "")
                 color: t.dim
                 font.family: t.sans; font.pixelSize: 11
                 lineHeight: 1.2

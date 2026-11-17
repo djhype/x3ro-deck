@@ -28,9 +28,13 @@ bind C-a send-prefix
 }
 
 TmuxManager::TmuxManager(QObject *parent)
-    : QObject(parent)
+    : SessionBackend(parent)
     , m_configPath(Config::configDir() + QStringLiteral("/tmux.conf"))
 {
+    // Agent terminals run `tmux attach`, which refuses to nest inside another
+    // tmux client; x3ro-deck may itself be launched from a tmux pane.
+    qunsetenv("TMUX");
+    qunsetenv("TMUX_PANE");
     QFile conf(m_configPath);
     if (!conf.exists()) {
         QDir().mkpath(Config::configDir());
@@ -73,11 +77,6 @@ bool TmuxManager::createSession(const QString &name, const QString &dir, const Q
     return true;
 }
 
-bool TmuxManager::ensureSession(const QString &name, const QString &dir, const QString &startCommand)
-{
-    return hasSession(name) || createSession(name, dir, startCommand);
-}
-
 QStringList TmuxManager::sessionsIn(const QString &dir) const
 {
     QProcess list;
@@ -102,7 +101,14 @@ bool TmuxManager::renameSession(const QString &from, const QString &to)
     return rename.exitStatus() == QProcess::NormalExit && rename.exitCode() == 0;
 }
 
-void TmuxManager::killServer()
+void TmuxManager::killSession(const QString &name)
+{
+    QProcess kill;
+    kill.start(QStringLiteral("tmux"), baseArgs() << QStringLiteral("kill-session") << QStringLiteral("-t") << (QLatin1Char('=') + name));
+    kill.waitForFinished(3000);
+}
+
+void TmuxManager::killAll()
 {
     m_poll.stop();
     QProcess kill;
@@ -110,7 +116,12 @@ void TmuxManager::killServer()
     kill.waitForFinished(3000);
 }
 
-QStringList TmuxManager::attachArgs(const QString &name) const
+QString TmuxManager::attachHint(const QString &name) const
+{
+    return QStringLiteral("tmux -L %1 attach -t %2").arg(socketName(), name);
+}
+
+QStringList TmuxManager::attachCommand(const QString &name) const
 {
     return QStringList{QStringLiteral("tmux")} + baseArgs()
         + QStringList{QStringLiteral("attach-session"), QStringLiteral("-t"), QLatin1Char('=') + name};
@@ -165,7 +176,7 @@ void TmuxManager::poll()
                 out.insert(QString::fromUtf8(cols.at(0)), QString::fromUtf8(cols.at(2)));
             }
         }
-        Q_EMIT paneCommands(out);
+        Q_EMIT foregroundProcesses(out);
         proc->deleteLater();
     });
     proc->start(QStringLiteral("tmux"),

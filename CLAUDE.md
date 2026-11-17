@@ -10,7 +10,7 @@ Qt 6 / KF6 desktop app (C++20, Widgets + QML panels) for running coding agents a
 - `kbuildsycoca6`: refresh KDE's caches after changing the desktop file or icons.
 - `scripts/check-format.sh [--fix]`: check (or apply) `.clang-format` on every tracked C++ file.
 - `scripts/smoke-test.sh [binary] [out.png]`: headless screenshot in an isolated environment. It fails without a PNG or on any QML error.
-- `ctest --test-dir build`: run the registered tests.
+- `ctest --test-dir build`: run the QtTest suites in `tests/`. They link `x3ro-deck-core`, the static library holding everything except `main.cpp`. `tst_sessionflow` drives AppController against a private tmux server.
 
 CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks formatting, builds with `-DX3RO_DECK_WERROR=ON`, runs `ctest` and the smoke test, and uploads the screenshot. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
 
@@ -35,14 +35,15 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
   - Ctrl+Q and the tray's Quit go through `confirmQuit`, which offers to stop the agents by killing the tmux server.
   - Layout state persists in `~/.config/x3ro-deck/x3ro-deck.conf`.
 - `src/TerminalHost.cpp`: embeds Konsole via `konsolepart` (`KParts::PartLoader`), so terminals use the user's Konsole profile.
-- `src/TmuxManager.cpp`: agents run in tmux on socket `-L x3ro-deck`, with config `~/.config/x3ro-deck/tmux.conf`. `ensureSession` only creates sessions that are missing, so agents survive app restarts. `submit` types text and presses Enter in one tmux call, or after a delay.
+- `src/SessionBackend.h`: the interface that keeps agent sessions alive outside the app (create, ensure, rename, send keys, submit, foreground-process poll, attach command, kill). AppController and MainWindow use only this interface; nothing outside the backend may call tmux.
+- `src/TmuxManager.cpp`: the tmux backend. Agents run on socket `-L x3ro-deck`, with config `~/.config/x3ro-deck/tmux.conf`. `ensureSession` only creates sessions that are missing, so agents survive app restarts. `submit` types text and presses Enter in one tmux call, or after a delay.
 - `src/AgentBus.cpp`: `QLocalServer` on `$XDG_RUNTIME_DIR/x3ro-deck.sock`. It reads one JSON hook payload per connection.
 - `hook/x3ro-deck-hook.cpp`: plain C++ with no Qt. Claude Code runs it from `~/.claude/settings.json` and Codex from `~/.codex/hooks.json`; both send the same Claude-style JSON. It must always exit 0, print nothing and finish in milliseconds.
 - `src/DockerClient.cpp`: Docker Engine API over `/var/run/docker.sock` (HTTP/1.0 over `QLocalSocket`). It subscribes to `/events` and filters containers by the `com.docker.compose.project` label.
 - `src/GitWatcher.cpp`: watches `HEAD` and `logs/HEAD` with `QFileSystemWatcher`.
 - `src/PrWatcher.cpp`: polls `gh pr view <branch> --json …` per checkout.
 - `qml/`: `Theme.qml` holds every color and font. Use its tokens and helpers (`agentColor`, `healthColor`, `elapsed`) and do not hardcode colors.
-- New QML files and data files must be added to `resources.qrc`. New C++ sources must be added to `CMakeLists.txt`.
+- New QML files and data files must be added to `resources.qrc`. New C++ sources must be added to the `x3ro-deck-core` library in `CMakeLists.txt`, and new tests to `tests/CMakeLists.txt`.
 
 # Code style
 

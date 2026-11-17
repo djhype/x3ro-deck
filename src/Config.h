@@ -40,9 +40,9 @@ struct AgentProfile
     QString id;
     QString label;
     QString kind;
-    QString command; // typed into the checkout's tmux shell
+    QString command; // typed into the checkout's session shell
     QString continueArgs; // appended to `command` to resume the latest conversation
-    QString process; // tmux's pane_current_command while the agent runs; a custom command's first word by default
+    QString process; // the session's foreground process while the agent runs; a custom command's first word by default
     QList<QPair<QString, QString>> env;
     QString allowKey;
     QString alwaysKey;

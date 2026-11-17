@@ -1,5 +1,7 @@
 #include "AppController.h"
 
+#include "TmuxManager.h"
+
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
@@ -208,7 +210,7 @@ AppController::AppController(QObject *parent)
     , m_config(Config::load(&m_configError))
     , m_docker(new DockerClient(this))
     , m_bus(new AgentBus(this))
-    , m_tmux(new TmuxManager(this))
+    , m_sessions(new TmuxManager(this))
     , m_git(new GitWatcher(this))
     , m_prs(new PrWatcher(this))
     , m_checkoutModel(new VariantListModel(kCheckoutRoles, this))
@@ -231,7 +233,7 @@ AppController::AppController(QObject *parent)
     connect(m_docker, &DockerClient::statsUpdated, this, &AppController::onStats);
     connect(m_docker, &DockerClient::connectedChanged, this, &AppController::totalsChanged);
     connect(m_bus, &AgentBus::hookEvent, this, &AppController::onHookEvent);
-    connect(m_tmux, &TmuxManager::paneCommands, this, &AppController::onPaneCommands);
+    connect(m_sessions, &SessionBackend::foregroundProcesses, this, &AppController::onPaneCommands);
     connect(m_git, &GitWatcher::updated, this, &AppController::onGit);
     connect(m_prs, &PrWatcher::updated, this, &AppController::onPr);
     connect(m_attention, &VariantListModel::countChanged, this, &AppController::totalsChanged);
@@ -265,7 +267,7 @@ void AppController::start()
         m_git->watch(m_checkouts[i].cfg.name, m_checkouts[i].cfg.path);
     }
     m_docker->start();
-    m_tmux->startPolling(3000);
+    m_sessions->startPolling(3000);
     m_statsTimer.start();
     publishCheckouts();
     publishServices();
@@ -312,6 +314,7 @@ QVariantMap AppController::current() const
         {QStringLiteral("commit"), c.git.commit},
         {QStringLiteral("project"), c.project},
         {QStringLiteral("session"), c.session},
+        {QStringLiteral("attachHint"), m_sessions->attachHint(c.session)},
         {QStringLiteral("offset"), c.cfg.portOffset},
         {QStringLiteral("containersUp"), up},
         {QStringLiteral("containersTotal"), total},
@@ -1002,7 +1005,7 @@ void AppController::attentionAction(const QString &id, const QString &action)
         const QString &session = m_checkouts.at(idx).session;
         const AgentProfile &p = profile(idx);
         const QString key = action == QLatin1String("allow") ? p.allowKey : action == QLatin1String("always") ? p.alwaysKey : p.denyKey;
-        m_tmux->sendKeys(session, {key});
+        m_sessions->sendKeys(session, {key});
         // Clear the card now; hook events confirm the new state moments later.
         setAgentState(idx, action == QLatin1String("deny") ? QStringLiteral("ready") : QStringLiteral("working"));
     } else if (kind == QLatin1String("docker")) {
@@ -1025,19 +1028,19 @@ void AppController::attentionAction(const QString &id, const QString &action)
 bool AppController::ensureAgentSession(int index)
 {
     const Checkout &c = m_checkouts.at(index);
-    if (m_tmux->hasSession(c.session)) {
+    if (m_sessions->hasSession(c.session)) {
         return true;
     }
     // A renamed checkout takes over the session it had under its old name.
-    for (const QString &old : m_tmux->sessionsIn(c.cfg.path)) {
+    for (const QString &old : m_sessions->sessionsIn(c.cfg.path)) {
         const bool ours = std::any_of(m_checkouts.cbegin(), m_checkouts.cend(), [&old](const Checkout &o) { return o.session == old; });
-        if (!ours && m_tmux->renameSession(old, c.session)) {
+        if (!ours && m_sessions->renameSession(old, c.session)) {
             return true;
         }
     }
     useProfile(index, c.cfg.agent);
-    return m_tmux->createSession(c.session, c.cfg.path,
-                                 m_config.autostartAgents ? profile(index).launchLine(false, c.cfg.args) : QString());
+    return m_sessions->createSession(c.session, c.cfg.path,
+                                     m_config.autostartAgents ? profile(index).launchLine(false, c.cfg.args) : QString());
 }
 
 bool AppController::reloadConfig()
@@ -1075,7 +1078,7 @@ void AppController::sendToAgent(const QString &text)
     if (m_current >= m_checkouts.size()) {
         return;
     }
-    m_tmux->submit(m_checkouts.at(m_current).session, text, profile(m_current).submitDelayMs);
+    m_sessions->submit(m_checkouts.at(m_current).session, text, profile(m_current).submitDelayMs);
     Q_EMIT focusAgentTerminal(m_current);
 }
 
@@ -1086,15 +1089,15 @@ void AppController::agentAction(const QString &action)
     }
     const Checkout &c = m_checkouts.at(m_current);
     if (action == QLatin1String("interrupt")) {
-        m_tmux->sendKeys(c.session, {QStringLiteral("Escape")});
+        m_sessions->sendKeys(c.session, {QStringLiteral("Escape")});
         // Claude Code sends no hook event for an interrupt.
         if (c.agent.state == QLatin1String("working")) {
             setAgentState(m_current, QStringLiteral("ready"));
         }
     } else if (action == QLatin1String("start") || action == QLatin1String("continue")) {
         // No autostart here: the line typed below starts the agent.
-        m_tmux->ensureSession(c.session, c.cfg.path, QString());
-        m_tmux->submit(c.session, profile(m_current).launchLine(action == QLatin1String("continue"), c.cfg.args));
+        m_sessions->ensureSession(c.session, c.cfg.path, QString());
+        m_sessions->submit(c.session, profile(m_current).launchLine(action == QLatin1String("continue"), c.cfg.args));
     }
     Q_EMIT focusAgentTerminal(m_current);
 }
