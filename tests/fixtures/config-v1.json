@@ -1,0 +1,8 @@
+{
+    "configVersion": 1,
+    "autostartAgents": false,
+    "checkouts": [],
+    "composeUp": "docker compose up -d --build",
+    "composeDown": "make down",
+    "composeRestart": "docker compose restart"
+}

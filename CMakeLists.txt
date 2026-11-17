@@ -38,6 +38,7 @@ add_library(x3ro-deck-core STATIC
     src/Config.cpp
     src/ConfigMigrations.cpp
     src/DockerClient.cpp
+    src/DockerEndpoint.cpp
     src/AgentBus.cpp
     common/x3ro-deck-socket.h
     src/SessionBackend.h

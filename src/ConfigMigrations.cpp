@@ -13,6 +13,17 @@ const QList<Migration> &all()
     static const QList<Migration> migrations{
         // v0 → v1: introduces configVersion itself; run() stamps it.
         [](QJsonObject c) { return c; },
+        // v1 → v2: compose commands take {compose}, so composeBinary applies.
+        [](QJsonObject c) {
+            static const QLatin1String prefix("docker compose ");
+            for (const char *key : {"composeUp", "composeDown", "composeRestart"}) {
+                const QString cmd = c.value(QLatin1String(key)).toString();
+                if (cmd.startsWith(prefix)) {
+                    c.insert(QLatin1String(key), QStringLiteral("{compose} ") + cmd.mid(prefix.size()));
+                }
+            }
+            return c;
+        },
     };
     return migrations;
 }

@@ -1,6 +1,7 @@
 #include "SettingsDialog.h"
 
 #include "Config.h"
+#include "DockerEndpoint.h"
 #include "Paths.h"
 
 #include <QCheckBox>
@@ -902,6 +903,25 @@ void SettingsDialog::refreshAgentChoices()
 
 QWidget *SettingsDialog::buildDockerPage()
 {
+    m_dockerHost = lineEdit(true);
+    m_dockerHost->setPlaceholderText(QStringLiteral("automatic"));
+    m_dockerHost->setText(m_root.value(QStringLiteral("dockerHost")).toString());
+    m_dockerEndpoint = hint(QString());
+    m_dockerEndpoint->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto showEndpoint = [this] {
+        m_dockerEndpoint->setText(QStringLiteral("In use: ") + resolveDockerEndpoint(m_dockerHost->text()).display());
+    };
+    connect(m_dockerHost, &QLineEdit::textChanged, this, showEndpoint);
+    showEndpoint();
+    m_composeBinary = new QComboBox;
+    m_composeBinary->setEditable(true);
+    m_composeBinary->addItems({QStringLiteral("docker compose"), QStringLiteral("docker-compose"), QStringLiteral("podman compose")});
+    m_composeBinary->setCurrentText(m_root.value(QStringLiteral("composeBinary")).toString(QStringLiteral("docker compose")));
+    auto *engine = form();
+    addField(engine, QStringLiteral("Docker host"), m_dockerHost, m_dockerEndpoint);
+    addField(engine, QStringLiteral("Compose binary"), m_composeBinary,
+             hint(QStringLiteral("What {compose} in the commands below and in quick commands becomes.")));
+
     m_composeUp = lineEdit(true);
     m_composeDown = lineEdit(true);
     m_composeRestart = lineEdit(true);
@@ -975,12 +995,18 @@ QWidget *SettingsDialog::buildDockerPage()
     auto *layout = new QVBoxLayout(page);
     layout->setContentsMargins(20, 20, 20, 8);
     layout->setSpacing(8);
+    layout->addWidget(section(QStringLiteral("Engine")));
+    layout->addWidget(hint(QStringLiteral("Empty finds it: DOCKER_HOST, the active docker context, then rootless Docker, Podman, "
+                                          "Colima, OrbStack and /var/run/docker.sock. Only unix:// sockets work.")));
+    layout->addLayout(engine);
+    layout->addSpacing(6);
     layout->addWidget(section(QStringLiteral("Docker Compose")));
     layout->addLayout(compose);
     layout->addSpacing(6);
     layout->addWidget(section(QStringLiteral("Quick commands")));
-    layout->addWidget(hint(QStringLiteral("{project} becomes the compose project and {port:<service>:<containerPort>} the port Docker "
-                                          "published for it. The group picks the button colour.")));
+    layout->addWidget(hint(QStringLiteral("{compose} becomes the compose binary, {project} the compose project and "
+                                          "{port:<service>:<containerPort>} the port Docker published for it. The group picks the "
+                                          "button colour.")));
     layout->addWidget(editable(m_quick, quickRow, setQuickRow), 3);
     layout->addSpacing(6);
     layout->addWidget(section(QStringLiteral("Links")));
@@ -1075,6 +1101,8 @@ QJsonObject SettingsDialog::config() const
     }
     root.insert(QStringLiteral("checkouts"), checkouts);
 
+    root.insert(QStringLiteral("dockerHost"), m_dockerHost->text().trimmed());
+    root.insert(QStringLiteral("composeBinary"), m_composeBinary->currentText().trimmed());
     root.insert(QStringLiteral("composeUp"), m_composeUp->text().trimmed());
     root.insert(QStringLiteral("composeDown"), m_composeDown->text().trimmed());
     root.insert(QStringLiteral("composeRestart"), m_composeRestart->text().trimmed());

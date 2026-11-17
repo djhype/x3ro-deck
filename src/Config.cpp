@@ -48,9 +48,11 @@ QJsonObject defaults()
         {QStringLiteral("agents"), defaultAgents()},
         {QStringLiteral("defaultAgent"), QStringLiteral("claude")},
         {QStringLiteral("konsoleProfile"), QString()},
-        {QStringLiteral("composeUp"), QStringLiteral("docker compose up -d")},
-        {QStringLiteral("composeDown"), QStringLiteral("docker compose down")},
-        {QStringLiteral("composeRestart"), QStringLiteral("docker compose restart")},
+        {QStringLiteral("dockerHost"), QString()},
+        {QStringLiteral("composeBinary"), QStringLiteral("docker compose")},
+        {QStringLiteral("composeUp"), QStringLiteral("{compose} up -d")},
+        {QStringLiteral("composeDown"), QStringLiteral("{compose} down")},
+        {QStringLiteral("composeRestart"), QStringLiteral("{compose} restart")},
         {QStringLiteral("notifyOnDone"), true},
         {QStringLiteral("autostartAgents"), true},
     };
@@ -367,6 +369,11 @@ Config Config::load(QString *error)
     }
     c.defaultAgent = root.value(QStringLiteral("defaultAgent")).toString(c.agents.first().id);
     c.konsoleProfile = root.value(QStringLiteral("konsoleProfile")).toString();
+    c.dockerHost = root.value(QStringLiteral("dockerHost")).toString().trimmed();
+    c.composeBinary = root.value(QStringLiteral("composeBinary")).toString(c.composeBinary).trimmed();
+    if (c.composeBinary.isEmpty()) {
+        c.composeBinary = QStringLiteral("docker compose");
+    }
     c.composeUp = root.value(QStringLiteral("composeUp")).toString(c.composeUp);
     c.composeDown = root.value(QStringLiteral("composeDown")).toString(c.composeDown);
     c.composeRestart = root.value(QStringLiteral("composeRestart")).toString(c.composeRestart);

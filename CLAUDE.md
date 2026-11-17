@@ -44,7 +44,9 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
 - `src/AgentBus.cpp`: `QLocalServer` on the hook socket. It reads one JSON hook payload per connection.
 - `common/x3ro-deck-socket.h`: the socket path, shared with the hook and free of Qt. `$X3RO_DECK_SOCKET` overrides it. Otherwise it is `$XDG_RUNTIME_DIR/x3ro-deck.sock` on Linux and `$TMPDIR/x3ro-deck.sock` on macOS, or `/tmp/x3ro-deck-<uid>/x3ro-deck.sock` when those are unset or too long for `sun_path` (107 bytes on Linux, 103 on macOS).
 - `hook/x3ro-deck-hook.cpp`: plain C++ with no Qt. Claude Code runs it from `~/.claude/settings.json` and Codex from `~/.codex/hooks.json`; both send the same Claude-style JSON. It must always exit 0, print nothing and finish in milliseconds.
-- `src/DockerClient.cpp`: Docker Engine API over `/var/run/docker.sock` (HTTP/1.0 over `QLocalSocket`). It subscribes to `/events` and filters containers by the `com.docker.compose.project` label.
+- `src/DockerClient.cpp`: Docker Engine API over a Unix socket (HTTP/1.0 over `QLocalSocket`). It subscribes to `/events` and filters containers by the `com.docker.compose.project` label.
+- `src/DockerEndpoint.cpp`: picks that socket. The order is the `dockerHost` setting, `DOCKER_HOST`, the active docker context, then rootless Docker, Podman, Colima, OrbStack and `/var/run/docker.sock`. Only `unix://` works. Settings → Docker shows the result.
+- Compose and quick commands expand `{compose}` to the `composeBinary` setting (`docker compose`, `docker-compose` or `podman compose`).
 - `src/GitWatcher.cpp`: watches `HEAD` and `logs/HEAD` with `QFileSystemWatcher`.
 - `src/PrWatcher.cpp`: polls `gh pr view <branch> --json …` per checkout.
 - `qml/`: `Theme.qml` holds every color and font. Use its tokens and helpers (`agentColor`, `healthColor`, `elapsed`) and do not hardcode colors.

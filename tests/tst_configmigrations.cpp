@@ -21,6 +21,7 @@ private Q_SLOTS:
     void currentVersionIsANoOp();
     void v0FileIsUpgradedWithBackup();
     void newerFileIsLeftAloneWithWarning();
+    void v1ComposeCommandsUseThePlaceholder();
     void freshInstallWritesCurrentVersion();
     void savingStampsTheVersion();
 
@@ -109,7 +110,7 @@ void ConfigMigrationsTest::v0FileIsUpgradedWithBackup()
 
     // The file now carries the version and still holds only the user's keys.
     const QJsonObject written = QJsonDocument::fromJson(read(configFile())).object();
-    QCOMPARE(written.value(QStringLiteral("configVersion")).toInt(), 1);
+    QCOMPARE(written.value(QStringLiteral("configVersion")).toInt(), ConfigMigrations::currentVersion());
     QVERIFY(written.contains(QStringLiteral("customKeyFromTheUser")));
     QVERIFY(!written.contains(QStringLiteral("composeUp")));
 
@@ -141,6 +142,19 @@ void ConfigMigrationsTest::newerFileIsLeftAloneWithWarning()
     QCOMPARE(QDir(m_tmp->path() + QStringLiteral("/x3ro-deck")).entryList({QStringLiteral("*.bak")}, QDir::Files), QStringList());
     // What it can read still applies.
     QCOMPARE(c.checkouts.size(), 1);
+}
+
+void ConfigMigrationsTest::v1ComposeCommandsUseThePlaceholder()
+{
+    installFixture(QStringLiteral("config-v1.json"));
+    QString error;
+    const Config c = Config::load(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY(QFile::exists(configFile() + QStringLiteral(".v1.bak")));
+    QCOMPARE(c.composeUp, QStringLiteral("{compose} up -d --build"));
+    QCOMPARE(c.composeDown, QStringLiteral("make down"));
+    QCOMPARE(c.composeRestart, QStringLiteral("{compose} restart"));
+    QCOMPARE(c.composeBinary, QStringLiteral("docker compose"));
 }
 
 void ConfigMigrationsTest::freshInstallWritesCurrentVersion()

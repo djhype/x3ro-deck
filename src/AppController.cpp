@@ -1,5 +1,6 @@
 #include "AppController.h"
 
+#include "DockerEndpoint.h"
 #include "Paths.h"
 #include "TmuxManager.h"
 
@@ -261,6 +262,7 @@ void AppController::start()
         m_prs->watch(m_checkouts[i].cfg.name, m_checkouts[i].cfg.path);
         m_git->watch(m_checkouts[i].cfg.name, m_checkouts[i].cfg.path);
     }
+    m_docker->setSocketPath(resolveDockerEndpoint(m_config.dockerHost).socketPath);
     m_docker->start();
     m_sessions->startPolling(3000);
     m_statsTimer.start();
@@ -404,6 +406,7 @@ int AppController::publicPort(int index, const QString &service, int containerPo
 QString AppController::expand(int index, const QString &command) const
 {
     QString out = command;
+    out.replace(QStringLiteral("{compose}"), m_config.composeBinary);
     out.replace(QStringLiteral("{project}"), m_checkouts.at(index).project);
     static const QRegularExpression portRe(QStringLiteral(R"(\{port:([^:}]+):(\d+)\})"));
     QRegularExpressionMatch m;
@@ -441,7 +444,7 @@ void AppController::onContainers(const QList<ContainerInfo> &containers)
         const QString dir = Paths::normalize(ci.workingDir);
         const int idx = checkoutForPath(dir);
         // Only compose projects rooted exactly at a checkout, not ones in subdirectories.
-        if (idx < 0 || m_checkouts[idx].cfg.path != dir) {
+        if (idx < 0 || !Paths::same(m_checkouts[idx].cfg.path, dir)) {
             continue;
         }
         m_checkouts[idx].containers.append(ci);
@@ -1049,6 +1052,7 @@ bool AppController::reloadConfig()
         sameCheckouts = next.checkouts.at(i).name == m_checkouts.at(i).cfg.name && next.checkouts.at(i).path == m_checkouts.at(i).cfg.path;
     }
     const Config prev = std::exchange(m_config, next);
+    m_docker->setSocketPath(resolveDockerEndpoint(m_config.dockerHost).socketPath);
     for (int i = 0; i < m_checkouts.size(); ++i) {
         Checkout &c = m_checkouts[i];
         const QString configuredBefore = prev.agent(c.cfg.agent).id;

@@ -73,9 +73,11 @@ struct Config
     QList<AgentProfile> agents; // never empty
     QString defaultAgent;
     QString konsoleProfile; // empty = Konsole's default profile
-    QString composeUp = QStringLiteral("docker compose up -d");
-    QString composeDown = QStringLiteral("docker compose down");
-    QString composeRestart = QStringLiteral("docker compose restart");
+    QString dockerHost; // empty = resolve (see DockerEndpoint.h)
+    QString composeBinary = QStringLiteral("docker compose"); // what {compose} in commands becomes
+    QString composeUp = QStringLiteral("{compose} up -d");
+    QString composeDown = QStringLiteral("{compose} down");
+    QString composeRestart = QStringLiteral("{compose} restart");
     bool notifyOnDone = true;
     bool autostartAgents = true; // a newly created agent session runs its profile's command
 

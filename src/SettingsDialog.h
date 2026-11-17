@@ -113,6 +113,9 @@ private:
     QLineEdit *m_keyDeny;
     QLineEdit *m_agentDelay;
 
+    QLineEdit *m_dockerHost;
+    QLabel *m_dockerEndpoint;
+    QComboBox *m_composeBinary;
     QLineEdit *m_composeUp;
     QLineEdit *m_composeDown;
     QLineEdit *m_composeRestart;

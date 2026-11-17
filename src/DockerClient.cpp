@@ -114,8 +114,22 @@ DockerClient::~DockerClient()
 
 void DockerClient::start()
 {
+    m_started = true;
     connectEvents();
     refresh();
+}
+
+void DockerClient::setSocketPath(const QString &path)
+{
+    if (path == m_socketPath) {
+        return;
+    }
+    m_socketPath = path;
+    if (m_started) {
+        setConnected(false);
+        connectEvents();
+        refresh();
+    }
 }
 
 void DockerClient::setConnected(bool c)

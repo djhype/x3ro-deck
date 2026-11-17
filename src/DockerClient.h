@@ -37,7 +37,7 @@ struct ContainerStats
     qint64 memBytes = -1;
 };
 
-// Talks to the Docker Engine API over /var/run/docker.sock.
+// Talks to the Docker Engine API over a Unix socket (see DockerEndpoint.h).
 //
 // Every request uses HTTP/1.0, so the daemon never chunk-encodes a response and
 // closes the connection when it is done; /events then becomes a plain stream of
@@ -50,6 +50,9 @@ public:
     ~DockerClient() override;
 
     void start();
+    // Switches to another Engine API socket and reconnects if running.
+    void setSocketPath(const QString &path);
+    QString socketPath() const { return m_socketPath; }
     void restartContainer(const QString &id);
     void stopContainer(const QString &id);
     void startContainer(const QString &id);
@@ -78,4 +81,5 @@ private:
     QTimer m_reconnect;
     bool m_connected = false;
     bool m_statsInFlight = false;
+    bool m_started = false;
 };
