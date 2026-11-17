@@ -101,6 +101,17 @@ DockerClient::DockerClient(QObject *parent)
     });
 }
 
+DockerClient::~DockerClient()
+{
+    // QObject deletes child sockets only after the timers are gone, and a
+    // socket closing then runs its callback into a half-destroyed client.
+    const QList<QLocalSocket *> sockets = findChildren<QLocalSocket *>(Qt::FindDirectChildrenOnly);
+    for (QLocalSocket *sock : sockets) {
+        sock->disconnect();
+        delete sock;
+    }
+}
+
 void DockerClient::start()
 {
     connectEvents();

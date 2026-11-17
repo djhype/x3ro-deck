@@ -47,6 +47,7 @@ class DockerClient : public QObject
     Q_OBJECT
 public:
     explicit DockerClient(QObject *parent = nullptr);
+    ~DockerClient() override;
 
     void start();
     void restartContainer(const QString &id);
