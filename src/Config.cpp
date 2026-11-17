@@ -56,6 +56,7 @@ QJsonObject defaults()
         {QStringLiteral("notifyOnDone"), true},
         {QStringLiteral("autostartAgents"), true},
         {QStringLiteral("sessionBackend"), QStringLiteral("tmux")},
+        {QStringLiteral("terminal"), QStringLiteral("konsole")},
     };
 }
 
@@ -381,5 +382,6 @@ Config Config::load(QString *error)
     c.notifyOnDone = root.value(QStringLiteral("notifyOnDone")).toBool(true);
     c.autostartAgents = root.value(QStringLiteral("autostartAgents")).toBool(true);
     c.sessionBackend = root.value(QStringLiteral("sessionBackend")).toString(c.sessionBackend).trimmed();
+    c.terminal = root.value(QStringLiteral("terminal")).toString(c.terminal).trimmed();
     return c;
 }

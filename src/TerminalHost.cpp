@@ -1,5 +1,9 @@
 #include "TerminalHost.h"
 
+#include "PtyChannel.h"
+#include "TerminalScreen.h"
+#include "TerminalView.h"
+
 #include <KParts/PartLoader>
 #include <KParts/ReadOnlyPart>
 #include <KPluginMetaData>
@@ -17,10 +21,17 @@ QList<QKeySequence> &appShortcuts()
     static QList<QKeySequence> list;
     return list;
 }
+
+bool &builtinDefault()
+{
+    static bool builtin = false;
+    return builtin;
+}
 } // namespace
 
 TerminalHost::TerminalHost(QWidget *parent)
     : QFrame(parent)
+    , m_builtin(builtinDefault())
     , m_layout(new QVBoxLayout(this))
     , m_placeholder(new QLabel(this))
 {
@@ -37,6 +48,8 @@ TerminalHost::TerminalHost(QWidget *parent)
 
 TerminalHost::~TerminalHost()
 {
+    delete m_pty; // hangs up the program; agent sessions survive
+    m_pty = nullptr;
     // The part is our child; detach first so its destroyed() does not reach a
     // half-destroyed host. Deleting it hangs up the terminal (agent sessions survive).
     if (m_part) {
@@ -69,7 +82,69 @@ void TerminalHost::setAppShortcuts(const QList<QKeySequence> &shortcuts)
     appShortcuts() = shortcuts;
 }
 
+void TerminalHost::setBuiltin(bool builtin)
+{
+    builtinDefault() = builtin;
+}
+
+bool TerminalHost::isAlive() const
+{
+    return m_builtin ? m_pty != nullptr : !m_part.isNull();
+}
+
+void TerminalHost::showError(const QString &text)
+{
+    m_placeholder->setText(text);
+    m_placeholder->show();
+    if (m_view) {
+        m_view->hide();
+    }
+}
+
 void TerminalHost::spawn()
+{
+    if (m_builtin) {
+        spawnBuiltin();
+    } else {
+        spawnKonsole();
+    }
+}
+
+void TerminalHost::spawnBuiltin()
+{
+    if (!m_view) {
+        m_view = new TerminalView(this);
+        m_view->setReservedShortcuts(appShortcuts());
+        m_layout->addWidget(m_view);
+        setFocusProxy(m_view);
+    }
+    QStringList argv = m_args;
+    if (m_program.isEmpty()) {
+        const QString shell = qEnvironmentVariable("SHELL");
+        argv = {shell.isEmpty() ? QStringLiteral("/bin/sh") : shell};
+    }
+    // A reattach redraws everything; start from a clean screen and modes.
+    m_view->screen()->reset();
+    m_pty = new PtyChannel(this);
+    QString error;
+    if (!m_pty->start(argv, m_dir, m_view->rows(), m_view->cols(), {}, &error)) {
+        delete m_pty;
+        m_pty = nullptr;
+        showError(QStringLiteral("Could not start the terminal:\n%1").arg(error));
+        return;
+    }
+    m_placeholder->hide();
+    m_view->show();
+    m_view->setChannel(m_pty);
+    connect(m_pty, &PtyChannel::closed, this, [this] {
+        m_view->setChannel(nullptr);
+        m_pty->deleteLater();
+        m_pty = nullptr;
+        Q_EMIT exited();
+    });
+}
+
+void TerminalHost::spawnKonsole()
 {
     const KPluginMetaData md(QStringLiteral("kf6/parts/konsolepart"));
     auto result = KParts::PartLoader::instantiatePart<KParts::ReadOnlyPart>(md, this, this);
@@ -110,7 +185,7 @@ void TerminalHost::spawn()
 
 void TerminalHost::respawn()
 {
-    if (m_part) {
+    if (isAlive()) {
         return;
     }
     spawn();
@@ -129,13 +204,18 @@ void TerminalHost::onOverrideShortcut(QKeyEvent *event, bool &override)
 
 void TerminalHost::sendInput(const QString &text)
 {
-    if (m_term) {
+    if (m_pty) {
+        m_pty->write(text.toUtf8());
+    } else if (m_term) {
         m_term->sendInput(text);
     }
 }
 
 QString TerminalHost::foregroundProcessName() const
 {
+    if (m_pty) {
+        return m_pty->foregroundProcessName();
+    }
     return m_term ? m_term->foregroundProcessName() : QString();
 }
 
@@ -151,6 +231,10 @@ void TerminalHost::setAccent(const QString &state)
 
 void TerminalHost::focusTerminal()
 {
+    if (m_view) {
+        m_view->setFocus(Qt::OtherFocusReason);
+        return;
+    }
     if (m_part && m_part->widget()) {
         m_part->widget()->setFocus(Qt::OtherFocusReason);
     }

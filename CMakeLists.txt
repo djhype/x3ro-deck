@@ -27,6 +27,9 @@ option(X3RO_DECK_CORE_ONLY "Build without KF6: the controller, backends, hook an
 
 # 6.4 is what Ubuntu 24.04 and Debian 12 ship.
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network)
+# The built-in terminal's emulator.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(vterm REQUIRED IMPORTED_TARGET vterm>=0.3)
 
 # The x3ro-deck-sessiond wire protocol and the attach client: QtCore only.
 add_library(x3ro-deck-sessionproto STATIC
@@ -65,10 +68,15 @@ add_library(x3ro-deck-base STATIC
     src/Paths.cpp
     src/AppController.cpp
     src/SettingsDialog.cpp
+    src/TerminalChannel.h
+    src/PtyChannel.cpp
+    src/TerminalAppearance.cpp
+    src/TerminalScreen.cpp
+    src/TerminalView.cpp
 )
 x3ro_deck_set_warnings(x3ro-deck-base)
 target_include_directories(x3ro-deck-base PUBLIC src common)
-target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
+target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util)
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)

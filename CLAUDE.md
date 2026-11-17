@@ -39,7 +39,12 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
   - It also owns the terminals, shortcuts, the tray icon and `KNotification`s.
   - Ctrl+Q and the tray's Quit go through `confirmQuit`, which offers to stop the agents by killing the tmux server.
   - Layout state persists in `~/.config/x3ro-deck/x3ro-deck.conf`.
-- `src/TerminalHost.cpp`: embeds Konsole via `konsolepart` (`KParts::PartLoader`), so terminals use the user's Konsole profile.
+- `src/TerminalHost.cpp`: hosts one terminal. By default it embeds Konsole via `konsolepart` (`KParts::PartLoader`), so terminals use the user's Konsole profile. With `terminal: "builtin"` (takes a restart) it shows a `TerminalView` instead and runs the program (the backend's attach command, or `$SHELL` for shell tabs) in a `PtyChannel`.
+- The built-in terminal lives in `x3ro-deck-base`, so it needs no KF6 and `tst_terminal` covers it:
+  - `TerminalScreen` wraps libvterm. It holds the cell grid and turns keys and pastes into bytes, honoring the program's modes. Ctrl combos use legacy control bytes, because libvterm would send CSI u.
+  - `TerminalView` is a `QWidget` that paints the screen cell by cell and maps key events. Its grid follows the widget size and resizes the channel. It claims every key except the window shortcuts passed to `setReservedShortcuts`.
+  - `TerminalChannel` is the byte stream behind a view. `PtyChannel` implements it with `forkpty`.
+  - `TerminalAppearance` holds the font, colors and padding. `fallback()` uses the system monospace font and the theme's colors.
 - `src/SessionBackend.h`: the interface that keeps agent sessions alive outside the app (create, ensure, rename, send keys, submit, foreground-process poll, attach command, kill). AppController and MainWindow use only this interface; nothing outside the backend may call tmux. The config key `sessionBackend` picks the implementation at startup: `tmux` (default) or `daemon`. Changing it takes a restart.
 - `src/TmuxManager.cpp`: the tmux backend. Agents run on socket `-L x3ro-deck`, with config `~/.config/x3ro-deck/tmux.conf`. `ensureSession` only creates sessions that are missing, so agents survive app restarts. `submit` types text and presses Enter in one tmux call, or after a delay.
 - `src/DaemonBackend.cpp`: the `daemon` backend, a blocking request/reply client of `x3ro-deck-sessiond`.

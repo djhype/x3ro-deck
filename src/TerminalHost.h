@@ -8,14 +8,17 @@
 class QKeyEvent;
 class QLabel;
 class QVBoxLayout;
+class PtyChannel;
 class TerminalInterface;
+class TerminalView;
 namespace KParts
 {
 class ReadOnlyPart;
 }
 
-// Hosts one embedded Konsole (konsolepart), so every terminal uses your
-// Konsole profile: zsh, powerlevel10k, fonts, colours and keybindings.
+// Hosts one terminal: an embedded Konsole (konsolepart), which uses your
+// Konsole profile, or the built-in TerminalView running the program in a
+// local PTY (config "terminal": "builtin").
 class TerminalHost : public QFrame
 {
     Q_OBJECT
@@ -27,11 +30,13 @@ public:
 
     // Keys the window handles itself; the terminal lets them through.
     static void setAppShortcuts(const QList<QKeySequence> &shortcuts);
+    // Whether terminals created from now on are built-in instead of konsolepart.
+    static void setBuiltin(bool builtin);
     ~TerminalHost() override;
 
     void sendInput(const QString &text);
     QString foregroundProcessName() const;
-    bool isAlive() const { return !m_part.isNull(); }
+    bool isAlive() const;
     // Restart the program or shell after it exited.
     void respawn();
     void setAccent(const QString &state); // "", "attention", "focus"
@@ -46,6 +51,9 @@ private Q_SLOTS:
 private:
     TerminalHost(QWidget *parent);
     void spawn();
+    void spawnKonsole();
+    void spawnBuiltin();
+    void showError(const QString &text);
 
     QString m_dir;
     QString m_program;
@@ -53,6 +61,9 @@ private:
     QString m_profile;
     QPointer<KParts::ReadOnlyPart> m_part;
     TerminalInterface *m_term = nullptr;
+    bool m_builtin = false;
+    TerminalView *m_view = nullptr;
+    PtyChannel *m_pty = nullptr;
     QVBoxLayout *m_layout;
     QLabel *m_placeholder;
 };

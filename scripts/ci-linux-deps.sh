@@ -7,4 +7,4 @@ pacman -Syu --noconfirm --needed \
     base-devel git cmake ninja clang \
     qt6-base qt6-declarative \
     kparts kcoreaddons kxmlgui knotifications kstatusnotifieritem kglobalaccel kdbusaddons kwindowsystem \
-    konsole tmux dbus ttf-dejavu
+    konsole tmux libvterm dbus ttf-dejavu

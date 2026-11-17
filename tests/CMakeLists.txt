@@ -27,6 +27,12 @@ target_compile_definitions(tst_socketpath PRIVATE X3RO_DECK_HOOK_PATH="$<TARGET_
 add_dependencies(tst_socketpath x3ro-deck-hook)
 add_test(NAME socketpath COMMAND tst_socketpath)
 
+add_executable(tst_terminal tst_terminal.cpp)
+x3ro_deck_set_warnings(tst_terminal)
+target_link_libraries(tst_terminal PRIVATE x3ro-deck-base Qt6::Test)
+add_test(NAME terminal COMMAND tst_terminal)
+set_tests_properties(terminal PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 add_executable(tst_paths tst_paths.cpp)
 x3ro_deck_set_warnings(tst_paths)
 target_link_libraries(tst_paths PRIVATE x3ro-deck-base Qt6::Test)

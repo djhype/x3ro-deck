@@ -52,6 +52,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     setWindowTitle(QStringLiteral("X3RO Deck"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("x3ro-deck"), QIcon(QStringLiteral(":/data/icons/x3ro-deck.svg"))));
     resize(1600, 980);
+    TerminalHost::setBuiltin(m_app->config().terminal == QLatin1String("builtin"));
 
     QFile qss(QStringLiteral(":/data/style.qss"));
     if (qss.open(QIODevice::ReadOnly)) {
@@ -330,7 +331,7 @@ void MainWindow::applySettings(const QJsonObject &config)
     QMessageBox box(this);
     box.setIcon(QMessageBox::Question);
     box.setWindowTitle(QStringLiteral("Restart X3RO Deck"));
-    box.setText(QStringLiteral("The checkout list or the session backend changed. It takes effect when X3RO Deck restarts."));
+    box.setText(QStringLiteral("The checkout list, the session backend or the terminal changed. It takes effect when X3RO Deck restarts."));
     box.setInformativeText(QStringLiteral("Agents keep running through the restart. Shell tabs close."));
     QPushButton *now = box.addButton(QStringLiteral("Restart now"), QMessageBox::AcceptRole);
     box.addButton(QStringLiteral("Later"), QMessageBox::RejectRole);
