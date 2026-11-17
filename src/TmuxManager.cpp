@@ -114,12 +114,14 @@ QStringList TmuxManager::sessionsIn(const QString &dir) const
 {
     QProcess list;
     list.start(QStringLiteral("tmux"),
-               baseArgs() << QStringLiteral("list-sessions") << QStringLiteral("-F") << QStringLiteral("#{session_path}\t#{session_name}"));
+               baseArgs() << QStringLiteral("list-sessions") << QStringLiteral("-F") << QStringLiteral("#{session_name}:#{session_path}"));
     list.waitForFinished(2000);
     QStringList out;
     for (const QString &line : QString::fromUtf8(list.readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        if (Paths::same(line.section(QLatin1Char('\t'), 0, 0), dir)) {
-            out.append(line.section(QLatin1Char('\t'), 1));
+        // Session names never contain ':' (see sessionName), paths may.
+        const qsizetype colon = line.indexOf(QLatin1Char(':'));
+        if (colon > 0 && Paths::same(line.mid(colon + 1), dir)) {
+            out.append(line.left(colon));
         }
     }
     return out;
@@ -203,16 +205,20 @@ void TmuxManager::poll()
         QHash<QString, QString> out;
         const QList<QByteArray> lines = proc->readAllStandardOutput().split('\n');
         for (const QByteArray &line : lines) {
-            const QList<QByteArray> cols = line.split('\t');
-            // Only the active pane of each session; a user may split a session by hand.
-            if (cols.size() == 3 && cols.at(1) == "1") {
-                out.insert(QString::fromUtf8(cols.at(0)), QString::fromUtf8(cols.at(2)));
+            // "name:1:command". Only the active pane of each session counts;
+            // a user may split a session by hand.
+            const qsizetype first = line.indexOf(':');
+            const qsizetype second = first < 0 ? -1 : line.indexOf(':', first + 1);
+            if (second == first + 2 && line.at(first + 1) == '1') {
+                out.insert(QString::fromUtf8(line.left(first)), QString::fromUtf8(line.mid(second + 1)));
             }
         }
         Q_EMIT foregroundProcesses(out);
         proc->deleteLater();
     });
+    // Colons, not tabs, separate fields: tmux before 3.5 prints tabs in -F
+    // output as '_'.
     proc->start(QStringLiteral("tmux"),
                 baseArgs() << QStringLiteral("list-panes") << QStringLiteral("-a") << QStringLiteral("-F")
-                           << QStringLiteral("#{session_name}\t#{?#{&&:#{window_active},#{pane_active}},1,0}\t#{pane_current_command}"));
+                           << QStringLiteral("#{session_name}:#{?#{&&:#{window_active},#{pane_active}},1,0}:#{pane_current_command}"));
 }
