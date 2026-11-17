@@ -169,8 +169,9 @@ private:
     QString expand(int index, const QString &command) const;
     int publicPort(int index, const QString &service, int containerPort) const;
 
-    Config m_config;
+    // Before m_config, which Config::load() fills it while initializing.
     QString m_configError;
+    Config m_config;
     QList<Checkout> m_checkouts;
     int m_current = 0;
     QString m_tab = QStringLiteral("docker");
