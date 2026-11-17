@@ -11,6 +11,18 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
 
+option(X3RO_DECK_WERROR "Treat compiler warnings as errors" OFF)
+
+# MSVC is also set for clang-cl, which takes MSVC-style flags.
+function(x3ro_deck_set_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra)
+    endif()
+    set_target_properties(${target} PROPERTIES COMPILE_WARNING_AS_ERROR ${X3RO_DECK_WERROR})
+endfunction()
+
 find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets Network Quick QuickWidgets Qml DBus)
 find_package(KF6Parts REQUIRED)
 find_package(KF6CoreAddons REQUIRED)
@@ -36,7 +48,7 @@ add_executable(x3ro-deck
     src/SettingsDialog.cpp
     resources.qrc
 )
-target_compile_options(x3ro-deck PRIVATE -Wall -Wextra)
+x3ro_deck_set_warnings(x3ro-deck)
 target_link_libraries(x3ro-deck PRIVATE
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
     KF6::Parts KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::StatusNotifierItem
@@ -46,15 +58,18 @@ target_link_libraries(x3ro-deck PRIVATE
 # The hook runs on every agent tool call, so it is plain C++ with no Qt
 # dependency: it starts in about a millisecond and never blocks the agent.
 add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
-target_compile_options(x3ro-deck-hook PRIVATE -Wall -Wextra -O2)
+x3ro_deck_set_warnings(x3ro-deck-hook)
+target_compile_options(x3ro-deck-hook PRIVATE $<IF:$<BOOL:${MSVC}>,/O2,-O2>)
 
 install(TARGETS x3ro-deck x3ro-deck-hook RUNTIME DESTINATION bin)
-# Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually
-# comes from a shell rc file that only terminals read.
-configure_file(data/x3ro-deck.desktop.in x3ro-deck.desktop @ONLY)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/x3ro-deck.desktop DESTINATION share/applications)
-install(FILES data/x3ro-deck.notifyrc DESTINATION share/knotifications6)
-install(FILES data/icons/x3ro-deck.svg DESTINATION share/icons/hicolor/scalable/apps)
-foreach(size 16 22 24 32 48 64 128 256 512)
-    install(FILES data/icons/x3ro-deck-${size}.png DESTINATION share/icons/hicolor/${size}x${size}/apps RENAME x3ro-deck.png)
-endforeach()
+if(UNIX AND NOT APPLE)
+    # Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually
+    # comes from a shell rc file that only terminals read.
+    configure_file(data/x3ro-deck.desktop.in x3ro-deck.desktop @ONLY)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/x3ro-deck.desktop DESTINATION share/applications)
+    install(FILES data/x3ro-deck.notifyrc DESTINATION share/knotifications6)
+    install(FILES data/icons/x3ro-deck.svg DESTINATION share/icons/hicolor/scalable/apps)
+    foreach(size 16 22 24 32 48 64 128 256 512)
+        install(FILES data/icons/x3ro-deck-${size}.png DESTINATION share/icons/hicolor/${size}x${size}/apps RENAME x3ro-deck.png)
+    endforeach()
+endif()

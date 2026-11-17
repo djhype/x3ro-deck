@@ -1,0 +1,47 @@
+{
+    "version": 4,
+    "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "linux",
+            "displayName": "Linux",
+            "inherits": "base",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "$env{HOME}/.local"
+            }
+        },
+        {
+            "name": "macos",
+            "displayName": "macOS",
+            "inherits": "base",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "$env{HOME}/.local"
+            }
+        },
+        {
+            "name": "windows",
+            "displayName": "Windows",
+            "inherits": "base",
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "$env{LOCALAPPDATA}/Programs/x3ro-deck"
+            }
+        }
+    ],
+    "buildPresets": [
+        { "name": "linux", "configurePreset": "linux" },
+        { "name": "macos", "configurePreset": "macos" },
+        { "name": "windows", "configurePreset": "windows" }
+    ]
+}

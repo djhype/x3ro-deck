@@ -4,9 +4,9 @@ Qt 6 / KF6 desktop app (C++20, Widgets + QML panels) for running coding agents a
 
 # Commands
 
-- `cmake -S . -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local`: configure. Plain CMake, without extra-cmake-modules.
-- `cmake --build build`: build both targets. The build must stay warning-free.
-- `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file, notifyrc and hicolor icons. The desktop file comes from `data/x3ro-deck.desktop.in` with an absolute `Exec`, because Plasma's session PATH lacks `~/.local/bin`.
+- `cmake --preset linux`: configure into `build/` with Ninja, RelWithDebInfo and `CMAKE_INSTALL_PREFIX=$HOME/.local`. Plain CMake, without extra-cmake-modules. `CMakePresets.json` also has `macos` and `windows` presets; each shows only on its own host.
+- `cmake --build --preset linux`: build both targets. The build must stay warning-free on GCC, Clang and MSVC; `x3ro_deck_set_warnings` in `CMakeLists.txt` picks the flags. Add `-DX3RO_DECK_WERROR=ON` to the configure step to turn warnings into errors (CI does).
+- `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file, notifyrc and hicolor icons. The desktop, notifyrc and icon rules apply only on `UNIX AND NOT APPLE`. The desktop file comes from `data/x3ro-deck.desktop.in` with an absolute `Exec`, because Plasma's session PATH lacks `~/.local/bin`.
 - `kbuildsycoca6`: refresh KDE's caches after changing the desktop file or icons.
 
 There is no test suite. Verify changes with a headless screenshot (see Workflow).
