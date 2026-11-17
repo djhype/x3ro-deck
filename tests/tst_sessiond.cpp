@@ -3,7 +3,9 @@
 // private temporary directory.
 
 #include "DaemonBackend.h"
+#include "SessionScreen.h"
 #include "SessiondProtocol.h"
+#include "TerminalScreen.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -122,6 +124,77 @@ QJsonObject sessionNamed(const QJsonObject &list, const QString &name)
     return {};
 }
 
+// The first difference between two screens, or an empty string.
+QString screenDiff(const TerminalScreen &a, const TerminalScreen &b)
+{
+    if (a.rows() != b.rows() || a.cols() != b.cols()) {
+        return QStringLiteral("size %1x%2 vs %3x%4").arg(a.cols()).arg(a.rows()).arg(b.cols()).arg(b.rows());
+    }
+    for (int row = 0; row < a.rows(); ++row) {
+        for (int col = 0; col < a.cols(); ++col) {
+            const TerminalScreen::Cell x = a.cell(row, col);
+            const TerminalScreen::Cell y = b.cell(row, col);
+            if (x.text != y.text || x.width != y.width || x.fg != y.fg || x.bg != y.bg || x.bold != y.bold || x.italic != y.italic
+                || x.underline != y.underline || x.strike != y.strike) {
+                return QStringLiteral("cell %1,%2: '%3' %4/%5 b%6 i%7 u%8 s%9 vs '%10' %11/%12 b%13 i%14 u%15 s%16")
+                    .arg(row)
+                    .arg(col)
+                    .arg(x.text, x.fg.name(), x.bg.name())
+                    .arg(x.bold)
+                    .arg(x.italic)
+                    .arg(x.underline)
+                    .arg(x.strike)
+                    .arg(y.text, y.fg.name(), y.bg.name())
+                    .arg(y.bold)
+                    .arg(y.italic)
+                    .arg(y.underline)
+                    .arg(y.strike);
+            }
+        }
+    }
+    if (a.cursor() != b.cursor()) {
+        return QStringLiteral("cursor %1,%2 vs %3,%4").arg(a.cursor().y()).arg(a.cursor().x()).arg(b.cursor().y()).arg(b.cursor().x());
+    }
+    if (a.cursorVisible() != b.cursorVisible() || a.altScreen() != b.altScreen() || a.title() != b.title()) {
+        return QStringLiteral("cursor visibility, alternate screen or title");
+    }
+    return {};
+}
+
+// Feeds `bytes` to a terminal directly and, through SessionScreen's redraw,
+// to a fresh one; the two must look the same.
+struct RoundTrip
+{
+    RoundTrip(int rows, int cols)
+        : direct(rows, cols)
+        , redrawn(rows, cols)
+        , model(rows, cols)
+    {
+    }
+    void feed(const QByteArray &bytes)
+    {
+        direct.feed(bytes);
+        model.feed(bytes);
+    }
+    QString check()
+    {
+        redrawn.reset();
+        redrawn.feed(model.redraw());
+        return screenDiff(direct, redrawn);
+    }
+    // Live output after the redraw.
+    void follow(const QByteArray &bytes)
+    {
+        direct.feed(bytes);
+        redrawn.feed(bytes);
+        model.feed(bytes);
+    }
+
+    TerminalScreen direct;
+    TerminalScreen redrawn;
+    SessionScreen model;
+};
+
 QString readFile(const QString &path)
 {
     QFile f(path);
@@ -137,6 +210,10 @@ private Q_SLOTS:
     void initTestCase();
     void cleanup();
     void keyBytes();
+    void screenRedraw();
+    void screenModes();
+    void screenAltScreen();
+    void screenResize();
     void protocol();
     void backend();
     void attachClient();
@@ -220,6 +297,122 @@ void SessiondTest::keyBytes()
     QCOMPARE(DaemonBackend::keyBytes(QStringLiteral("hello")), QByteArray("hello"));
 }
 
+void SessiondTest::screenRedraw()
+{
+    RoundTrip t(8, 20);
+    t.feed("plain\r\n\x1b[1;31mbold red\x1b[0m \x1b[3;4mul\x1b[0m \x1b[38;5;200mx\x1b[48;2;10;20;30mrgb\x1b[0m\r\n");
+    t.feed("\x1b[7mrev\x1b[27m \x1b[9mstrike\x1b[0m \x1b[21mdbl\x1b[24m \x1b[44m\x1b[K\x1b[0m\r\n");
+    t.feed("\xe6\x97\xa5\xe6\x9c\xac e\xcc\x81 \x1b[93;100mbright\x1b[0m\r\n");
+    t.feed("a line long enough to wrap twice on a narrow screen\r\n");
+    t.feed("\x1b]2;my title\x07\x1b[3;7H\x1b[32;1m");
+    QCOMPARE(t.check(), QString());
+    QCOMPARE(t.model.rowText(0), QStringLiteral("plain"));
+    QCOMPARE(t.model.cursorRow(), 2);
+    QCOMPARE(t.model.cursorCol(), 6);
+    QCOMPARE(t.model.title(), QStringLiteral("my title"));
+
+    // The pen and the cursor carry on where the program left them.
+    t.follow("Xy");
+    QCOMPARE(screenDiff(t.direct, t.redrawn), QString());
+
+    // Soft wraps survive: widening rejoins the wrapped line on both.
+    t.direct.resize(8, 60);
+    t.redrawn.resize(8, 60);
+    QCOMPARE(screenDiff(t.direct, t.redrawn), QString());
+    QVERIFY(t.redrawn.rowText(4).startsWith(QStringLiteral("a line long enough to wrap twice")));
+
+    // Text that fills the last row's last cell doesn't scroll the redraw.
+    RoundTrip full(3, 5);
+    full.feed("abcde\r\nfghij\r\nklmno");
+    QCOMPARE(full.check(), QString());
+}
+
+void SessiondTest::screenModes()
+{
+    RoundTrip t(10, 40);
+    const QByteArray modes = "\x1b[?1h\x1b[?2004h\x1b[?1000;1006h\x1b=\x1b[>1u\x1b[5 q\x1b[>4;2m\x1b]0;x[?2004l\x07\x1bP+q[?1l\x1b\\ok";
+    // One byte at a time: sequences split across reads still count.
+    for (char c : modes) {
+        t.feed(QByteArray(1, c));
+    }
+    QCOMPARE(t.check(), QString());
+    const QByteArray redraw = t.model.redraw();
+    for (const char *expected :
+         {"\x1b[?1h", "\x1b[?2004h", "\x1b[?1000h", "\x1b[?1006h", "\x1b=", "\x1b[=1;1u", "\x1b[5 q", "\x1b[>4;2m"}) {
+        QVERIFY2(redraw.contains(expected), expected + 1);
+    }
+
+    // A terminal fed the redraw sends what the program asked for.
+    QByteArray sent;
+    QObject::connect(&t.redrawn, &TerminalScreen::output, &t.redrawn, [&sent](const QByteArray &b) { sent += b; });
+    t.redrawn.sendKey(TerminalScreen::Up);
+    QCOMPARE(sent, QByteArray("\x1bOA"));
+    sent.clear();
+    t.redrawn.paste(QStringLiteral("p"));
+    QCOMPARE(sent, QByteArray("\x1b[200~p\x1b[201~"));
+
+    // Popping and resetting turn them off again.
+    t.feed("\x1b[<u\x1b[?2004l");
+    QVERIFY(!t.model.redraw().contains("=1;1u"));
+    QVERIFY(t.model.redraw().contains("\x1b[?2004l"));
+    t.feed("\x1b"
+           "c");
+    const QByteArray reset = t.model.redraw();
+    QVERIFY(reset.contains("\x1b[?1l"));
+    QVERIFY(reset.contains("\x1b>"));
+    QVERIFY(!reset.contains("5 q"));
+    QVERIFY(!reset.contains(">4;2m"));
+
+    // A scroll region and origin mode: the cursor lands where it was.
+    RoundTrip region(10, 20);
+    region.feed("top\x1b[3;8r\x1b[?6h\x1b[2;4Hin");
+    QCOMPARE(region.check(), QString());
+    region.follow("\r\n\r\n\r\n\r\n\r\n\r\n\r\nscrolled");
+    QCOMPARE(screenDiff(region.direct, region.redrawn), QString());
+}
+
+void SessiondTest::screenAltScreen()
+{
+    RoundTrip t(6, 30);
+    t.feed("shell prompt $ \x1b[?1049h\x1b[H\x1b[2J\x1b[44m\x1b[2Jfull-screen app\x1b[?25l\x1b[4;3H");
+    QCOMPARE(t.check(), QString());
+    QVERIFY(t.model.altScreen());
+    QVERIFY(!t.model.cursorVisible());
+    QVERIFY(t.redrawn.altScreen());
+    QVERIFY(t.model.redraw().contains("\x1b[?1049h"));
+    t.feed("\x1b[?1049l\x1b[?25h");
+    QVERIFY(!t.model.altScreen());
+    QCOMPARE(t.model.rowText(0), QStringLiteral("shell prompt $"));
+    QCOMPARE(t.check(), QString());
+}
+
+void SessiondTest::screenResize()
+{
+    // Output at one size, a client at another: the redraw is already rewrapped.
+    SessionScreen model(10, 20);
+    TerminalScreen direct(10, 20);
+    const QByteArray out = "$ echo one two three four five six\r\none two three four five six\r\n$ ";
+    model.feed(out);
+    direct.feed(out);
+    QCOMPARE(model.rowText(0), QStringLiteral("$ echo one two three"));
+    QCOMPARE(model.rowText(1), QStringLiteral(" four five six"));
+
+    model.resize(10, 40);
+    direct.resize(10, 40);
+    QCOMPARE(model.rowText(0), QStringLiteral("$ echo one two three four five six"));
+    TerminalScreen attached(10, 40);
+    attached.feed(model.redraw());
+    QCOMPARE(screenDiff(direct, attached), QString());
+
+    // Narrower than the text: it wraps again, and the cursor follows it.
+    model.resize(10, 12);
+    direct.resize(10, 12);
+    TerminalScreen narrow(10, 12);
+    narrow.feed(model.redraw());
+    QCOMPARE(screenDiff(direct, narrow), QString());
+    QCOMPARE(narrow.rowText(narrow.cursor().y()), QStringLiteral("$"));
+}
+
 void SessiondTest::protocol()
 {
     QVERIFY(startForeground());
@@ -269,11 +462,32 @@ void SessiondTest::protocol()
     c.request(op("write", {{QStringLiteral("name"), QStringLiteral("q")}, {QStringLiteral("data"), QStringLiteral("renamed\r")}}));
     QVERIFY(c.waitFor(id, "renamed"));
 
-    // A second client attaching gets the recent output replayed.
+    // A second client attaching at another size gets the screen redrawn at
+    // that size, not the raw output written at the old one.
     Client late;
     QVERIFY(late.connectTo(m_socket));
-    QVERIFY(late.request(op("attach", {{QStringLiteral("name"), QStringLiteral("q")}})).value(QStringLiteral("ok")).toBool());
-    QVERIFY(late.waitFor(id, "<v1>"));
+    const QJsonObject attached = late.request(
+        op("attach", {{QStringLiteral("name"), QStringLiteral("q")}, {QStringLiteral("cols"), 50}, {QStringLiteral("rows"), 12}}));
+    QVERIFY(attached.value(QStringLiteral("ok")).toBool());
+    QCOMPARE(attached.value(QStringLiteral("cols")).toInt(), 50);
+    QVERIFY(late.waitFor(id, "renamed"));
+    QVERIFY2(late.output.value(id).startsWith("\x1b[0m\x1b[?1047l"), late.output.value(id).left(40).constData());
+    QVERIFY(!late.output.value(id).contains("\r\n")); // placed rows, not replayed lines
+    TerminalScreen lateView(12, 50);
+    lateView.feed(late.output.value(id));
+    const QJsonObject screen = c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("q")}}));
+    QCOMPARE(screen.value(QStringLiteral("cols")).toInt(), 50);
+    QCOMPARE(screen.value(QStringLiteral("rows")).toInt(), 12);
+    const QJsonArray lines = screen.value(QStringLiteral("lines")).toArray();
+    QCOMPARE(lines.size(), 12);
+    for (int row = 0; row < 12; ++row) {
+        QCOMPARE(lateView.rowText(row), lines.at(row).toString());
+    }
+    QVERIFY(lines.contains(QStringLiteral("renamed")));
+    QCOMPARE(lateView.cursor(),
+             QPoint(screen.value(QStringLiteral("cursor"))[QStringLiteral("col")].toInt(),
+                    screen.value(QStringLiteral("cursor"))[QStringLiteral("row")].toInt()));
+    QVERIFY(!c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("nope")}})).value(QStringLiteral("ok")).toBool());
 
     // Kill ends the session and tells the attached clients.
     QVERIFY(c.request(op("kill", {{QStringLiteral("name"), QStringLiteral("q")}})).value(QStringLiteral("ok")).toBool());
@@ -443,6 +657,43 @@ void SessiondTest::attachClient()
     QCOMPARE(exitCode(pid), 0);
     ::close(master);
     QVERIFY(!sessionNamed(c.request(op("list")), QStringLiteral("my_checkout")).isEmpty());
+
+    // A full-screen program, resized while nobody is attached: the next
+    // client gets its alternate screen and modes at the client's size.
+    c.request(op("write",
+                 {{QStringLiteral("name"), QStringLiteral("my_checkout")},
+                  {QStringLiteral("data"),
+                   QStringLiteral("printf '\\033[?1049h\\033[?1h\\033[H\\033[2J\\033[1;33mfull-%s\\033[0m' screen; cat\r")}}));
+    QTRY_VERIFY_WITH_TIMEOUT(
+        c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("my_checkout")}})).value(QStringLiteral("altScreen")).toBool(),
+        5000);
+    c.request(op("resize",
+                 {{QStringLiteral("name"), QStringLiteral("my_checkout")}, {QStringLiteral("cols"), 60}, {QStringLiteral("rows"), 15}}));
+    const QJsonObject resized = c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("my_checkout")}}));
+    QCOMPARE(resized.value(QStringLiteral("cols")).toInt(), 60);
+    QCOMPARE(resized.value(QStringLiteral("lines")).toArray().first().toString(), QStringLiteral("full-screen"));
+    pid = attach(QStringLiteral("my_checkout"), &master);
+    seen.clear();
+    QVERIFY2(readUntil(master, seen, "full-screen"), seen.constData());
+    QVERIFY2(readUntil(master, seen, "\x1b[?1h"), seen.constData());
+    QVERIFY(seen.contains("\x1b[?1049h"));
+    QVERIFY(seen.contains("\x1b[0;1;33m"));
+    QTRY_COMPARE_WITH_TIMEOUT(sessionNamed(c.request(op("list")), QStringLiteral("my_checkout")).value(QStringLiteral("cols")).toInt(), 90,
+                              5000);
+    // Detaching leaves the terminal as it found it.
+    QCOMPARE(::write(master, "\x1c", 1), 1);
+    QVERIFY2(readUntil(master, seen, "[detached from my_checkout]"), seen.constData());
+    QVERIFY(seen.lastIndexOf("\x1b[?1049l") > seen.lastIndexOf("full-screen"));
+    QVERIFY(seen.lastIndexOf("\x1b[?1l") > seen.lastIndexOf("\x1b[?1h"));
+    QCOMPARE(exitCode(pid), 0);
+    ::close(master);
+    c.request(op("write", {{QStringLiteral("name"), QStringLiteral("my_checkout")}, {QStringLiteral("data"), QStringLiteral("\x04")}}));
+    c.request(op("write",
+                 {{QStringLiteral("name"), QStringLiteral("my_checkout")},
+                  {QStringLiteral("data"), QStringLiteral("printf '\\033[?1049l\\033[?1l'; clear; echo typed-42\r")}}));
+    QTRY_VERIFY_WITH_TIMEOUT(
+        !c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("my_checkout")}})).value(QStringLiteral("altScreen")).toBool(),
+        5000);
 
     // The session ending ends the client.
     pid = attach(QStringLiteral("my_checkout"), &master);

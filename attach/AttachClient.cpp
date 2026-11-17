@@ -29,9 +29,16 @@ namespace
 constexpr char kDetachKey = 0x1c;
 const QByteArray kDetachKeyCsi = QByteArrayLiteral("\x1b[92;5u");
 
-// Leaves the terminal usable whatever the session's program had turned on:
-// alternate screen, hidden cursor, mouse reporting, bracketed paste, focus events.
-const char kResetModes[] = "\x1b[?1049l\x1b[0m\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?1004l";
+// Leaves the terminal usable whatever the session's program, or the redraw
+// on attach, had turned on: alternate screen, hidden cursor and its shape,
+// scroll region and origin mode, application cursor keys and keypad, mouse
+// reporting and its encodings, focus events, bracketed paste, and kitty or
+// xterm extended keys.
+const char kResetModes[] = "\x1b[?1049l\x1b[0m\x1b"
+                           "7\x1b[r\x1b"
+                           "8\x1b[?6l\x1b[?7h\x1b[?25h\x1b[0 q\x1b[?1l\x1b>"
+                           "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l"
+                           "\x1b[?2004l\x1b[?1004l\x1b[=0;1u\x1b[>4m";
 
 int g_signalPipe[2] = {-1, -1};
 termios g_saved{};
@@ -247,7 +254,7 @@ int runAttach(int argc, char **argv)
         cfmakeraw(&raw);
         tcsetattr(STDIN_FILENO, TCSADRAIN, &raw);
         g_raw = true;
-        // A clean screen for the replayed output.
+        // A clean screen, before the session's redraw or, without one, its next repaint.
         writeAll(STDOUT_FILENO, QByteArrayLiteral("\x1b[H\x1b[2J"));
     }
 

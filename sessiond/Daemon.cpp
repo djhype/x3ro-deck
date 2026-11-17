@@ -1,5 +1,6 @@
 #include "Daemon.h"
 
+#include "SessionScreen.h"
 #include "SessiondProtocol.h"
 
 #include <QCoreApplication>
@@ -30,7 +31,8 @@
 
 namespace
 {
-constexpr qsizetype kHistory = 256 * 1024;
+// Every session holds a cell grid this big at most.
+constexpr int kMaxSize = 1000;
 // A client this far behind is stuck; dropping it keeps the daemon's memory bounded.
 constexpr qint64 kClientBacklog = 8 * 1024 * 1024;
 constexpr qint64 kIdleExitMs = 60 * 1000;
@@ -82,7 +84,7 @@ QString foregroundName(int fd)
 int clampSize(const QJsonValue &v, int fallback)
 {
     const int n = v.toInt(fallback);
-    return n < 1 ? fallback : qMin(n, 10000);
+    return n < 1 ? fallback : qMin(n, kMaxSize);
 }
 
 void signalGroup(pid_t pg, int sig)
@@ -292,24 +294,45 @@ void Daemon::handle(QLocalSocket *sock, const QJsonObject &req)
         if (s) {
             const quint32 id = s->id;
             m_clients[sock].attached.insert(id);
-            const bool replay = req.value(QStringLiteral("replay")).toBool(true);
+            const bool redraw = req.value(QStringLiteral("replay")).toBool(true);
             const int cols = clampSize(req.value(QStringLiteral("cols")), s->cols);
             const int rows = clampSize(req.value(QStringLiteral("rows")), s->rows);
             reply.insert(QStringLiteral("session"), qint64(id));
             reply.insert(QStringLiteral("cols"), cols);
             reply.insert(QStringLiteral("rows"), rows);
-            afterReply = [this, sock, id, replay, cols, rows] {
+            afterReply = [this, sock, id, redraw, cols, rows] {
                 Session *x = m_sessions.value(id);
                 if (!x) {
                     return;
                 }
-                if (replay && !x->history.isEmpty()) {
-                    send(sock, Sessiond::encodeData(Sessiond::Output, id, x->history));
-                }
+                // Resized first, so the redraw already has the client's size;
+                // the kernel tells the program when the size changed.
                 resize(x, cols, rows);
-                // A TUI redraws on SIGWINCH even when the size stayed the same.
-                signalGroup(tcgetpgrp(x->fd), SIGWINCH);
+                if (redraw) {
+                    send(sock, Sessiond::encodeData(Sessiond::Output, id, x->screen->redraw()));
+                } else {
+                    // Nothing to show until the program repaints, which a TUI
+                    // does on SIGWINCH even when the size stayed the same.
+                    signalGroup(tcgetpgrp(x->fd), SIGWINCH);
+                }
             };
+        } else {
+            error = noSession;
+        }
+    } else if (op == QLatin1String("screen")) {
+        if (s) {
+            QJsonArray lines;
+            for (int row = 0; row < s->screen->rows(); ++row) {
+                lines.append(s->screen->rowText(row));
+            }
+            reply.insert(QStringLiteral("cols"), s->screen->cols());
+            reply.insert(QStringLiteral("rows"), s->screen->rows());
+            reply.insert(QStringLiteral("cursor"),
+                         QJsonObject{{QStringLiteral("row"), s->screen->cursorRow()}, {QStringLiteral("col"), s->screen->cursorCol()}});
+            reply.insert(QStringLiteral("cursorVisible"), s->screen->cursorVisible());
+            reply.insert(QStringLiteral("altScreen"), s->screen->altScreen());
+            reply.insert(QStringLiteral("title"), s->screen->title());
+            reply.insert(QStringLiteral("lines"), lines);
         } else {
             error = noSession;
         }
@@ -447,6 +470,7 @@ QJsonObject Daemon::create(const QJsonObject &req, QString *error)
     s->fd = fd;
     s->cols = cols;
     s->rows = rows;
+    s->screen = std::make_unique<SessionScreen>(rows, cols);
     const quint32 id = s->id;
     s->reader = new QSocketNotifier(fd, QSocketNotifier::Read, this);
     connect(s->reader, &QSocketNotifier::activated, this, [this, id] {
@@ -465,25 +489,21 @@ QJsonObject Daemon::create(const QJsonObject &req, QString *error)
     return {{QStringLiteral("session"), qint64(id)}};
 }
 
-void Daemon::readPty(Session *s)
+qsizetype Daemon::readPty(Session *s)
 {
     char buf[65536];
     const ssize_t n = ::read(s->fd, buf, sizeof buf);
     if (n < 0 && (errno == EAGAIN || errno == EINTR)) {
-        return;
+        return 0;
     }
     if (n <= 0) {
         // Every slave end is closed (EIO). The session ends when its
         // process is reaped; stop the notifier spinning until then.
         s->reader->setEnabled(false);
-        return;
+        return 0;
     }
     const QByteArray chunk(buf, n);
-    s->history.append(chunk);
-    // Trimmed in steps, so most reads don't shift the buffer.
-    if (s->history.size() > kHistory + 64 * 1024) {
-        s->history.remove(0, s->history.size() - kHistory);
-    }
+    s->screen->feed(chunk);
     const QByteArray frame = Sessiond::encodeData(Sessiond::Output, s->id, chunk);
     const QList<QLocalSocket *> socks = m_clients.keys();
     for (QLocalSocket *sock : socks) {
@@ -492,6 +512,7 @@ void Daemon::readPty(Session *s)
             send(sock, frame);
         }
     }
+    return n;
 }
 
 void Daemon::writePty(Session *s, const QByteArray &bytes)
@@ -530,6 +551,7 @@ void Daemon::resize(Session *s, int cols, int rows)
     if (ioctl(s->fd, TIOCSWINSZ, &ws) == 0) {
         s->cols = cols;
         s->rows = rows;
+        s->screen->resize(rows, cols);
     }
 }
 
@@ -547,9 +569,7 @@ void Daemon::onChildSignal()
             }
             // Pass on what the process wrote last before the PTY closes.
             for (int i = 0; i < 64 && s->reader->isEnabled(); ++i) {
-                const qsizetype before = s->history.size();
-                readPty(s);
-                if (s->history.size() == before) {
+                if (readPty(s) == 0) {
                     break;
                 }
             }

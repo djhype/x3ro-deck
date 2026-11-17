@@ -9,12 +9,14 @@
 #include <QTimer>
 
 #include <functional>
+#include <memory>
 
 #include <sys/types.h>
 
 class QLocalServer;
 class QLocalSocket;
 class QSocketNotifier;
+class SessionScreen;
 
 // x3ro-deck-sessiond: owns agent PTYs so agents outlive the GUI. Clients speak
 // the protocol in SessiondProtocol.h over a local socket.
@@ -46,7 +48,7 @@ private:
         QSocketNotifier *reader = nullptr;
         QSocketNotifier *writer = nullptr;
         QByteArray pending; // input the PTY has not taken yet
-        QByteArray history; // recent output, replayed on attach
+        std::unique_ptr<SessionScreen> screen; // what the session shows, redrawn on attach
     };
     struct Client
     {
@@ -61,7 +63,8 @@ private:
     QJsonObject create(const QJsonObject &req, QString *error);
 
     Session *find(const QJsonObject &req) const;
-    void readPty(Session *s);
+    // Returns the number of bytes read; 0 at EOF or when nothing was ready.
+    qsizetype readPty(Session *s);
     void writePty(Session *s, const QByteArray &bytes);
     void flushPty(Session *s);
     void resize(Session *s, int cols, int rows);

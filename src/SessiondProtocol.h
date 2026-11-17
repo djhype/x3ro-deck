@@ -26,11 +26,16 @@
 //   list     {}                                     → {sessions:[{id, name, cwd, env, pid,
 //                                                       cols, rows, foreground}]}
 //   write    {name|session, data}                   data is a UTF-8 string
-//   resize   {name|session, cols, rows}
+//   resize   {name|session, cols, rows}             at most 1000 each; the last one wins
 //   rename   {name, to}
 //   kill     {name|session}
 //   attach   {name|session, cols?, rows?, replay?}  → {session, cols, rows}; Output
-//            frames follow, starting with recent output unless replay is false
+//            frames follow. The session takes the given size first; then,
+//            unless replay is false, the first frame redraws its current
+//            screen (see SessionScreen.h) on a terminal of that size.
+//   screen   {name|session}                         → {cols, rows, cursor:{row, col},
+//                                                       cursorVisible, altScreen, title,
+//                                                       lines:[text]}
 //   detach   {session}
 //   shutdown {}                                     ends every session, then the daemon
 // Events:
