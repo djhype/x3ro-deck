@@ -233,7 +233,8 @@ QString slug(const QString &label, const QSet<QString> &taken)
 QStringList konsoleProfiles()
 {
     QStringList names;
-    const QStringList dirs = QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, QStringLiteral("konsole"), QStandardPaths::LocateDirectory);
+    const QStringList dirs
+        = QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, QStringLiteral("konsole"), QStandardPaths::LocateDirectory);
     for (const QString &dir : dirs) {
         const QFileInfoList files = QDir(dir).entryInfoList({QStringLiteral("*.profile")}, QDir::Files);
         for (const QFileInfo &file : files) {
@@ -299,7 +300,8 @@ SettingsDialog::SettingsDialog(const QJsonObject &json, QWidget *parent)
     editJson->setToolTip(Config::configPath());
     connect(editJson, &QPushButton::clicked, this, [this] {
         if (dirty()
-            && QMessageBox::question(this, QStringLiteral("Settings"), QStringLiteral("Discard your changes and open config.json in a text editor?"),
+            && QMessageBox::question(this, QStringLiteral("Settings"),
+                                     QStringLiteral("Discard your changes and open config.json in a text editor?"),
                                      QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel)
                 != QMessageBox::Discard) {
             return;
@@ -333,8 +335,8 @@ SettingsDialog::SettingsDialog(const QJsonObject &json, QWidget *parent)
 
 SettingsDialog::ListButtons SettingsDialog::listButtons(const QString &addText)
 {
-    ListButtons b{new QHBoxLayout, new QPushButton(addText), new QPushButton(QStringLiteral("Remove")), new QPushButton(QStringLiteral("↑")),
-                  new QPushButton(QStringLiteral("↓"))};
+    ListButtons b{new QHBoxLayout, new QPushButton(addText), new QPushButton(QStringLiteral("Remove")),
+                  new QPushButton(QStringLiteral("↑")), new QPushButton(QStringLiteral("↓"))};
     b.up->setToolTip(QStringLiteral("Move up"));
     b.down->setToolTip(QStringLiteral("Move down"));
     for (QPushButton *button : {b.add, b.remove, b.up, b.down}) {
@@ -433,15 +435,18 @@ QWidget *SettingsDialog::buildCheckoutsPage()
         checkPath();
     });
     connect(browse, &QPushButton::clicked, this, [this] {
-        const QString dir = QFileDialog::getExistingDirectory(parentWidget(), QStringLiteral("Checkout folder"), expandedPath(m_checkoutPath->text().trimmed()));
+        const QString dir = QFileDialog::getExistingDirectory(parentWidget(), QStringLiteral("Checkout folder"),
+                                                              expandedPath(m_checkoutPath->text().trimmed()));
         if (!dir.isEmpty()) {
             m_checkoutPath->setText(tildePath(dir));
             editCheckout(QStringLiteral("path"), m_checkoutPath->text());
             checkPath();
         }
     });
-    connect(m_checkoutOffset, &QLineEdit::textEdited, this, [this](const QString &text) { editCheckout(QStringLiteral("portOffset"), text.toInt()); });
-    connect(m_checkoutArgs, &QLineEdit::textEdited, this, [this](const QString &text) { editCheckout(QStringLiteral("args"), text.trimmed()); });
+    connect(m_checkoutOffset, &QLineEdit::textEdited, this,
+            [this](const QString &text) { editCheckout(QStringLiteral("portOffset"), text.toInt()); });
+    connect(m_checkoutArgs, &QLineEdit::textEdited, this,
+            [this](const QString &text) { editCheckout(QStringLiteral("args"), text.trimmed()); });
     connect(m_checkoutAgent, &QComboBox::activated, this, [this](int index) {
         const QString id = m_checkoutAgent->itemData(index).toString();
         if (id != kNewAgent) {
@@ -492,8 +497,9 @@ void SettingsDialog::editCheckout(const QString &key, const QJsonValue &value)
 
 void SettingsDialog::addCheckout()
 {
-    const QString start = m_checkouts.isEmpty() ? QDir::homePath()
-                                                : QFileInfo(expandedPath(m_checkouts.last().value(QStringLiteral("path")).toString())).path();
+    const QString start = m_checkouts.isEmpty()
+        ? QDir::homePath()
+        : QFileInfo(expandedPath(m_checkouts.last().value(QStringLiteral("path")).toString())).path();
     // Parented past this dialog, whose stylesheet would otherwise restyle the system file dialog.
     const QString dir = QFileDialog::getExistingDirectory(parentWidget(), QStringLiteral("Add checkout"), start);
     if (dir.isEmpty()) {
@@ -510,7 +516,8 @@ void SettingsDialog::addCheckout()
     for (int n = 2; names.contains(name); ++n) {
         name = QStringLiteral("%1-%2").arg(base).arg(n);
     }
-    m_checkouts.append(QJsonObject{{QStringLiteral("name"), name}, {QStringLiteral("path"), tildePath(dir)}, {QStringLiteral("portOffset"), offset}});
+    m_checkouts.append(
+        QJsonObject{{QStringLiteral("name"), name}, {QStringLiteral("path"), tildePath(dir)}, {QStringLiteral("portOffset"), offset}});
     m_checkoutList->addItem(name);
     m_checkoutList->setCurrentRow(static_cast<int>(m_checkouts.size()) - 1);
     m_checkoutName->setFocus();
@@ -688,9 +695,10 @@ QWidget *SettingsDialog::buildAgentsPage()
     }
     for (QLineEdit *edit : {m_keyAllow, m_keyAlways, m_keyDeny}) {
         connect(edit, &QLineEdit::textEdited, this, [this] {
-            editAgent(QStringLiteral("permissionKeys"), QJsonObject{{QStringLiteral("allow"), m_keyAllow->text().trimmed()},
-                                                                    {QStringLiteral("always"), m_keyAlways->text().trimmed()},
-                                                                    {QStringLiteral("deny"), m_keyDeny->text().trimmed()}});
+            editAgent(QStringLiteral("permissionKeys"),
+                      QJsonObject{{QStringLiteral("allow"), m_keyAllow->text().trimmed()},
+                                  {QStringLiteral("always"), m_keyAlways->text().trimmed()},
+                                  {QStringLiteral("deny"), m_keyDeny->text().trimmed()}});
         });
     }
     connect(m_agentPrompts, &QPlainTextEdit::textChanged, this, [this] {
@@ -702,7 +710,8 @@ QWidget *SettingsDialog::buildAgentsPage()
         }
         editAgent(QStringLiteral("prompts"), prompts);
     });
-    connect(m_agentDelay, &QLineEdit::textEdited, this, [this](const QString &text) { editAgent(QStringLiteral("submitDelayMs"), text.toInt()); });
+    connect(m_agentDelay, &QLineEdit::textEdited, this,
+            [this](const QString &text) { editAgent(QStringLiteral("submitDelayMs"), text.toInt()); });
 
     auto writeEnv = [this] {
         QJsonObject env;
@@ -889,7 +898,8 @@ void SettingsDialog::refreshAgentChoices()
     m_checkoutAgent->insertSeparator(m_checkoutAgent->count());
     m_checkoutAgent->addItem(QStringLiteral("Custom command…"), kNewAgent);
     const int row = m_checkoutList->currentRow();
-    const QString current = row >= 0 && row < m_checkouts.size() ? m_checkouts.at(row).value(QStringLiteral("agent")).toString() : QString();
+    const QString current
+        = row >= 0 && row < m_checkouts.size() ? m_checkouts.at(row).value(QStringLiteral("agent")).toString() : QString();
     m_checkoutAgent->setCurrentIndex(std::max(0, m_checkoutAgent->findData(current)));
     m_loading = loading;
 }
@@ -907,7 +917,8 @@ QWidget *SettingsDialog::buildDockerPage()
     auto *compose = form();
     addField(compose, QStringLiteral("Up"), m_composeUp);
     addField(compose, QStringLiteral("Down"), m_composeDown);
-    addField(compose, QStringLiteral("Restart"), m_composeRestart, hint(QStringLiteral("Each runs in a shell tab in the checkout's folder.")));
+    addField(compose, QStringLiteral("Restart"), m_composeRestart,
+             hint(QStringLiteral("Each runs in a shell tab in the checkout's folder.")));
 
     m_quick = table({QStringLiteral("Label"), QStringLiteral("Command"), QStringLiteral("Group")});
     m_quick->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -1160,8 +1171,8 @@ bool SettingsDialog::validate()
     }
     for (int r = 0; r < m_links->rowCount(); ++r) {
         const QJsonObject o = linkRow(m_links, r);
-        const int filled = int(!o.value(QStringLiteral("label")).toString().isEmpty()) + int(!o.value(QStringLiteral("service")).toString().isEmpty())
-            + int(o.value(QStringLiteral("containerPort")).toInt() > 0);
+        const int filled = int(!o.value(QStringLiteral("label")).toString().isEmpty())
+            + int(!o.value(QStringLiteral("service")).toString().isEmpty()) + int(o.value(QStringLiteral("containerPort")).toInt() > 0);
         if (filled > 0 && filled < 3) {
             m_links->setCurrentCell(r, 0);
             return fail(QStringLiteral("docker"), QStringLiteral("Every link needs a label, a service and a container port."));
@@ -1180,8 +1191,8 @@ void SettingsDialog::accept()
 void SettingsDialog::reject()
 {
     if (dirty()
-        && QMessageBox::question(this, QStringLiteral("Settings"), QStringLiteral("Discard your changes?"), QMessageBox::Discard | QMessageBox::Cancel,
-                                 QMessageBox::Cancel)
+        && QMessageBox::question(this, QStringLiteral("Settings"), QStringLiteral("Discard your changes?"),
+                                 QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel)
             != QMessageBox::Discard) {
         return;
     }

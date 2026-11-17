@@ -10,18 +10,20 @@
 
 class QLocalSocket;
 
-struct PortMapping {
+struct PortMapping
+{
     int privatePort = 0;
     int publicPort = 0;
 };
 
-struct ContainerInfo {
+struct ContainerInfo
+{
     QString id;
     QString name;
     QString project;
     QString service;
     QString workingDir;
-    QString state;  // docker State: running, exited, restarting, …
+    QString state; // docker State: running, exited, restarting, …
     QString status; // docker Status: "Up 27 minutes (healthy)"
     QString health; // derived: healthy | running | starting | unhealthy | exited | restarting | other
     int exitCode = 0;
@@ -29,7 +31,8 @@ struct ContainerInfo {
     QList<PortMapping> ports;
 };
 
-struct ContainerStats {
+struct ContainerStats
+{
     double cpuPercent = -1;
     qint64 memBytes = -1;
 };

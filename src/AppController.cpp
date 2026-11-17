@@ -21,11 +21,11 @@ const QStringList kCheckoutRoles{QStringLiteral("id"),         QStringLiteral("n
                                  QStringLiteral("selected")};
 const QStringList kServiceRoles{QStringLiteral("id"),     QStringLiteral("name"), QStringLiteral("health"), QStringLiteral("ports"),
                                 QStringLiteral("uptime"), QStringLiteral("cpu"),  QStringLiteral("mem")};
-const QStringList kAttentionRoles{QStringLiteral("id"),      QStringLiteral("itemId"),    QStringLiteral("key"),       QStringLiteral("kind"),
-                                  QStringLiteral("checkout"), QStringLiteral("checkoutName"), QStringLiteral("title"),
-                                  QStringLiteral("detail"),  QStringLiteral("since"),     QStringLiteral("canAlways"),
-                                  QStringLiteral("dismissable"), QStringLiteral("prUrl"), QStringLiteral("prPrompt"),
-                                  QStringLiteral("agentLabel")};
+const QStringList kAttentionRoles{QStringLiteral("id"),        QStringLiteral("itemId"),      QStringLiteral("key"),
+                                  QStringLiteral("kind"),      QStringLiteral("checkout"),    QStringLiteral("checkoutName"),
+                                  QStringLiteral("title"),     QStringLiteral("detail"),      QStringLiteral("since"),
+                                  QStringLiteral("canAlways"), QStringLiteral("dismissable"), QStringLiteral("prUrl"),
+                                  QStringLiteral("prPrompt"),  QStringLiteral("agentLabel")};
 
 int healthRank(const QString &h)
 {
@@ -93,8 +93,7 @@ QString commandText(const QJsonValue &command)
 // Files named in a Codex apply_patch body ("*** Update File: src/main.cpp").
 QStringList patchFiles(const QJsonObject &input)
 {
-    static const QRegularExpression re(QStringLiteral(R"(^\*\*\* (?:Add|Update|Delete) File: (.+)$)"),
-                                       QRegularExpression::MultilineOption);
+    static const QRegularExpression re(QStringLiteral(R"(^\*\*\* (?:Add|Update|Delete) File: (.+)$)"), QRegularExpression::MultilineOption);
     QStringList files;
     for (auto it = re.globalMatch(commandText(input.value(QStringLiteral("command")))); it.hasNext();) {
         files.append(it.next().captured(1).trimmed());
@@ -342,7 +341,8 @@ QVariantList AppController::quickCommands() const
 {
     QVariantList out;
     for (const QuickCommand &q : m_config.quickCommands) {
-        out.append(QVariantMap{{QStringLiteral("label"), q.label}, {QStringLiteral("command"), q.command}, {QStringLiteral("group"), q.group}});
+        out.append(
+            QVariantMap{{QStringLiteral("label"), q.label}, {QStringLiteral("command"), q.command}, {QStringLiteral("group"), q.group}});
     }
     return out;
 }
@@ -360,7 +360,8 @@ QVariantList AppController::links() const
 {
     QVariantList out;
     for (const LinkConfig &l : m_config.links) {
-        out.append(QVariantMap{{QStringLiteral("label"), l.label}, {QStringLiteral("port"), publicPort(m_current, l.service, l.containerPort)}});
+        out.append(
+            QVariantMap{{QStringLiteral("label"), l.label}, {QStringLiteral("port"), publicPort(m_current, l.service, l.containerPort)}});
     }
     return out;
 }
@@ -638,8 +639,8 @@ void AppController::onHookEvent(const QJsonObject &p)
         a.permDetail = describeInput(tool, input, c.cfg.path);
         // Codex offers "approve for this session" on every prompt; Claude Code
         // offers "always" only when it has a rule to suggest.
-        a.permCanAlways = profile(idx).kind == QLatin1String("codex")
-            || !p.value(QStringLiteral("permission_suggestions")).toArray().isEmpty();
+        a.permCanAlways
+            = profile(idx).kind == QLatin1String("codex") || !p.value(QStringLiteral("permission_suggestions")).toArray().isEmpty();
         setAgentState(idx, QStringLiteral("permission"));
     } else if (ev == QLatin1String("PostToolUse") || ev == QLatin1String("PostToolUseFailure")) {
         ++a.tools;
@@ -768,7 +769,9 @@ void AppController::publishCheckouts()
             {QStringLiteral("agentState"), c.agent.state},
             {QStringLiteral("agentLabel"), profile(i).label},
             {QStringLiteral("healthText"), total ? QStringLiteral("%1/%2").arg(up).arg(total) : QStringLiteral("down")},
-            {QStringLiteral("healthState"), total == 0 ? QStringLiteral("down") : (worst >= 3 ? QStringLiteral("bad") : (worst > 0 ? QStringLiteral("warn") : QStringLiteral("ok")))},
+            {QStringLiteral("healthState"),
+             total == 0 ? QStringLiteral("down")
+                        : (worst >= 3 ? QStringLiteral("bad") : (worst > 0 ? QStringLiteral("warn") : QStringLiteral("ok")))},
             {QStringLiteral("selected"), i == m_current},
         });
     }
@@ -796,7 +799,8 @@ void AppController::publishServices()
 
 void AppController::publishAttention()
 {
-    struct Item {
+    struct Item
+    {
         int priority;
         QVariantMap row;
         QDateTime since;
@@ -829,8 +833,10 @@ void AppController::publishAttention()
         };
         const QString agentId = QStringLiteral("agent:") + c.cfg.name;
         if (a.state == QLatin1String("permission")) {
-            items.append({0, make(agentId, QStringLiteral("permission"), permissionTitle(a.permTool),
-                                  a.permTool.isEmpty() ? a.permDetail : a.permTool + QStringLiteral("(") + a.permDetail + QStringLiteral(")"), a.since, false),
+            items.append({0,
+                          make(agentId, QStringLiteral("permission"), permissionTitle(a.permTool),
+                               a.permTool.isEmpty() ? a.permDetail : a.permTool + QStringLiteral("(") + a.permDetail + QStringLiteral(")"),
+                               a.since, false),
                           a.since});
         } else if (a.state == QLatin1String("question")) {
             items.append({1, make(agentId, QStringLiteral("question"), a.questionTitle, a.lastMessage, a.since, false), a.since});
@@ -839,7 +845,8 @@ void AppController::publishAttention()
             if (msg.size() > 280) {
                 msg = msg.left(280) + QStringLiteral("…");
             }
-            items.append({3, make(agentId, QStringLiteral("done"), QStringLiteral("Finished — waiting for you"), msg, a.since, true), a.since});
+            items.append(
+                {3, make(agentId, QStringLiteral("done"), QStringLiteral("Finished — waiting for you"), msg, a.since, true), a.since});
         }
 
         for (const ContainerInfo &ci : c.containers) {
@@ -863,9 +870,8 @@ void AppController::publishAttention()
     items.erase(std::remove_if(items.begin(), items.end(),
                                [this](const Item &it) { return m_dismissed.contains(it.row.value(QStringLiteral("key")).toString()); }),
                 items.end());
-    std::stable_sort(items.begin(), items.end(), [](const Item &x, const Item &y) {
-        return x.priority != y.priority ? x.priority < y.priority : x.since < y.since;
-    });
+    std::stable_sort(items.begin(), items.end(),
+                     [](const Item &x, const Item &y) { return x.priority != y.priority ? x.priority < y.priority : x.since < y.since; });
 
     QList<QVariantMap> rows;
     for (const Item &it : std::as_const(items)) {
@@ -995,9 +1001,7 @@ void AppController::attentionAction(const QString &id, const QString &action)
     if (kind == QLatin1String("permission")) {
         const QString &session = m_checkouts.at(idx).session;
         const AgentProfile &p = profile(idx);
-        const QString key = action == QLatin1String("allow") ? p.allowKey
-            : action == QLatin1String("always")              ? p.alwaysKey
-                                                             : p.denyKey;
+        const QString key = action == QLatin1String("allow") ? p.allowKey : action == QLatin1String("always") ? p.alwaysKey : p.denyKey;
         m_tmux->sendKeys(session, {key});
         // Clear the card now; hook events confirm the new state moments later.
         setAgentState(idx, action == QLatin1String("deny") ? QStringLiteral("ready") : QStringLiteral("working"));
@@ -1010,7 +1014,8 @@ void AppController::attentionAction(const QString &id, const QString &action)
                 if (ci.id == containerId) {
                     select(idx);
                     setTab(QStringLiteral("docker"));
-                    Q_EMIT runInTerminal(idx, QStringLiteral("logs · %1").arg(ci.service), QStringLiteral("docker logs -f --tail 300 %1").arg(ci.name));
+                    Q_EMIT runInTerminal(idx, QStringLiteral("logs · %1").arg(ci.service),
+                                         QStringLiteral("docker logs -f --tail 300 %1").arg(ci.name));
                 }
             }
         }
@@ -1031,7 +1036,8 @@ bool AppController::ensureAgentSession(int index)
         }
     }
     useProfile(index, c.cfg.agent);
-    return m_tmux->createSession(c.session, c.cfg.path, m_config.autostartAgents ? profile(index).launchLine(false, c.cfg.args) : QString());
+    return m_tmux->createSession(c.session, c.cfg.path,
+                                 m_config.autostartAgents ? profile(index).launchLine(false, c.cfg.args) : QString());
 }
 
 bool AppController::reloadConfig()

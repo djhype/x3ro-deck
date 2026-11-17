@@ -11,15 +11,14 @@ namespace
 const QString kFields = QStringLiteral("number,url,title,state,isDraft,baseRefName,reviewDecision,mergeable,mergeStateStatus,"
                                        "additions,deletions,statusCheckRollup,latestReviews");
 
-constexpr int kPollFast = 30 * 1000;      // mergeability unknown or checks running
+constexpr int kPollFast = 30 * 1000; // mergeability unknown or checks running
 constexpr int kPollNormal = 2 * 60 * 1000; // open PR, settled
-constexpr int kPollIdle = 3 * 60 * 1000;   // no PR yet, or merged/closed
+constexpr int kPollIdle = 3 * 60 * 1000; // no PR yet, or merged/closed
 constexpr int kTimeout = 30 * 1000;
 
 bool isDefaultBranch(const QString &branch)
 {
-    return branch.isEmpty() || branch == QLatin1String("main") || branch == QLatin1String("master")
-        || branch == QLatin1String("develop");
+    return branch.isEmpty() || branch == QLatin1String("main") || branch == QLatin1String("master") || branch == QLatin1String("develop");
 }
 } // namespace
 
@@ -143,7 +142,7 @@ PrInfo PrWatcher::parse(const QByteArray &json)
     pr.deletions = o.value(QStringLiteral("deletions")).toInt();
 
     // CheckRuns carry status + conclusion; legacy StatusContexts carry a single state.
-    static const QStringList failed{QStringLiteral("FAILURE"), QStringLiteral("ERROR"), QStringLiteral("TIMED_OUT"),
+    static const QStringList failed{QStringLiteral("FAILURE"),   QStringLiteral("ERROR"),           QStringLiteral("TIMED_OUT"),
                                     QStringLiteral("CANCELLED"), QStringLiteral("ACTION_REQUIRED"), QStringLiteral("STARTUP_FAILURE")};
     static const QStringList ignored{QStringLiteral("SKIPPED"), QStringLiteral("NEUTRAL"), QStringLiteral("STALE")};
     for (const QJsonValue &v : o.value(QStringLiteral("statusCheckRollup")).toArray()) {

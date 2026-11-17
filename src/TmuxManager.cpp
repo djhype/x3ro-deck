@@ -58,8 +58,8 @@ bool TmuxManager::createSession(const QString &name, const QString &dir, const Q
 {
     QProcess create;
     create.start(QStringLiteral("tmux"),
-                 baseArgs() << QStringLiteral("new-session") << QStringLiteral("-d") << QStringLiteral("-s") << name << QStringLiteral("-c") << dir
-                            << QStringLiteral("-x") << QStringLiteral("200") << QStringLiteral("-y") << QStringLiteral("50"));
+                 baseArgs() << QStringLiteral("new-session") << QStringLiteral("-d") << QStringLiteral("-s") << name << QStringLiteral("-c")
+                            << dir << QStringLiteral("-x") << QStringLiteral("200") << QStringLiteral("-y") << QStringLiteral("50"));
     create.waitForFinished(3000);
     if (create.exitCode() != 0) {
         qWarning("tmux new-session %s failed: %s", qPrintable(name), create.readAllStandardError().constData());
@@ -112,7 +112,8 @@ void TmuxManager::killServer()
 
 QStringList TmuxManager::attachArgs(const QString &name) const
 {
-    return QStringList{QStringLiteral("tmux")} + baseArgs() + QStringList{QStringLiteral("attach-session"), QStringLiteral("-t"), QLatin1Char('=') + name};
+    return QStringList{QStringLiteral("tmux")} + baseArgs()
+        + QStringList{QStringLiteral("attach-session"), QStringLiteral("-t"), QLatin1Char('=') + name};
 }
 
 void TmuxManager::sendKeys(const QString &name, const QStringList &keys, bool literal)

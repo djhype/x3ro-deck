@@ -8,7 +8,8 @@
 class QProcess;
 class QTimer;
 
-struct PrInfo {
+struct PrInfo
+{
     int number = 0; // 0: the branch has no pull request
     QString url;
     QString title;
@@ -16,8 +17,8 @@ struct PrInfo {
     bool draft = false;
     QString base;
     QString reviewDecision; // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
-    QString mergeable;      // MERGEABLE | CONFLICTING | UNKNOWN
-    QString mergeState;     // CLEAN | BEHIND | BLOCKED | DIRTY | UNSTABLE | ...
+    QString mergeable; // MERGEABLE | CONFLICTING | UNKNOWN
+    QString mergeState; // CLEAN | BEHIND | BLOCKED | DIRTY | UNSTABLE | ...
     int additions = 0;
     int deletions = 0;
     int checksPassed = 0;
@@ -44,7 +45,8 @@ Q_SIGNALS:
     void updated(const QString &key, const PrInfo &info);
 
 private:
-    struct Entry {
+    struct Entry
+    {
         QString dir;
         QString branch;
         QProcess *proc = nullptr;

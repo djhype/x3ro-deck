@@ -6,21 +6,24 @@
 #include <QString>
 #include <QStringList>
 
-struct CheckoutConfig {
+struct CheckoutConfig
+{
     QString name;
     QString path; // absolute, canonical
     int portOffset = 0;
     QString agent; // profile id; empty = Config::defaultAgent
-    QString args;  // shell fragment merged into the agent's command line; wins on flag conflicts
+    QString args; // shell fragment merged into the agent's command line; wins on flag conflicts
 };
 
-struct QuickCommand {
+struct QuickCommand
+{
     QString label;
     QString command; // may contain {port:<service>:<containerPort>} and {project}
-    QString group;   // "check" | "env" | "data" — picks the accent colour
+    QString group; // "check" | "env" | "data" — picks the accent colour
 };
 
-struct LinkConfig {
+struct LinkConfig
+{
     QString label;
     QString service;
     int containerPort = 0;
@@ -32,18 +35,19 @@ struct LinkConfig {
 // local model (a model on a local server, say) runs under Claude Code or Codex. Kind
 // "custom" runs any other command; it sends no hooks, so only the pane poll
 // tracks it.
-struct AgentProfile {
+struct AgentProfile
+{
     QString id;
     QString label;
     QString kind;
-    QString command;      // typed into the checkout's tmux shell
+    QString command; // typed into the checkout's tmux shell
     QString continueArgs; // appended to `command` to resume the latest conversation
-    QString process;      // tmux's pane_current_command while the agent runs; a custom command's first word by default
+    QString process; // tmux's pane_current_command while the agent runs; a custom command's first word by default
     QList<QPair<QString, QString>> env;
     QString allowKey;
     QString alwaysKey;
     QString denyKey;
-    QString prPrompt;    // sent when no PR exists yet; empty hides the button
+    QString prPrompt; // sent when no PR exists yet; empty hides the button
     QStringList prompts; // one button each in the session panel
     int submitDelayMs = 0;
 
@@ -53,7 +57,8 @@ struct AgentProfile {
     QString launchLine(bool resume, const QString &extraArgs = QString()) const;
 };
 
-struct Config {
+struct Config
+{
     QList<CheckoutConfig> checkouts;
     QList<QuickCommand> quickCommands;
     QList<LinkConfig> links;

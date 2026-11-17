@@ -33,11 +33,13 @@ public:
     void reject() override;
 
 private:
-    struct Agent {
-        QString id;       // ":new<n>" until config() names it after its label
+    struct Agent
+    {
+        QString id; // ":new<n>" until config() names it after its label
         QJsonObject json; // the kind's defaults merged with the user's keys
     };
-    struct ListButtons {
+    struct ListButtons
+    {
         QHBoxLayout *layout;
         QPushButton *add;
         QPushButton *remove;

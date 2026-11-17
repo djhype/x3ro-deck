@@ -92,5 +92,6 @@ void GitWatcher::read(const QString &key)
         Q_EMIT updated(key, info);
     });
     proc->start(QStringLiteral("sh"),
-                {QStringLiteral("-c"), QStringLiteral("git -C \"$1\" branch --show-current && git -C \"$1\" log -1 --format='%h %s'"), QStringLiteral("sh"), dir});
+                {QStringLiteral("-c"), QStringLiteral("git -C \"$1\" branch --show-current && git -C \"$1\" log -1 --format='%h %s'"),
+                 QStringLiteral("sh"), dir});
 }

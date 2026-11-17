@@ -552,18 +552,17 @@ void MainWindow::notify(const QVariantMap &item)
     auto *n = new KNotification(kind == QLatin1String("docker") ? QStringLiteral("containerIssue") : QStringLiteral("needsYou"));
     const QString who = kind == QLatin1String("docker")
         ? item.value(QStringLiteral("checkoutName")).toString()
-        : QStringLiteral("%1 · %2").arg(item.value(QStringLiteral("checkoutName")).toString(), item.value(QStringLiteral("agentLabel")).toString());
+        : QStringLiteral("%1 · %2").arg(item.value(QStringLiteral("checkoutName")).toString(),
+                                        item.value(QStringLiteral("agentLabel")).toString());
     n->setTitle(QStringLiteral("%1 · %2").arg(who, item.value(QStringLiteral("title")).toString()));
     n->setText(item.value(QStringLiteral("detail")).toString().toHtmlEscaped());
     n->setIconName(QStringLiteral("x3ro-deck"));
     if (kind == QLatin1String("permission")) {
         n->setUrgency(KNotification::HighUrgency);
-        connect(n->addAction(QStringLiteral("Allow")), &KNotificationAction::activated, this, [this, id] {
-            m_app->attentionAction(id, QStringLiteral("allow"));
-        });
-        connect(n->addAction(QStringLiteral("Deny")), &KNotificationAction::activated, this, [this, id] {
-            m_app->attentionAction(id, QStringLiteral("deny"));
-        });
+        connect(n->addAction(QStringLiteral("Allow")), &KNotificationAction::activated, this,
+                [this, id] { m_app->attentionAction(id, QStringLiteral("allow")); });
+        connect(n->addAction(QStringLiteral("Deny")), &KNotificationAction::activated, this,
+                [this, id] { m_app->attentionAction(id, QStringLiteral("deny")); });
     }
     connect(n->addDefaultAction(QStringLiteral("Open")), &KNotificationAction::activated, this, [this, id] {
         reveal();

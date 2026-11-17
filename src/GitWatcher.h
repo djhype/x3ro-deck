@@ -5,7 +5,8 @@
 #include <QObject>
 #include <QTimer>
 
-struct GitInfo {
+struct GitInfo
+{
     QString branch;
     QString commit; // "<short sha> <subject>"
 };
@@ -29,7 +30,7 @@ private:
     static QString gitDir(const QString &dir);
 
     QFileSystemWatcher m_watcher;
-    QHash<QString, QString> m_dirs;     // key → work tree
+    QHash<QString, QString> m_dirs; // key → work tree
     QHash<QString, QString> m_fileKeys; // watched path → key
     QHash<QString, QTimer *> m_debounce;
     QTimer m_safety;

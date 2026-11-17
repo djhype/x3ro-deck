@@ -141,9 +141,8 @@ void DockerClient::request(const QByteArray &method, const QString &path, Callba
         sock->deleteLater();
     };
 
-    connect(sock, &QLocalSocket::connected, sock, [sock, method, path] {
-        sock->write(method + ' ' + path.toUtf8() + " HTTP/1.0\r\nHost: docker\r\nContent-Length: 0\r\n\r\n");
-    });
+    connect(sock, &QLocalSocket::connected, sock,
+            [sock, method, path] { sock->write(method + ' ' + path.toUtf8() + " HTTP/1.0\r\nHost: docker\r\nContent-Length: 0\r\n\r\n"); });
     connect(sock, &QLocalSocket::readyRead, sock, [sock, buffer] { buffer->append(sock->readAll()); });
     connect(sock, &QLocalSocket::disconnected, sock, [sock, buffer, finish] {
         buffer->append(sock->readAll());
@@ -233,17 +232,17 @@ void DockerClient::connectEvents()
 
 void DockerClient::restartContainer(const QString &id)
 {
-    request("POST", QStringLiteral("/containers/%1/restart?t=5").arg(id), [](int, const QByteArray &) {});
+    request("POST", QStringLiteral("/containers/%1/restart?t=5").arg(id), [](int, const QByteArray &) { });
 }
 
 void DockerClient::stopContainer(const QString &id)
 {
-    request("POST", QStringLiteral("/containers/%1/stop?t=5").arg(id), [](int, const QByteArray &) {});
+    request("POST", QStringLiteral("/containers/%1/stop?t=5").arg(id), [](int, const QByteArray &) { });
 }
 
 void DockerClient::startContainer(const QString &id)
 {
-    request("POST", QStringLiteral("/containers/%1/start").arg(id), [](int, const QByteArray &) {});
+    request("POST", QStringLiteral("/containers/%1/start").arg(id), [](int, const QByteArray &) { });
 }
 
 void DockerClient::sampleStats(const QStringList &ids)
@@ -257,27 +256,31 @@ void DockerClient::sampleStats(const QStringList &ids)
 
     for (const QString &id : ids) {
         // stream=false waits ~1s so precpu_stats is populated and CPU% is meaningful.
-        request("GET", QStringLiteral("/containers/%1/stats?stream=false").arg(id), [this, id, results, pending](int status, const QByteArray &body) {
-            if (status == 200) {
-                const QJsonObject o = QJsonDocument::fromJson(body).object();
-                const QJsonObject cpu = o.value(QStringLiteral("cpu_stats")).toObject();
-                const QJsonObject pre = o.value(QStringLiteral("precpu_stats")).toObject();
-                const double cpuDelta = cpu.value(QStringLiteral("cpu_usage")).toObject().value(QStringLiteral("total_usage")).toDouble()
-                    - pre.value(QStringLiteral("cpu_usage")).toObject().value(QStringLiteral("total_usage")).toDouble();
-                const double sysDelta = cpu.value(QStringLiteral("system_cpu_usage")).toDouble() - pre.value(QStringLiteral("system_cpu_usage")).toDouble();
-                const double online = cpu.value(QStringLiteral("online_cpus")).toDouble(1);
-                const QJsonObject mem = o.value(QStringLiteral("memory_stats")).toObject();
-                const double usage = mem.value(QStringLiteral("usage")).toDouble();
-                const double inactive = mem.value(QStringLiteral("stats")).toObject().value(QStringLiteral("inactive_file")).toDouble();
-                ContainerStats s;
-                s.cpuPercent = sysDelta > 0 ? cpuDelta / sysDelta * online * 100.0 : 0.0;
-                s.memBytes = static_cast<qint64>(usage > inactive ? usage - inactive : usage);
-                results->insert(id, s);
-            }
-            if (--*pending == 0) {
-                m_statsInFlight = false;
-                Q_EMIT statsUpdated(*results);
-            }
-        });
+        request("GET", QStringLiteral("/containers/%1/stats?stream=false").arg(id),
+                [this, id, results, pending](int status, const QByteArray &body) {
+                    if (status == 200) {
+                        const QJsonObject o = QJsonDocument::fromJson(body).object();
+                        const QJsonObject cpu = o.value(QStringLiteral("cpu_stats")).toObject();
+                        const QJsonObject pre = o.value(QStringLiteral("precpu_stats")).toObject();
+                        const double cpuDelta
+                            = cpu.value(QStringLiteral("cpu_usage")).toObject().value(QStringLiteral("total_usage")).toDouble()
+                            - pre.value(QStringLiteral("cpu_usage")).toObject().value(QStringLiteral("total_usage")).toDouble();
+                        const double sysDelta = cpu.value(QStringLiteral("system_cpu_usage")).toDouble()
+                            - pre.value(QStringLiteral("system_cpu_usage")).toDouble();
+                        const double online = cpu.value(QStringLiteral("online_cpus")).toDouble(1);
+                        const QJsonObject mem = o.value(QStringLiteral("memory_stats")).toObject();
+                        const double usage = mem.value(QStringLiteral("usage")).toDouble();
+                        const double inactive
+                            = mem.value(QStringLiteral("stats")).toObject().value(QStringLiteral("inactive_file")).toDouble();
+                        ContainerStats s;
+                        s.cpuPercent = sysDelta > 0 ? cpuDelta / sysDelta * online * 100.0 : 0.0;
+                        s.memBytes = static_cast<qint64>(usage > inactive ? usage - inactive : usage);
+                        results->insert(id, s);
+                    }
+                    if (--*pending == 0) {
+                        m_statsInFlight = false;
+                        Q_EMIT statsUpdated(*results);
+                    }
+                });
     }
 }

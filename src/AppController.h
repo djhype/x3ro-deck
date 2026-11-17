@@ -14,7 +14,8 @@
 #include <QTimer>
 #include <QVariantMap>
 
-struct AgentInfo {
+struct AgentInfo
+{
     QString profile; // AgentProfile::id
     // offline | ready | working | permission | question | done
     QString state = QStringLiteral("offline");
@@ -36,7 +37,8 @@ struct AgentInfo {
     bool permCanAlways = false;
 };
 
-struct ServiceRow {
+struct ServiceRow
+{
     QString service;
     QStringList ids;
     QStringList names;
@@ -47,7 +49,8 @@ struct ServiceRow {
     qint64 mem = -1;
 };
 
-struct Checkout {
+struct Checkout
+{
     CheckoutConfig cfg;
     QString session; // tmux session name
     GitInfo git;
@@ -185,7 +188,7 @@ private:
     QHash<QString, ContainerStats> m_stats;
     QHash<QString, QDateTime> m_dockerIssueSince;
     QSet<QString> m_dismissed; // attention keys
-    QSet<QString> m_raised;    // attention keys already announced
+    QSet<QString> m_raised; // attention keys already announced
     QTimer m_statsTimer;
     bool m_statsVisible = false;
     bool m_panesPolled = false;

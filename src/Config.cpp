@@ -204,12 +204,8 @@ QJsonObject Config::kindDefaults(const QString &kind)
     }
     if (kind == QLatin1String("custom")) {
         return QJsonObject{
-            {QStringLiteral("command"), QString()},
-            {QStringLiteral("continueArgs"), QString()},
-            {QStringLiteral("process"), QString()},
-            {QStringLiteral("prPrompt"), QString()},
-            {QStringLiteral("prompts"), QJsonArray{}},
-            {QStringLiteral("submitDelayMs"), 0},
+            {QStringLiteral("command"), QString()},  {QStringLiteral("continueArgs"), QString()}, {QStringLiteral("process"), QString()},
+            {QStringLiteral("prPrompt"), QString()}, {QStringLiteral("prompts"), QJsonArray{}},   {QStringLiteral("submitDelayMs"), 0},
         };
     }
     return QJsonObject{
@@ -303,14 +299,12 @@ Config Config::load(QString *error)
     }
     for (const QJsonValue &v : root.value(QStringLiteral("quickCommands")).toArray()) {
         const QJsonObject o = v.toObject();
-        c.quickCommands.append({o.value(QStringLiteral("label")).toString(),
-                                o.value(QStringLiteral("command")).toString(),
+        c.quickCommands.append({o.value(QStringLiteral("label")).toString(), o.value(QStringLiteral("command")).toString(),
                                 o.value(QStringLiteral("group")).toString(QStringLiteral("check"))});
     }
     for (const QJsonValue &v : root.value(QStringLiteral("links")).toArray()) {
         const QJsonObject o = v.toObject();
-        c.links.append({o.value(QStringLiteral("label")).toString(),
-                        o.value(QStringLiteral("service")).toString(),
+        c.links.append({o.value(QStringLiteral("label")).toString(), o.value(QStringLiteral("service")).toString(),
                         o.value(QStringLiteral("containerPort")).toInt()});
     }
     for (const QJsonValue &v : root.value(QStringLiteral("agents")).toArray()) {
