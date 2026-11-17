@@ -3,6 +3,7 @@
 #include "TerminalAppearance.h"
 
 #include <QElapsedTimer>
+#include <QHash>
 #include <QKeySequence>
 #include <QPointer>
 #include <QWidget>
@@ -17,9 +18,10 @@ class TerminalScreen;
 // size, and the channel is resized to match.
 //
 // It shows the screen's scrollback when scrolled back, and keeps a mouse
-// selection. Mouse events go to the program only when it asked for them and
-// Shift is not held (reportsMouse()); so far that covers the wheel, and
-// button and motion reports join it there.
+// selection. Mouse events (buttons, motion and the wheel) go to the program
+// only when it asked for them and Shift is not held (reportsMouse()); with
+// Shift they select locally. Input methods compose at the cursor: the
+// preedit is drawn there and the commit is typed.
 class TerminalView : public QWidget
 {
     Q_OBJECT
@@ -61,6 +63,9 @@ public:
     void copySelection();
 
     QSize sizeHint() const override;
+    QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+    // The input method's uncommitted text, drawn at the cursor.
+    QString preedit() const { return m_preedit; }
 
 Q_SIGNALS:
     void gridResized(int rows, int cols);
@@ -74,6 +79,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *e) override;
     void mouseReleaseEvent(QMouseEvent *e) override;
     void mouseDoubleClickEvent(QMouseEvent *e) override;
+    void inputMethodEvent(QInputMethodEvent *e) override;
     void wheelEvent(QWheelEvent *e) override;
     void focusInEvent(QFocusEvent *e) override;
     void focusOutEvent(QFocusEvent *e) override;
@@ -91,6 +97,12 @@ private:
 
     void updateCellSize();
     bool reportsMouse(Qt::KeyboardModifiers mods) const;
+    // Sends a button change to the program if it takes it; false leaves the
+    // event to local handling.
+    bool reportButton(QMouseEvent *e, bool pressed);
+    void drawGlyphs(QPainter &p, const QRect &r, const QString &text, int font);
+    void updateBlink();
+    QRect cursorRect() const; // the cursor cell in widget pixels
     QPoint viewCellAt(const QPoint &px) const; // clamped to the grid
     Pos posAt(const QPoint &px) const;
     void extendSelection(const QPoint &px);
@@ -124,4 +136,12 @@ private:
     QElapsedTimer m_doubleClick; // for a triple click
     QPoint m_lastMouse;
     QTimer *m_autoScroll;
+    Qt::MouseButtons m_reported; // pressed buttons the program was told about
+
+    QTimer *m_blink;
+    bool m_blinkOn = true;
+    QTimer *m_imUpdate; // tells the input method where the cursor went
+    QString m_preedit;
+    int m_preeditCursor = 0; // in UTF-16 units of m_preedit
+    QHash<QString, int> m_advance[4]; // glyph widths of non-ASCII text, per font
 };

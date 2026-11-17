@@ -9,6 +9,7 @@
 #include <QClipboard>
 #include <QDir>
 #include <QFile>
+#include <QInputMethodEvent>
 #include <QProcess>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -157,6 +158,265 @@ private Q_SLOTS:
         QCOMPARE(s.rowText(0), QStringLiteral("日x"));
         s.feed("\x1b]0;my title\x07");
         QCOMPARE(s.title(), QStringLiteral("my title"));
+    }
+
+    void screenTrueColorAndWideText()
+    {
+        TerminalScreen s(3, 40);
+        // A 24-bit gradient keeps every step, foreground and background.
+        QByteArray gradient;
+        for (int i = 0; i < 32; ++i) {
+            gradient += "\x1b[48;2;" + QByteArray::number(i * 8) + ";" + QByteArray::number(255 - i * 8) + ";128m ";
+        }
+        s.feed(gradient + "\x1b[0m\r\n\x1b[38;2;250;128;7;4:3mc\x1b[0m");
+        for (int i = 0; i < 32; ++i) {
+            QCOMPARE(s.cell(0, i).bg, QColor(i * 8, 255 - i * 8, 128));
+            QVERIFY(!s.cell(0, i).defaultBg);
+        }
+        QCOMPARE(s.cell(1, 0).fg, QColor(250, 128, 7));
+        QCOMPARE(s.cell(1, 0).underline, 3);
+
+        // CJK and emoji take two cells; combining marks stay on their base.
+        s.feed("\x1b[3;1H\xe4\xbd\xa0\xe5\xa5\xbd\xf0\x9f\x98\x80"
+               "e\xcc\x81|"); // 你好😀é|
+        QCOMPARE(s.cell(2, 0).text, QStringLiteral("你"));
+        QCOMPARE(s.cell(2, 0).width, 2);
+        QCOMPARE(s.cell(2, 1).width, 0);
+        QCOMPARE(s.cell(2, 2).text, QStringLiteral("好"));
+        QCOMPARE(s.cell(2, 4).text, QString::fromUtf8("\xf0\x9f\x98\x80"));
+        QCOMPARE(s.cell(2, 4).width, 2);
+        QCOMPARE(s.cell(2, 6).text, QString::fromUtf8("e\xcc\x81"));
+        QCOMPARE(s.cell(2, 6).width, 1);
+        QCOMPARE(s.cell(2, 7).text, QStringLiteral("|"));
+    }
+
+    void screenCursorStyle()
+    {
+        TerminalScreen s(3, 10);
+        QCOMPARE(s.cursorShape(), TerminalScreen::Block);
+        QVERIFY(!s.cursorBlink());
+        s.feed("\x1b[6 q");
+        QCOMPARE(s.cursorShape(), TerminalScreen::Bar);
+        QVERIFY(!s.cursorBlink());
+        s.feed("\x1b[3 q");
+        QCOMPARE(s.cursorShape(), TerminalScreen::Underline);
+        QVERIFY(s.cursorBlink());
+        s.feed("\x1b[2 q");
+        QCOMPARE(s.cursorShape(), TerminalScreen::Block);
+        QVERIFY(!s.cursorBlink());
+        s.feed("\x1b[?12h");
+        QVERIFY(s.cursorBlink());
+        s.reset();
+        QCOMPARE(s.cursorShape(), TerminalScreen::Block);
+        QVERIFY(!s.cursorBlink());
+    }
+
+    void screenMouseReports()
+    {
+        TerminalScreen s(10, 40);
+        QByteArray out;
+        connect(&s, &TerminalScreen::output, this, [&out](const QByteArray &b) { out += b; });
+        auto click = [&s](int row, int col, Qt::KeyboardModifiers mods = Qt::NoModifier) {
+            s.sendMouseMove(row, col, mods);
+            s.sendMouseButton(1, true, mods);
+            s.sendMouseButton(1, false, mods);
+        };
+        // Nothing until the program asks.
+        click(1, 2);
+        QVERIFY(out.isEmpty());
+
+        // 1000 (clicks) in the X10 encoding: CSI M, then button, column and
+        // row, each plus 32 and 1-based. A release is button 3.
+        s.feed("\x1b[?1000h");
+        click(1, 2);
+        QCOMPARE(out, QByteArray("\x1b[M #\"\x1b[M##\""));
+        out.clear();
+        // Clicks only: a drag reports nothing but the buttons.
+        s.sendMouseMove(4, 4);
+        s.sendMouseButton(3, true);
+        s.sendMouseMove(4, 6);
+        s.sendMouseButton(3, false);
+        QCOMPARE(out, QByteArray("\x1b[M\"%%\x1b[M#'%")); // the release lands where the pointer went
+        out.clear();
+
+        // SGR (1006): decimal, M for press and m for release, which keeps the button.
+        s.feed("\x1b[?1006h");
+        click(1, 2);
+        QCOMPARE(out, QByteArray("\x1b[<0;3;2M\x1b[<0;3;2m"));
+        out.clear();
+        s.sendMouseMove(1, 3, Qt::ControlModifier);
+        s.sendMouseButton(2, true, Qt::ControlModifier);
+        s.sendMouseButton(2, false, Qt::ControlModifier);
+        QCOMPARE(out, QByteArray("\x1b[<17;4;2M\x1b[<17;4;2m")); // Ctrl adds 16
+        out.clear();
+
+        // 1002 (button events): motion with a button held.
+        s.feed("\x1b[?1000l\x1b[?1002h");
+        s.sendMouseMove(0, 0);
+        s.sendMouseButton(1, true);
+        s.sendMouseMove(0, 5);
+        s.sendMouseButton(1, false);
+        s.sendMouseMove(0, 7); // no button: not reported
+        QCOMPARE(out, QByteArray("\x1b[<0;1;1M\x1b[<32;6;1M\x1b[<0;6;1m"));
+        out.clear();
+
+        // 1003 (any event): motion without a button, too.
+        s.feed("\x1b[?1002l\x1b[?1003h");
+        s.sendMouseMove(2, 9);
+        QCOMPARE(out, QByteArray("\x1b[<35;10;3M"));
+        out.clear();
+
+        s.feed("\x1b[?1003l");
+        QVERIFY(!s.mouseReporting());
+        click(1, 2);
+        QVERIFY(out.isEmpty());
+    }
+
+    void viewMouseReports()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 20, 6);
+        view.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        channel.print("hello world\r\n\x1b[?1002h\x1b[?1006h");
+
+        // htop-style click and a drag, reported to the program.
+        QTest::mousePress(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 2, 1));
+        QTest::mouseMove(&view, cellCenter(view, 4, 1));
+        QTest::mouseRelease(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 4, 1));
+        QCOMPARE(channel.written, QByteArray("\x1b[<0;3;2M\x1b[<32;5;2M\x1b[<0;5;2m"));
+        QVERIFY(!view.hasSelection());
+        channel.written.clear();
+        QTest::mouseClick(&view, Qt::RightButton, Qt::AltModifier, cellCenter(view, 0, 0));
+        QCOMPARE(channel.written, QByteArray("\x1b[<10;1;1M\x1b[<10;1;1m")); // Alt adds 8
+        channel.written.clear();
+
+        // Shift selects locally instead.
+        QTest::mousePress(&view, Qt::LeftButton, Qt::ShiftModifier, cellCenter(view, 0, 0));
+        QTest::mouseMove(&view, cellCenter(view, 4, 0));
+        QTest::mouseRelease(&view, Qt::LeftButton, Qt::ShiftModifier, cellCenter(view, 4, 0));
+        QVERIFY(channel.written.isEmpty());
+        QCOMPARE(view.selectedText(), QStringLiteral("hello"));
+
+        // A release follows its press even if Shift comes down in between.
+        QTest::mousePress(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 1, 2));
+        QTest::mouseRelease(&view, Qt::LeftButton, Qt::ShiftModifier, cellCenter(view, 1, 2));
+        QCOMPARE(channel.written, QByteArray("\x1b[<0;2;3M\x1b[<4;2;3m"));
+        channel.written.clear();
+
+        // Any-event tracking sees the pointer move without a button.
+        channel.print("\x1b[?1003h");
+        const QPointF hover = cellCenter(view, 7, 3);
+        QMouseEvent move(QEvent::MouseMove, hover, view.mapToGlobal(hover), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(&view, &move);
+        QCOMPARE(channel.written, QByteArray("\x1b[<35;8;4M"));
+    }
+
+    void viewInputMethod()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 20, 4);
+        view.show();
+        view.activateWindow();
+        view.setFocus();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        QVERIFY(view.testAttribute(Qt::WA_InputMethodEnabled));
+        QVERIFY(view.inputMethodQuery(Qt::ImEnabled).toBool());
+        channel.print("$ ");
+        const QSize cell = view.cellSize();
+        const int pad = view.appearance().padding;
+        QCOMPARE(view.inputMethodQuery(Qt::ImCursorRectangle).toRect(), QRect(pad + 2 * cell.width(), pad, cell.width(), cell.height()));
+
+        // Composing: the preedit is shown at the cursor but not sent.
+        {
+            QInputMethodEvent e(QStringLiteral("にほ"), {{QInputMethodEvent::Cursor, 2, 1, QVariant()}});
+            QCoreApplication::sendEvent(&view, &e);
+        }
+        QCOMPARE(view.preedit(), QStringLiteral("にほ"));
+        QVERIFY(channel.written.isEmpty());
+        const QImage img = view.grab().toImage();
+        // The preedit underline under the first character, and the caret
+        // after the second (two cells each).
+        bool underlined = false;
+        for (int y = pad; y < pad + cell.height() && !underlined; ++y) {
+            bool full = true;
+            for (int x = pad + 2 * cell.width(); x < pad + 6 * cell.width() && full; ++x) {
+                full = img.pixelColor(x, y) == view.appearance().foreground;
+            }
+            underlined = full;
+        }
+        QVERIFY(underlined);
+        QCOMPARE(img.pixelColor(pad + 6 * cell.width(), pad + cell.height() / 2), view.appearance().cursor);
+
+        // Committing types the text and clears the preedit.
+        {
+            QInputMethodEvent e;
+            e.setCommitString(QStringLiteral("日本"));
+            QCoreApplication::sendEvent(&view, &e);
+        }
+        QVERIFY(view.preedit().isEmpty());
+        QCOMPARE(channel.written, QStringLiteral("日本").toUtf8());
+    }
+
+    void viewPaintsCursorShapes()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 10, 3);
+        view.show();
+        view.activateWindow();
+        view.setFocus();
+        QVERIFY(QTest::qWaitForWindowExposed(&view));
+        QTRY_VERIFY(view.hasFocus());
+        const QSize cell = view.cellSize();
+        const int pad = view.appearance().padding;
+        const QColor cursor = view.appearance().cursor;
+        const QColor bg = view.appearance().background;
+        auto px = [&](int x, int y) {
+            return view.grab().toImage().pixelColor(pad + x, pad + y);
+        };
+        // Block: the whole cell.
+        QCOMPARE(px(cell.width() / 2, cell.height() / 2), cursor);
+        // Bar: the left edge only.
+        channel.print("\x1b[6 q");
+        QCOMPARE(px(0, cell.height() / 2), cursor);
+        QCOMPARE(px(cell.width() - 1, cell.height() / 2), bg);
+        // Underline: the bottom only.
+        channel.print("\x1b[4 q");
+        QCOMPARE(px(cell.width() / 2, cell.height() - 1), cursor);
+        QCOMPARE(px(cell.width() / 2, 1), bg);
+    }
+
+    void viewPaintsWideCharsOnTheGrid()
+    {
+        TerminalView view;
+        FakeChannel channel;
+        view.setChannel(&channel);
+        sizeView(view, 12, 2);
+        // A wide glyph never spills into the next cell's column.
+        channel.print("\xe6\x97\xa5\xf0\x9f\x98\x80|\x1b[?25l");
+        const QImage img = view.grab().toImage();
+        const QSize cell = view.cellSize();
+        const int pad = view.appearance().padding;
+        const QColor bg = view.appearance().background;
+        bool inked = false;
+        for (int x = 0; x < 4 * cell.width(); ++x) {
+            for (int y = 0; y < cell.height(); ++y) {
+                inked |= img.pixelColor(pad + x, pad + y) != bg;
+            }
+        }
+        QVERIFY(inked);
+        // Column 5 holds only "|", drawn by the font's ASCII glyph.
+        int outside = 0;
+        for (int y = 0; y < cell.height(); ++y) {
+            outside += img.pixelColor(pad + 5 * cell.width() + 1, pad + y) != bg ? 1 : 0;
+        }
+        QCOMPARE(outside, 0);
     }
 
     void screenResize()

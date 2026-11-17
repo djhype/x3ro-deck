@@ -128,6 +128,16 @@ struct TerminalScreenCallbacks
             s->m_cursorVisible = val->boolean;
             Q_EMIT s->cursorMoved(s->m_cursor, s->m_cursor);
             break;
+        case VTERM_PROP_CURSORSHAPE:
+            s->m_cursorShape = val->number >= TerminalScreen::Block && val->number <= TerminalScreen::Bar
+                ? TerminalScreen::CursorShape(val->number)
+                : TerminalScreen::Block;
+            Q_EMIT s->cursorMoved(s->m_cursor, s->m_cursor);
+            break;
+        case VTERM_PROP_CURSORBLINK:
+            s->m_cursorBlink = val->boolean;
+            Q_EMIT s->cursorMoved(s->m_cursor, s->m_cursor);
+            break;
         case VTERM_PROP_ALTSCREEN:
             s->m_altScreen = val->boolean;
             break;
@@ -328,7 +338,17 @@ TerminalScreen::TerminalScreen(int rows, int cols, QObject *parent)
     vterm_screen_enable_altscreen(m_screen, 1);
     vterm_screen_enable_reflow(m_screen, true);
     vterm_screen_reset(m_screen, 1);
+    resetCursorStyle();
     setAppearance(TerminalAppearance::fallback());
+}
+
+void TerminalScreen::resetCursorStyle()
+{
+    // libvterm's reset turns blinking on; like Konsole, the cursor stays
+    // steady until the program asks otherwise.
+    VTermValue steady;
+    steady.boolean = 0;
+    vterm_state_set_termprop(m_state, VTERM_PROP_CURSORBLINK, &steady);
 }
 
 TerminalScreen::~TerminalScreen()
@@ -393,6 +413,7 @@ void TerminalScreen::resize(int rows, int cols)
 void TerminalScreen::reset()
 {
     vterm_screen_reset(m_screen, 1);
+    resetCursorStyle();
     m_altScreen = false;
     m_reverseScreen = false;
     m_mouseMode = 0;
@@ -624,6 +645,16 @@ void TerminalScreen::sendWheel(int row, int col, bool up, Qt::KeyboardModifiers 
 {
     vterm_mouse_move(m_vt, std::clamp(row, 0, m_rows - 1), std::clamp(col, 0, m_cols - 1), toVTerm(mods));
     vterm_mouse_button(m_vt, up ? 4 : 5, true, toVTerm(mods));
+}
+
+void TerminalScreen::sendMouseMove(int row, int col, Qt::KeyboardModifiers mods)
+{
+    vterm_mouse_move(m_vt, std::clamp(row, 0, m_rows - 1), std::clamp(col, 0, m_cols - 1), toVTerm(mods));
+}
+
+void TerminalScreen::sendMouseButton(int button, bool pressed, Qt::KeyboardModifiers mods)
+{
+    vterm_mouse_button(m_vt, button, pressed, toVTerm(mods));
 }
 
 void TerminalScreen::sendKey(Key key, Qt::KeyboardModifiers mods)

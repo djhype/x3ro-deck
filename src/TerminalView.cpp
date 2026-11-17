@@ -5,6 +5,8 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QInputMethod>
+#include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QTimer>
@@ -15,14 +17,52 @@ bool before(qint64 aLine, int aCol, qint64 bLine, int bCol)
 {
     return aLine < bLine || (aLine == bLine && aCol < bCol);
 }
+
+int mouseButton(Qt::MouseButton b)
+{
+    switch (b) {
+    case Qt::LeftButton:
+        return 1;
+    case Qt::MiddleButton:
+        return 2;
+    case Qt::RightButton:
+        return 3;
+    default:
+        return 0;
+    }
+}
+
+Qt::KeyboardModifiers terminalMods(Qt::KeyboardModifiers mods)
+{
+    return mods & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier);
+}
+
+// Cells a character takes in the preedit, which is not in libvterm's grid:
+// East Asian wide and emoji ranges take two, combining marks none.
+int charCells(char32_t ch)
+{
+    const QChar::Category cat = QChar::category(ch);
+    if (cat == QChar::Mark_NonSpacing || cat == QChar::Mark_Enclosing || ch == 0x200d) {
+        return 0;
+    }
+    const bool wide = (ch >= 0x1100 && ch <= 0x115f) || (ch >= 0x2e80 && ch <= 0xa4cf && ch != 0x303f) || (ch >= 0xac00 && ch <= 0xd7a3)
+        || (ch >= 0xf900 && ch <= 0xfaff) || (ch >= 0xfe30 && ch <= 0xfe4f) || (ch >= 0xff00 && ch <= 0xff60)
+        || (ch >= 0xffe0 && ch <= 0xffe6) || (ch >= 0x1f300 && ch <= 0x1f64f) || (ch >= 0x1f900 && ch <= 0x1f9ff)
+        || (ch >= 0x20000 && ch <= 0x3fffd);
+    return wide ? 2 : 1;
+}
 } // namespace
 
 TerminalView::TerminalView(QWidget *parent)
     : QWidget(parent)
     , m_screen(new TerminalScreen(24, 80, this))
     , m_autoScroll(new QTimer(this))
+    , m_blink(new QTimer(this))
+    , m_imUpdate(new QTimer(this))
 {
     setFocusPolicy(Qt::StrongFocus);
+    setAttribute(Qt::WA_InputMethodEnabled);
+    setMouseTracking(true); // any-event tracking reports motion without a button
     setAttribute(Qt::WA_OpaquePaintEvent);
     setAutoFillBackground(false);
     setCursor(Qt::IBeamCursor);
@@ -30,6 +70,17 @@ TerminalView::TerminalView(QWidget *parent)
 
     m_autoScroll->setInterval(50);
     connect(m_autoScroll, &QTimer::timeout, this, &TerminalView::autoScroll);
+    connect(m_blink, &QTimer::timeout, this, [this] {
+        m_blinkOn = !m_blinkOn;
+        update(cursorRect().adjusted(0, 0, m_cell.width(), 0));
+    });
+    m_imUpdate->setSingleShot(true);
+    m_imUpdate->setInterval(30);
+    connect(m_imUpdate, &QTimer::timeout, this, [this] {
+        if (hasFocus()) {
+            QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
+        }
+    });
 
     connect(m_screen, &TerminalScreen::changed, this, [this](const QRect &cells) {
         if (m_offset > 0 && m_screen->altScreen()) {
@@ -42,6 +93,10 @@ TerminalView::TerminalView(QWidget *parent)
     connect(m_screen, &TerminalScreen::cursorMoved, this, [this](const QPoint &from, const QPoint &to) {
         update(cellsToPixels(QRect(from + QPoint(0, m_offset), QSize(2, 1))));
         update(cellsToPixels(QRect(to + QPoint(0, m_offset), QSize(2, 1))));
+        updateBlink();
+        if (hasFocus() && !m_imUpdate->isActive()) {
+            m_imUpdate->start();
+        }
     });
     // Output never moves a scrolled-back view: the same text stays in place
     // while new lines arrive below it.
@@ -85,6 +140,7 @@ void TerminalView::setAppearance(const TerminalAppearance &appearance)
         f.setBold(i & 1);
         f.setItalic(i & 2);
         m_fonts[i] = f;
+        m_advance[i].clear();
     }
     m_screen->setAppearance(appearance);
     updateCellSize();
@@ -179,6 +235,59 @@ void TerminalView::scrollBy(int lines)
 void TerminalView::beforeInput()
 {
     scrollTo(0);
+    if (m_blink->isActive()) {
+        m_blinkOn = true; // the cursor stays lit while typing
+        m_blink->start();
+        update(cursorRect().adjusted(0, 0, m_cell.width(), 0));
+    }
+}
+
+void TerminalView::updateBlink()
+{
+    const int flash = QApplication::cursorFlashTime();
+    if (!hasFocus() || !m_screen->cursorBlink() || !m_screen->cursorVisible() || flash <= 0) {
+        m_blink->stop();
+        m_blinkOn = true;
+        return;
+    }
+    if (!m_blink->isActive()) {
+        m_blinkOn = true;
+        m_blink->start(flash / 2);
+    }
+}
+
+QRect TerminalView::cursorRect() const
+{
+    return cellsToPixels(QRect(m_screen->cursor() + QPoint(0, m_offset), QSize(1, 1)));
+}
+
+void TerminalView::drawGlyphs(QPainter &p, const QRect &r, const QString &text, int font)
+{
+    const int baseline = r.y() + m_ascent;
+    if (text.at(0).unicode() < 0x80 && text.size() == 1) {
+        p.drawText(r.x(), baseline, text);
+        return;
+    }
+    // A glyph from a fallback font (CJK, emoji, symbols) may be wider or
+    // narrower than its cells: center it, and shrink it when it would spill
+    // into the next cell, so the grid stays aligned.
+    QHash<QString, int> &cache = m_advance[font];
+    auto it = cache.find(text);
+    if (it == cache.end()) {
+        it = cache.insert(text, QFontMetrics(m_fonts[font]).horizontalAdvance(text));
+    }
+    const int advance = *it;
+    if (advance <= r.width()) {
+        p.drawText(r.x() + (r.width() - advance) / 2, baseline, text);
+        return;
+    }
+    const qreal k = qreal(r.width()) / advance;
+    const qreal mid = r.y() + r.height() / 2.0;
+    p.save();
+    p.translate(r.x(), mid);
+    p.scale(k, k);
+    p.drawText(QPointF(0, baseline - mid), text);
+    p.restore();
 }
 
 QRect TerminalView::cellsToPixels(const QRect &cells) const
@@ -203,8 +312,10 @@ void TerminalView::paintEvent(QPaintEvent *e)
     const int firstCol = std::max(0, (dirty.left() - pad) / cw - 1);
     const int lastCol = std::min(cols() - 1, (dirty.right() - pad) / cw);
     const QPoint cursor = m_screen->cursor() + QPoint(0, m_offset);
-    const bool showCursor = m_screen->cursorVisible();
     const bool focused = hasFocus();
+    // The preedit takes the cursor's place while the input method composes.
+    const bool showCursor = m_screen->cursorVisible() && m_preedit.isEmpty() && (!focused || m_blinkOn);
+    const TerminalScreen::CursorShape shape = m_screen->cursorShape();
     const int top = topLine();
     QPoint selFrom;
     QPoint selTo;
@@ -223,7 +334,7 @@ void TerminalView::paintEvent(QPaintEvent *e)
             const bool isCursor = showCursor && cursor == QPoint(col, row);
             const bool selected
                 = selection && !before(line, col + c.width - 1, selFrom.y(), selFrom.x()) && !before(selTo.y(), selTo.x(), line, col);
-            if (isCursor && focused) {
+            if (isCursor && focused && shape == TerminalScreen::Block) {
                 p.fillRect(r, m_appearance.cursor);
                 c.fg = m_appearance.background;
             } else if (selected) {
@@ -238,23 +349,76 @@ void TerminalView::paintEvent(QPaintEvent *e)
                     currentFont = f;
                 }
                 p.setPen(c.fg);
-                p.drawText(r.x(), y + m_ascent, c.text);
+                drawGlyphs(p, r, c.text, f);
             }
             if (c.underline) {
                 const int uy = std::min(y + m_ascent + 2, y + ch - 1);
-                p.fillRect(QRect(r.x(), uy, r.width(), 1), c.fg);
-                if (c.underline == 2 && uy + 2 < y + ch) {
-                    p.fillRect(QRect(r.x(), uy + 2, r.width(), 1), c.fg);
+                if (c.underline == 3) {
+                    // Curly: a zigzag between uy - 1 and uy + 1.
+                    const int low = std::min(uy + 1, y + ch - 1);
+                    QPolygon wave;
+                    for (int x = r.x(); x <= r.right() + 1; x += 2) {
+                        wave << QPoint(x, ((x - pad) / 2) % 2 ? low : uy - 1);
+                    }
+                    p.setPen(c.fg);
+                    p.drawPolyline(wave);
+                } else {
+                    p.fillRect(QRect(r.x(), uy, r.width(), 1), c.fg);
+                    if (c.underline == 2 && uy + 2 < y + ch) {
+                        p.fillRect(QRect(r.x(), uy + 2, r.width(), 1), c.fg);
+                    }
                 }
             }
             if (c.strike) {
                 p.fillRect(QRect(r.x(), y + ch / 2, r.width(), 1), c.fg);
+            }
+            if (isCursor && focused && shape != TerminalScreen::Block) {
+                const int t = std::max(2, ch / 10);
+                p.fillRect(shape == TerminalScreen::Bar ? QRect(r.x(), y, t, ch) : QRect(r.x(), y + ch - t, r.width(), t),
+                           m_appearance.cursor);
             }
             if (isCursor && !focused) {
                 p.setPen(m_appearance.cursor);
                 p.drawRect(r.adjusted(0, 0, -1, -1));
             }
         }
+    }
+
+    if (!m_preedit.isEmpty()) {
+        // Over the cells at the cursor, a cell or two per character,
+        // underlined, with the input method's own cursor as a bar.
+        const QRect start = cursorRect();
+        int x = start.x();
+        int caretX = -1;
+        p.setFont(m_fonts[0]);
+        currentFont = 0;
+        const QList<uint> chars = m_preedit.toUcs4();
+        int at = 0; // UTF-16 index of the next character
+        int i = 0;
+        while (i < chars.size()) {
+            if (caretX < 0 && at >= m_preeditCursor) {
+                caretX = x;
+            }
+            QString cluster;
+            int cells = 0;
+            do {
+                const char32_t u = chars[i];
+                cluster += QString::fromUcs4(&u, 1);
+                cells = std::max(cells, charCells(u));
+                ++i;
+            } while (i < chars.size() && charCells(chars[i]) == 0);
+            at += int(cluster.size());
+            const QRect r(x, start.y(), std::max(1, cells) * cw, ch);
+            p.fillRect(r, m_appearance.background);
+            p.setPen(m_appearance.foreground);
+            drawGlyphs(p, r, cluster, 0);
+            p.fillRect(QRect(r.x(), std::min(r.y() + m_ascent + 2, r.bottom()), r.width(), 1), m_appearance.foreground);
+            x += r.width();
+        }
+        if (caretX < 0) {
+            caretX = x;
+        }
+        p.fillRect(QRect(caretX, start.y(), 2, ch), m_appearance.cursor);
     }
 
     // Where the view is in the history, in the right padding while scrolled back.
@@ -411,6 +575,32 @@ bool TerminalView::reportsMouse(Qt::KeyboardModifiers mods) const
     return m_screen->mouseReporting() && !(mods & Qt::ShiftModifier);
 }
 
+bool TerminalView::reportButton(QMouseEvent *e, bool pressed)
+{
+    const int button = mouseButton(e->button());
+    const Qt::KeyboardModifiers mods = terminalMods(e->modifiers());
+    if (!button) {
+        return false;
+    }
+    if (pressed) {
+        if (!reportsMouse(mods)) {
+            return false;
+        }
+        scrollTo(0); // the program's cells are the screen, not the history
+        m_reported |= e->button();
+    } else {
+        // A release goes where its press went, whatever Shift does meanwhile.
+        if (!(m_reported & e->button())) {
+            return false;
+        }
+        m_reported &= ~e->button();
+    }
+    const QPoint cell = viewCellAt(e->position().toPoint()) - QPoint(0, m_offset);
+    m_screen->sendMouseMove(cell.y(), cell.x(), mods);
+    m_screen->sendMouseButton(button, pressed, mods);
+    return true;
+}
+
 QPoint TerminalView::viewCellAt(const QPoint &px) const
 {
     const int pad = m_appearance.padding;
@@ -519,7 +709,9 @@ void TerminalView::extendSelection(const QPoint &px)
 
 void TerminalView::mousePressEvent(QMouseEvent *e)
 {
-    // Button reports to the program (PE-131) go here, under reportsMouse().
+    if (reportButton(e, true)) {
+        return;
+    }
     m_lastMouse = e->position().toPoint();
     if (e->button() == Qt::MiddleButton) {
         QClipboard *clip = QApplication::clipboard();
@@ -545,6 +737,9 @@ void TerminalView::mousePressEvent(QMouseEvent *e)
 
 void TerminalView::mouseDoubleClickEvent(QMouseEvent *e)
 {
+    if (reportButton(e, true)) {
+        return;
+    }
     if (e->button() != Qt::LeftButton) {
         QWidget::mouseDoubleClickEvent(e);
         return;
@@ -559,6 +754,12 @@ void TerminalView::mouseDoubleClickEvent(QMouseEvent *e)
 
 void TerminalView::mouseMoveEvent(QMouseEvent *e)
 {
+    // libvterm drops the moves the program's tracking mode does not want.
+    if (m_reported || (!m_selecting && reportsMouse(terminalMods(e->modifiers())))) {
+        const QPoint cell = viewCellAt(e->position().toPoint()) - QPoint(0, m_offset);
+        m_screen->sendMouseMove(cell.y(), cell.x(), terminalMods(e->modifiers()));
+        return;
+    }
     if (!m_selecting) {
         QWidget::mouseMoveEvent(e);
         return;
@@ -586,6 +787,9 @@ void TerminalView::autoScroll()
 
 void TerminalView::mouseReleaseEvent(QMouseEvent *e)
 {
+    if (reportButton(e, false)) {
+        return;
+    }
     if (e->button() != Qt::LeftButton || !m_selecting) {
         QWidget::mouseReleaseEvent(e);
         return;
@@ -629,10 +833,63 @@ void TerminalView::wheelEvent(QWheelEvent *e)
     scrollBy(lines);
 }
 
+void TerminalView::inputMethodEvent(QInputMethodEvent *e)
+{
+    const QString commit = e->commitString();
+    if (!commit.isEmpty()) {
+        beforeInput();
+        const QList<uint> chars = commit.toUcs4();
+        for (const uint ch : chars) {
+            if (ch >= 0x20 && ch != 0x7f) {
+                m_screen->sendChar(char32_t(ch));
+            }
+        }
+    }
+    m_preedit = e->preeditString();
+    m_preeditCursor = int(m_preedit.size());
+    const QList<QInputMethodEvent::Attribute> attrs = e->attributes();
+    for (const QInputMethodEvent::Attribute &a : attrs) {
+        if (a.type == QInputMethodEvent::Cursor) {
+            m_preeditCursor = std::clamp(a.start, 0, int(m_preedit.size()));
+        }
+    }
+    if (!m_preedit.isEmpty()) {
+        scrollTo(0);
+    }
+    e->accept();
+    update();
+}
+
+QVariant TerminalView::inputMethodQuery(Qt::InputMethodQuery query) const
+{
+    switch (query) {
+    case Qt::ImEnabled:
+        return true;
+    case Qt::ImCursorRectangle:
+        return cursorRect();
+    case Qt::ImFont:
+        return m_fonts[0];
+    case Qt::ImHints:
+        return int(Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase | Qt::ImhMultiLine);
+    // The terminal has no text the input method could edit around the cursor.
+    case Qt::ImSurroundingText:
+    case Qt::ImCurrentSelection:
+    case Qt::ImTextBeforeCursor:
+    case Qt::ImTextAfterCursor:
+        return QString();
+    case Qt::ImCursorPosition:
+    case Qt::ImAnchorPosition:
+        return 0;
+    default:
+        return QWidget::inputMethodQuery(query);
+    }
+}
+
 void TerminalView::focusInEvent(QFocusEvent *e)
 {
     QWidget::focusInEvent(e);
     m_screen->setFocused(true);
+    updateBlink();
     update(cellsToPixels(QRect(m_screen->cursor(), QSize(2, 1))));
 }
 
@@ -640,5 +897,6 @@ void TerminalView::focusOutEvent(QFocusEvent *e)
 {
     QWidget::focusOutEvent(e);
     m_screen->setFocused(false);
+    updateBlink();
     update(cellsToPixels(QRect(m_screen->cursor(), QSize(2, 1))));
 }

@@ -103,6 +103,10 @@ public:
     QPoint cursor() const { return m_cursor; } // x = column, y = row
     bool cursorVisible() const { return m_cursorVisible; }
     bool altScreen() const { return m_altScreen; }
+    enum CursorShape { Block = 1, Underline, Bar }; // libvterm's VTERM_PROP_CURSORSHAPE values
+    CursorShape cursorShape() const { return m_cursorShape; }
+    // Only when the program asks (DECSCUSR or mode 12); a fresh screen is steady.
+    bool cursorBlink() const { return m_cursorBlink; }
     // The program asked for mouse events (any tracking mode).
     bool mouseReporting() const { return m_mouseMode != 0; }
     QString title() const { return m_title; }
@@ -115,6 +119,12 @@ public:
     void setFocused(bool focused);
     // One wheel step at a screen cell, encoded as the program's mouse mode asks.
     void sendWheel(int row, int col, bool up, Qt::KeyboardModifiers mods = Qt::NoModifier);
+    // Pointer moves and button changes at a screen cell (button 1 left,
+    // 2 middle, 3 right). libvterm reports only what the program's tracking
+    // mode (click, drag or any motion) asks for, in its encoding (X10, UTF-8,
+    // SGR or urxvt).
+    void sendMouseMove(int row, int col, Qt::KeyboardModifiers mods = Qt::NoModifier);
+    void sendMouseButton(int button, bool pressed, Qt::KeyboardModifiers mods = Qt::NoModifier);
 
 Q_SIGNALS:
     // Bytes for the program: keystrokes, pastes and replies to its queries.
@@ -132,6 +142,7 @@ private:
     friend struct TerminalScreenCallbacks;
     struct Scrollback;
     void flush();
+    void resetCursorStyle();
 
     VTerm *m_vt = nullptr;
     VTermScreen *m_screen = nullptr;
@@ -143,6 +154,8 @@ private:
     QColor m_bg;
     QPoint m_cursor;
     bool m_cursorVisible = true;
+    CursorShape m_cursorShape = Block;
+    bool m_cursorBlink = false;
     bool m_altScreen = false;
     bool m_reverseScreen = false;
     int m_mouseMode = 0;

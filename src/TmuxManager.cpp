@@ -23,7 +23,7 @@ set -s extended-keys on
 set -g allow-passthrough on
 set -g set-clipboard on
 set -g default-terminal "tmux-256color"
-set -as terminal-features ",xterm-256color:RGB:clipboard"
+set -as terminal-features ",xterm-256color:RGB:clipboard:usstyle"
 setw -g aggressive-resize on
 set -g prefix C-a
 unbind C-b
