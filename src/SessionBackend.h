@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QMap>
 #include <QObject>
 #include <QStringList>
 
@@ -16,14 +17,19 @@ class SessionBackend : public QObject
 public:
     using QObject::QObject;
 
+    using Environment = QMap<QString, QString>;
+
     virtual bool hasSession(const QString &name) const = 0;
-    // A new session runs a shell in `dir` and types `startCommand` into it, so
-    // the shell survives the agent exiting.
-    virtual bool createSession(const QString &name, const QString &dir, const QString &startCommand) = 0;
-    bool ensureSession(const QString &name, const QString &dir, const QString &startCommand)
+    // A new session runs a shell in `dir` with `env` added to the app's
+    // environment, and types `startCommand` into it, so the shell survives the
+    // agent exiting.
+    virtual bool createSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {}) = 0;
+    bool ensureSession(const QString &name, const QString &dir, const QString &startCommand, const Environment &env = {})
     {
-        return hasSession(name) || createSession(name, dir, startCommand);
+        return hasSession(name) || createSession(name, dir, startCommand, env);
     }
+    // The `env` the session was created with.
+    virtual Environment sessionEnvironment(const QString &name) const = 0;
     // Sessions started in `dir`, whatever their name.
     virtual QStringList sessionsIn(const QString &dir) const = 0;
     virtual bool renameSession(const QString &from, const QString &to) = 0;

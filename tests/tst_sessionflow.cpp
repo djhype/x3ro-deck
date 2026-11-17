@@ -11,6 +11,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocalSocket>
+#include <QProcess>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -24,9 +25,12 @@ private Q_SLOTS:
     void initTestCase();
     void cleanupTestCase();
     void startPermissionPromptRestartStop();
+    void envAtSpawnAndProfileSwitch();
 
 private:
-    QString readLog() const;
+    static QString readFile(const QString &path);
+    QString readLog() const { return readFile(m_log); }
+    QString paneText(const QString &session) const;
     void sendHook(const QJsonObject &payload) const;
     int permissionRows(AppController &app) const;
 
@@ -34,6 +38,8 @@ private:
     QTemporaryDir m_tmp{QStringLiteral("/tmp/xdt-XXXXXX")};
     QString m_repo;
     QString m_log;
+    QString m_envRepo;
+    QString m_envLog;
 };
 
 void SessionFlowTest::initTestCase()
@@ -47,6 +53,28 @@ void SessionFlowTest::initTestCase()
     m_repo = m_tmp.path() + QStringLiteral("/repo");
     m_log = m_tmp.path() + QStringLiteral("/agent.log");
     QVERIFY(QDir().mkpath(m_repo));
+    m_envRepo = m_tmp.path() + QStringLiteral("/env-repo");
+    m_envLog = m_tmp.path() + QStringLiteral("/env.log");
+    QVERIFY(QDir().mkpath(m_envRepo));
+
+    // Logs X3RO_TEST as the agent sees it, then waits like an agent would.
+    const QString script = m_tmp.path() + QStringLiteral("/agent.sh");
+    QFile agent(script);
+    QVERIFY(agent.open(QIODevice::WriteOnly));
+    agent.write(QStringLiteral("#!/bin/sh\n"
+                               "if [ -n \"${X3RO_TEST+x}\" ]; then printf '%s\\n' \"$X3RO_TEST\"; else echo unset; fi >> %1\n"
+                               "exec cat\n")
+                    .arg(m_envLog)
+                    .toUtf8());
+    agent.close();
+    agent.setPermissions(agent.permissions() | QFileDevice::ExeOwner);
+    auto scriptAgent = [&script](const char *id, const QJsonObject &env) {
+        return QJsonObject{{QStringLiteral("id"), QLatin1String(id)},
+                           {QStringLiteral("kind"), QStringLiteral("custom")},
+                           {QStringLiteral("command"), script},
+                           {QStringLiteral("process"), QStringLiteral("cat")},
+                           {QStringLiteral("env"), env}};
+    };
     QVERIFY(QDir().mkpath(m_tmp.path() + QStringLiteral("/config/x3ro-deck")));
 
     // `cat` stands in for an agent: what reaches its terminal ends up in the log.
@@ -55,13 +83,18 @@ void SessionFlowTest::initTestCase()
         {QStringLiteral("defaultAgent"), QStringLiteral("fake")},
         {QStringLiteral("agents"),
          QJsonArray{QJsonObject{
-             {QStringLiteral("id"), QStringLiteral("fake")},
-             {QStringLiteral("kind"), QStringLiteral("custom")},
-             {QStringLiteral("command"), QStringLiteral("cat >> ") + m_log},
-             {QStringLiteral("permissionKeys"), QJsonObject{{QStringLiteral("allow"), QStringLiteral("Enter")}}},
-         }}},
+                        {QStringLiteral("id"), QStringLiteral("fake")},
+                        {QStringLiteral("kind"), QStringLiteral("custom")},
+                        {QStringLiteral("command"), QStringLiteral("cat >> ") + m_log},
+                        {QStringLiteral("permissionKeys"), QJsonObject{{QStringLiteral("allow"), QStringLiteral("Enter")}}},
+                    },
+                    scriptAgent("envy", {{QStringLiteral("X3RO_TEST"), QStringLiteral("${HOME}/deck|$X3RO_UNSET_VAR|$")}}),
+                    scriptAgent("plain", {})}},
         {QStringLiteral("checkouts"),
-         QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("flow")}, {QStringLiteral("path"), m_repo}}}},
+         QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("flow")}, {QStringLiteral("path"), m_repo}},
+                    QJsonObject{{QStringLiteral("name"), QStringLiteral("envy")},
+                                {QStringLiteral("path"), m_envRepo},
+                                {QStringLiteral("agent"), QStringLiteral("envy")}}}},
     };
     QFile f(m_tmp.path() + QStringLiteral("/config/x3ro-deck/config.json"));
     QVERIFY(f.open(QIODevice::WriteOnly));
@@ -75,10 +108,20 @@ void SessionFlowTest::cleanupTestCase()
     app.sessions()->killAll();
 }
 
-QString SessionFlowTest::readLog() const
+QString SessionFlowTest::readFile(const QString &path)
 {
-    QFile f(m_log);
+    QFile f(path);
     return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+}
+
+QString SessionFlowTest::paneText(const QString &session) const
+{
+    QProcess capture;
+    capture.start(QStringLiteral("tmux"),
+                  {QStringLiteral("-L"), QStringLiteral("x3ro-deck"), QStringLiteral("capture-pane"), QStringLiteral("-p"),
+                   QStringLiteral("-t"), QLatin1Char('=') + session + QLatin1Char(':')});
+    capture.waitForFinished(2000);
+    return QString::fromUtf8(capture.readAllStandardOutput());
 }
 
 void SessionFlowTest::sendHook(const QJsonObject &payload) const
@@ -149,6 +192,41 @@ void SessionFlowTest::startPermissionPromptRestartStop()
         app.sessions()->killAll();
         QVERIFY(!app.sessions()->hasSession(session));
     }
+}
+
+void SessionFlowTest::envAtSpawnAndProfileSwitch()
+{
+    AppController app;
+    app.start();
+    const QString session = app.checkout(1).session;
+    const QString expected = QDir::homePath() + QStringLiteral("/deck||$\n");
+
+    // The profile's env reaches the agent, expanded against the app's
+    // environment, and is never typed into the pane.
+    QVERIFY(app.ensureAgentSession(1));
+    QCOMPARE(app.profile(1).id, QStringLiteral("envy"));
+    QTRY_COMPARE_WITH_TIMEOUT(readFile(m_envLog), expected, 5000);
+    QVERIFY2(!paneText(session).contains(QStringLiteral("X3RO_TEST")), qPrintable(paneText(session)));
+    QTRY_VERIFY_WITH_TIMEOUT(app.checkout(1).agent.running, 10000);
+
+    // End the agent, switch the checkout to a profile without env and start
+    // it: the session is recreated, so the variable is gone.
+    app.select(1);
+    app.sessions()->sendKeys(session, {QStringLiteral("C-d")});
+    QTRY_VERIFY_WITH_TIMEOUT(!app.checkout(1).agent.running, 10000);
+    app.setAgentProfile(QStringLiteral("plain"));
+    QCOMPARE(app.profile(1).id, QStringLiteral("plain"));
+    app.agentAction(QStringLiteral("start"));
+    QTRY_COMPARE_WITH_TIMEOUT(readFile(m_envLog), expected + QStringLiteral("unset\n"), 5000);
+    QVERIFY(app.sessions()->sessionEnvironment(session).isEmpty());
+
+    // Starting the same profile again keeps the session.
+    app.sessions()->sendKeys(session, {QStringLiteral("C-d")});
+    QTRY_VERIFY_WITH_TIMEOUT(!app.checkout(1).agent.running, 10000);
+    app.sessions()->submit(session, QStringLiteral("export KEPT=1"));
+    app.agentAction(QStringLiteral("start"));
+    QTRY_COMPARE_WITH_TIMEOUT(readFile(m_envLog), expected + QStringLiteral("unset\nunset\n"), 5000);
+    QVERIFY(paneText(session).contains(QStringLiteral("export KEPT=1")));
 }
 
 QTEST_MAIN(SessionFlowTest)

@@ -166,21 +166,35 @@ QStringList withoutOverridden(const QStringList &base, const QStringList &extra)
 
 QString AgentProfile::launchLine(bool resume, const QString &extraArgs) const
 {
-    QStringList parts;
-    for (const auto &[name, value] : env) {
-        QString quoted = value;
-        quoted.replace(QLatin1Char('\\'), QStringLiteral("\\\\"))
-            .replace(QLatin1Char('"'), QStringLiteral("\\\""))
-            .replace(QLatin1Char('`'), QStringLiteral("\\`"));
-        parts.append(name + QStringLiteral("=\"") + quoted + QLatin1Char('"'));
-    }
     QStringList cmd = shellTokens(command);
     if (resume && !continueArgs.isEmpty()) {
         cmd += shellTokens(continueArgs);
     }
     const QStringList extra = shellTokens(extraArgs);
-    parts += withoutOverridden(cmd, extra) + extra;
-    return parts.join(QLatin1Char(' '));
+    return (withoutOverridden(cmd, extra) + extra).join(QLatin1Char(' '));
+}
+
+QMap<QString, QString> AgentProfile::sessionEnv(const QProcessEnvironment &from) const
+{
+    QMap<QString, QString> out;
+    for (const auto &[name, value] : env) {
+        out.insert(name, expandVariables(value, from));
+    }
+    return out;
+}
+
+QString expandVariables(const QString &value, const QProcessEnvironment &env)
+{
+    static const QRegularExpression var(QStringLiteral(R"(\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*)))"));
+    QString out;
+    qsizetype last = 0;
+    for (auto it = var.globalMatch(value); it.hasNext();) {
+        const QRegularExpressionMatch m = it.next();
+        out += value.mid(last, m.capturedStart() - last);
+        out += env.value(m.hasCaptured(1) ? m.captured(1) : m.captured(2));
+        last = m.capturedEnd();
+    }
+    return out + value.mid(last);
 }
 
 QJsonObject Config::kindDefaults(const QString &kind)

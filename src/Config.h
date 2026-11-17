@@ -2,7 +2,9 @@
 
 #include <QJsonObject>
 #include <QList>
+#include <QMap>
 #include <QPair>
+#include <QProcessEnvironment>
 #include <QString>
 #include <QStringList>
 
@@ -52,10 +54,16 @@ struct AgentProfile
     int submitDelayMs = 0;
 
     // The shell line that starts (or, with `resume`, continues) the agent.
-    // Env values are double-quoted, so `$VAR` expands from the shell.
     // `extraArgs` (a checkout's custom args) replace same-named flags in `command`.
     QString launchLine(bool resume, const QString &extraArgs = QString()) const;
+    // `env` with $VAR and ${VAR} expanded against `from`, for the session to
+    // start with. The values never pass through the session shell.
+    QMap<QString, QString> sessionEnv(const QProcessEnvironment &from = QProcessEnvironment::systemEnvironment()) const;
 };
+
+// Expands $VAR and ${VAR} in `value`; unset variables expand to nothing, and
+// a `$` not followed by a name stays as is.
+QString expandVariables(const QString &value, const QProcessEnvironment &env);
 
 struct Config
 {

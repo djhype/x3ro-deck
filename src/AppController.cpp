@@ -1039,8 +1039,9 @@ bool AppController::ensureAgentSession(int index)
         }
     }
     useProfile(index, c.cfg.agent);
-    return m_sessions->createSession(c.session, c.cfg.path,
-                                     m_config.autostartAgents ? profile(index).launchLine(false, c.cfg.args) : QString());
+    const AgentProfile &p = profile(index);
+    return m_sessions->createSession(c.session, c.cfg.path, m_config.autostartAgents ? p.launchLine(false, c.cfg.args) : QString(),
+                                     p.sessionEnv());
 }
 
 bool AppController::reloadConfig()
@@ -1095,9 +1096,16 @@ void AppController::agentAction(const QString &action)
             setAgentState(m_current, QStringLiteral("ready"));
         }
     } else if (action == QLatin1String("start") || action == QLatin1String("continue")) {
+        const AgentProfile &p = profile(m_current);
+        const SessionBackend::Environment env = p.sessionEnv();
+        // A session's environment is fixed when it starts, so another profile's
+        // env takes a fresh session. The attached terminal reattaches by itself.
+        if (!c.agent.running && m_sessions->hasSession(c.session) && m_sessions->sessionEnvironment(c.session) != env) {
+            m_sessions->killSession(c.session);
+        }
         // No autostart here: the line typed below starts the agent.
-        m_sessions->ensureSession(c.session, c.cfg.path, QString());
-        m_sessions->submit(c.session, profile(m_current).launchLine(action == QLatin1String("continue"), c.cfg.args));
+        m_sessions->ensureSession(c.session, c.cfg.path, QString(), env);
+        m_sessions->submit(c.session, p.launchLine(action == QLatin1String("continue"), c.cfg.args));
     }
     Q_EMIT focusAgentTerminal(m_current);
 }

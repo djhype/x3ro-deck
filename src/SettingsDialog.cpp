@@ -631,7 +631,9 @@ QWidget *SettingsDialog::buildAgentsPage()
     addField(m_agentFields, QStringLiteral("Resume arguments"), m_agentResume,
              hint(QStringLiteral("Added to the command by Continue; empty hides that button.")));
     addField(m_agentFields, QStringLiteral("Environment"), envBox,
-             hint(QStringLiteral("Set on the command line, so values can use $VARIABLES from the shell.")), true);
+             hint(QStringLiteral(
+                 "Set on the agent's session when it starts, never typed. $VAR and ${VAR} expand from X3RO Deck's own environment.")),
+             true);
     addField(m_agentFields, QStringLiteral("Prompt buttons"), m_agentPrompts,
              hint(QStringLiteral("One prompt per line. Each becomes a button that sends it to the agent.")), true);
     addField(m_agentFields, QStringLiteral("PR prompt"), m_agentPrPrompt,

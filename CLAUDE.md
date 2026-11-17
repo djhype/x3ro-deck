@@ -27,7 +27,8 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
 - `src/Config.{h,cpp}`: `~/.config/x3ro-deck/config.json`, written with defaults on first run. User keys override defaults at the top level.
   - `agents` is an ordered list of `AgentProfile`s. `kind` (`claude`, `codex` or `custom`) selects `kindDefaults`: command, resume args, process name, permission keys, prompt buttons and submit delay. Profile keys override them.
   - `custom` runs any CLI. It sends no hooks, so only the pane poll tracks it, and its `process` defaults to the command's first word.
-  - `env` makes a profile run its CLI against another backend. `launchLine` types it as `KEY="value"` prefixes, so `$VAR` expands in the session shell.
+  - `env` makes a profile run its CLI against another backend. `AgentProfile::sessionEnv` expands `$VAR`/`${VAR}` against the app's own environment (unset → empty), and the session backend sets the result when it creates the session (`tmux new-session -e`). It is never typed, so it stays out of the pane and shell history.
+  - A session's env is fixed at creation, and tmux records it in the session option `@x3ro-deck-env`. Start or Continue with a profile whose env differs kills the idle session and creates a fresh one; the attached terminal reattaches.
   - A checkout's `agent` key names the profile a fresh session starts; `defaultAgent` covers the rest.
 - `src/SettingsDialog.cpp`: the Settings dialog, a Widgets form over `config.json`. It edits the JSON itself, so keys without a field survive a save, and it leaves profile keys at their kind's defaults out of the file. `data/style.qss` styles it under `SettingsDialog` and `QMessageBox` selectors.
 - `src/MainWindow.cpp`: builds the widget layout with `QSplitter`s and one `QQuickWidget` per QML panel; all panels share one `QQmlEngine`.
