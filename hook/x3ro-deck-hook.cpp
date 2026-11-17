@@ -2,15 +2,16 @@
 //
 // Claude Code (~/.claude/settings.json) and Codex (~/.codex/hooks.json) both
 // run it with the same Claude-style JSON on stdin. It writes that JSON,
-// unchanged, to the x3ro-deck Unix socket ($XDG_RUNTIME_DIR/x3ro-deck.sock).
+// unchanged, to the x3ro-deck Unix socket (see common/x3ro-deck-socket.h).
 // One connection carries one event; closing the connection marks the end of
 // the payload.
 //
 // It always exits 0 and prints nothing, so either agent treats it as a no-op
 // hook whether or not x3ro-deck is running.
 
+#include <x3ro-deck-socket.h>
+
 #include <cerrno>
-#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -36,15 +37,14 @@ int main()
         return 0;
     }
 
-    const char *runtime = std::getenv("XDG_RUNTIME_DIR");
-    std::string path = runtime && *runtime ? std::string(runtime) : "/run/user/" + std::to_string(getuid());
-    path += "/x3ro-deck.sock";
-
-    sockaddr_un addr{};
-    addr.sun_family = AF_UNIX;
-    if (path.size() >= sizeof addr.sun_path) {
+    // An over-long path cannot be connected to; the app logs it.
+    const x3ro_deck::SocketPath sock = x3ro_deck::hookSocketPath();
+    if (sock.tooLong()) {
         return 0;
     }
+    const std::string &path = sock.path;
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
     std::memcpy(addr.sun_path, path.c_str(), path.size() + 1);
 
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);

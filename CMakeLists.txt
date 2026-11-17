@@ -38,6 +38,7 @@ add_library(x3ro-deck-core STATIC
     src/Config.cpp
     src/DockerClient.cpp
     src/AgentBus.cpp
+    common/x3ro-deck-socket.h
     src/SessionBackend.h
     src/TmuxManager.cpp
     src/GitWatcher.cpp
@@ -49,7 +50,7 @@ add_library(x3ro-deck-core STATIC
     src/SettingsDialog.cpp
 )
 x3ro_deck_set_warnings(x3ro-deck-core)
-target_include_directories(x3ro-deck-core PUBLIC src)
+target_include_directories(x3ro-deck-core PUBLIC src common)
 target_link_libraries(x3ro-deck-core PUBLIC
     Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
     KF6::Parts KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::StatusNotifierItem
@@ -64,6 +65,7 @@ target_link_libraries(x3ro-deck PRIVATE x3ro-deck-core)
 # dependency: it starts in about a millisecond and never blocks the agent.
 add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
 x3ro_deck_set_warnings(x3ro-deck-hook)
+target_include_directories(x3ro-deck-hook PRIVATE common)
 target_compile_options(x3ro-deck-hook PRIVATE $<IF:$<BOOL:${MSVC}>,/O2,-O2>)
 
 option(BUILD_TESTING "Build the tests" ON)

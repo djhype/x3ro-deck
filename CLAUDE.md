@@ -37,7 +37,8 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
 - `src/TerminalHost.cpp`: embeds Konsole via `konsolepart` (`KParts::PartLoader`), so terminals use the user's Konsole profile.
 - `src/SessionBackend.h`: the interface that keeps agent sessions alive outside the app (create, ensure, rename, send keys, submit, foreground-process poll, attach command, kill). AppController and MainWindow use only this interface; nothing outside the backend may call tmux.
 - `src/TmuxManager.cpp`: the tmux backend. Agents run on socket `-L x3ro-deck`, with config `~/.config/x3ro-deck/tmux.conf`. `ensureSession` only creates sessions that are missing, so agents survive app restarts. `submit` types text and presses Enter in one tmux call, or after a delay.
-- `src/AgentBus.cpp`: `QLocalServer` on `$XDG_RUNTIME_DIR/x3ro-deck.sock`. It reads one JSON hook payload per connection.
+- `src/AgentBus.cpp`: `QLocalServer` on the hook socket. It reads one JSON hook payload per connection.
+- `common/x3ro-deck-socket.h`: the socket path, shared with the hook and free of Qt. `$X3RO_DECK_SOCKET` overrides it. Otherwise it is `$XDG_RUNTIME_DIR/x3ro-deck.sock` on Linux and `$TMPDIR/x3ro-deck.sock` on macOS, or `/tmp/x3ro-deck-<uid>/x3ro-deck.sock` when those are unset or too long for `sun_path` (107 bytes on Linux, 103 on macOS).
 - `hook/x3ro-deck-hook.cpp`: plain C++ with no Qt. Claude Code runs it from `~/.claude/settings.json` and Codex from `~/.codex/hooks.json`; both send the same Claude-style JSON. It must always exit 0, print nothing and finish in milliseconds.
 - `src/DockerClient.cpp`: Docker Engine API over `/var/run/docker.sock` (HTTP/1.0 over `QLocalSocket`). It subscribes to `/events` and filters containers by the `com.docker.compose.project` label.
 - `src/GitWatcher.cpp`: watches `HEAD` and `logs/HEAD` with `QFileSystemWatcher`.
@@ -60,10 +61,10 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container. It checks form
   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1 \
     dbus-run-session -- ./build/x3ro-deck --tab agents --select 0 --screenshot out.png 9000
   ```
-- Simulate agents by piping hook JSON into `./build/x3ro-deck-hook` with the test instance's `XDG_RUNTIME_DIR`.
+- Simulate agents by piping hook JSON into `./build/x3ro-deck-hook` with the test instance's `XDG_RUNTIME_DIR` (or `X3RO_DECK_SOCKET`).
 - IMPORTANT: the user usually has the app running. When testing alongside it:
   - Use `dbus-run-session`. Without it, the test only activates the live window and exits.
-  - Point `XDG_RUNTIME_DIR` at a private 0700 directory with a short path, such as `/run/user/1000/xdt`. `AgentBus` removes an existing socket and would take the live app's hooks, and a socket path over 107 bytes fails to bind.
+  - Point `XDG_RUNTIME_DIR` at a private 0700 directory with a short path, such as `/run/user/1000/xdt`. `AgentBus` removes an existing socket and would take the live app's hooks. Setting `X3RO_DECK_SOCKET` on the test instance and the hook does the same for the socket alone.
   - Point `TMUX_TMPDIR` at the same directory. The test instance then runs its own `-L x3ro-deck` tmux server, which is safe to kill.
   - Point `XDG_CONFIG_HOME` at a temporary directory containing `{"autostartAgents": false}` in `x3ro-deck/config.json`, and set `GH_CONFIG_DIR=$HOME/.config/gh` so `gh` stays authenticated.
   - Without `TMUX_TMPDIR`, the test instance attaches to the live `-L x3ro-deck` tmux server. NEVER run `tmux kill-server` or `kill-session` against that server, or choose "Stop agents and quit" in a test instance attached to it, because its sessions hold the user's live agents.

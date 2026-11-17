@@ -3,9 +3,12 @@
 #include <QJsonDocument>
 #include <QLocalServer>
 #include <QLocalSocket>
-#include <QStandardPaths>
 
 #include <memory>
+
+#include <x3ro-deck-socket.h>
+
+#include <sys/stat.h>
 
 AgentBus::AgentBus(QObject *parent)
     : QObject(parent)
@@ -35,19 +38,37 @@ AgentBus::~AgentBus()
 
 QString AgentBus::socketPath()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + QStringLiteral("/x3ro-deck.sock");
+    return QString::fromStdString(x3ro_deck::hookSocketPath().path);
 }
 
 bool AgentBus::listen(QString *error)
 {
-    // A stale socket from a crashed instance would make listen() fail. The
-    // single-instance guard in main() guarantees no live instance owns it.
-    QLocalServer::removeServer(socketPath());
-    if (!m_server->listen(socketPath())) {
+    auto fail = [error](const QString &message) {
         if (error) {
-            *error = m_server->errorString();
+            *error = message;
         }
         return false;
+    };
+    const x3ro_deck::SocketPath sock = x3ro_deck::hookSocketPath();
+    if (sock.tooLong()) {
+        return fail(
+            QStringLiteral("socket path is %1 bytes, over the platform limit of %2").arg(sock.path.size()).arg(x3ro_deck::kMaxSocketPath));
+    }
+    if (!sock.privateDir.empty()) {
+        // /tmp is shared: a directory someone else made could hand them our hooks.
+        const char *dir = sock.privateDir.c_str();
+        mkdir(dir, 0700);
+        struct stat st{};
+        if (lstat(dir, &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != getuid() || (st.st_mode & 077) != 0) {
+            return fail(QStringLiteral("%1 is not a private directory owned by this user").arg(QString::fromStdString(sock.privateDir)));
+        }
+    }
+    // A stale socket from a crashed instance would make listen() fail. The
+    // single-instance guard in main() guarantees no live instance owns it.
+    const QString path = QString::fromStdString(sock.path);
+    QLocalServer::removeServer(path);
+    if (!m_server->listen(path)) {
+        return fail(m_server->errorString());
     }
     return true;
 }
