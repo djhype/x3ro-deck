@@ -1,5 +1,6 @@
 #include "TerminalSettings.h"
 
+#include "DconfTerminalSettings.h"
 #include "GpuTerminalSettings.h"
 #include "KonsoleSettings.h"
 
@@ -66,6 +67,10 @@ TerminalSettings::Sources TerminalSettings::builtinSources()
     sources.push_back(std::make_unique<KittySettings>());
     sources.push_back(std::make_unique<GhosttySettings>());
     sources.push_back(std::make_unique<AlacrittySettings>());
+    sources.push_back(std::make_unique<GnomeConsoleSettings>());
+    sources.push_back(std::make_unique<GnomeTerminalSettings>());
+    sources.push_back(std::make_unique<PtyxisSettings>());
+    sources.push_back(std::make_unique<MateTerminalSettings>());
     return sources;
 }
 

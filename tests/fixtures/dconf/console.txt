@@ -1,0 +1,4 @@
+[/]
+custom-font='Fira Mono 10'
+theme='day'
+use-system-font=false

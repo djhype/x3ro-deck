@@ -1,0 +1,12 @@
+[/]
+default-profile-uuid='5e1b7a1a7a3a4b1c9d1e2f3a4b5c6d7e'
+font-name='Cascadia Code 15'
+interface-style='light'
+profile-uuids=['5e1b7a1a7a3a4b1c9d1e2f3a4b5c6d7e']
+use-system-font=false
+
+[Profiles/5e1b7a1a7a3a4b1c9d1e2f3a4b5c6d7e]
+label='Work'
+limit-scrollback=true
+palette-id='dracula'
+scrollback-lines=uint32 2500

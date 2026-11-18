@@ -1,0 +1,20 @@
+[/]
+default='b1dcc9dd-5262-4d8d-a863-c897e6d979b9'
+list=['b1dcc9dd-5262-4d8d-a863-c897e6d979b9', '0a1b2c3d-0000-4000-8000-000000000001']
+
+[:0a1b2c3d-0000-4000-8000-000000000001]
+visible-name='Plain'
+
+[:b1dcc9dd-5262-4d8d-a863-c897e6d979b9]
+background-color='rgb(40,42,54)'
+bold-is-bright=true
+cursor-shape='ibeam'
+custom-command='tmux new -A'
+font='JetBrains Mono 13'
+foreground-color='#F8F8F2'
+palette=['rgb(33,34,44)', 'rgb(255,85,85)', 'rgb(80,250,123)', 'rgb(241,250,140)', 'rgb(189,147,249)', 'rgb(255,121,198)', 'rgb(139,233,253)', 'rgb(248,248,242)', 'rgb(98,114,164)', 'rgb(255,110,110)', 'rgb(105,255,148)', 'rgb(255,255,165)', 'rgb(214,172,255)', 'rgb(255,146,223)', 'rgb(164,255,255)', 'rgb(255,255,255)']
+scrollback-unlimited=true
+use-custom-command=true
+use-system-font=false
+use-theme-colors=false
+visible-name='Dracula'

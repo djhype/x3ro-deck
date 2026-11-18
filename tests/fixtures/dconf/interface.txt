@@ -1,0 +1,4 @@
+[/]
+color-scheme='prefer-dark'
+cursor-blink=false
+monospace-font-name='Source Code Pro Semi-Bold 11'
