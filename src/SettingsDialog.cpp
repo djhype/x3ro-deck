@@ -1231,30 +1231,29 @@ QWidget *SettingsDialog::buildGeneralPage()
     fillTerminalProfiles(m_root.value(QStringLiteral("terminalProfile")).toString().trimmed());
     connect(m_terminalSource, &QComboBox::currentIndexChanged, this, [this] { fillTerminalProfiles(QString()); });
 
-    const QList<AppTheme::Info> themes = AppTheme::available();
-    auto themeBox = [&themes](const QString &current) {
-        auto *box = new QComboBox;
-        box->setMinimumWidth(280);
-        for (const AppTheme::Info &t : themes) {
-            box->addItem(t.builtin ? t.name : QStringLiteral("%1 (%2.json)").arg(t.name, t.id), t.id);
-        }
-        const int at = box->findData(current);
-        if (at < 0 && !current.isEmpty()) {
-            box->addItem(QStringLiteral("%1 (missing)").arg(current), current);
-        }
-        box->setCurrentIndex(std::max(0, box->findData(current)));
-        return box;
-    };
-    m_theme = themeBox(m_root.value(QStringLiteral("theme")).toString(AppTheme::builtinDefault()));
-    m_theme->insertItem(0, QStringLiteral("System (follows light and dark mode)"), AppTheme::system());
-    if (m_root.value(QStringLiteral("theme")).toString() == AppTheme::system()) {
-        m_theme->setCurrentIndex(0);
+    for (QComboBox **box : {&m_theme, &m_themeLight, &m_themeDark}) {
+        *box = new QComboBox;
+        (*box)->setMinimumWidth(280);
     }
-    m_themeLight = themeBox(m_root.value(QStringLiteral("themeLight")).toString(AppTheme::builtinLight()));
-    m_themeDark = themeBox(m_root.value(QStringLiteral("themeDark")).toString(AppTheme::builtinDefault()));
+    fillThemes(m_root.value(QStringLiteral("theme")).toString(AppTheme::builtinDefault()),
+               m_root.value(QStringLiteral("themeLight")).toString(AppTheme::builtinLight()),
+               m_root.value(QStringLiteral("themeDark")).toString(AppTheme::builtinDefault()));
+    auto *editTheme = new QPushButton(QStringLiteral("Edit theme…"));
+    editTheme->setAutoDefault(false);
+    connect(editTheme, &QPushButton::clicked, this, [this] {
+        // System edits the theme it shows in dark mode.
+        const QString id = m_theme->currentData().toString();
+        Q_EMIT editThemeRequested(id == AppTheme::system() ? m_themeDark->currentData().toString() : id);
+    });
+    auto *themeRow = new QWidget;
+    auto *themeRowLayout = new QHBoxLayout(themeRow);
+    themeRowLayout->setContentsMargins(0, 0, 0, 0);
+    themeRowLayout->setSpacing(8);
+    themeRowLayout->addWidget(m_theme, 1);
+    themeRowLayout->addWidget(editTheme);
     auto *appearance = form();
     addField(
-        appearance, QStringLiteral("Theme"), m_theme,
+        appearance, QStringLiteral("Theme"), themeRow,
         hint(
             QStringLiteral("Changes show right away. Drop your own themes into %1 as JSON files.").arg(Paths::tilde(AppTheme::userDir()))));
     for (const auto &[text, box] : {std::pair{"Light mode", m_themeLight}, std::pair{"Dark mode", m_themeDark}}) {
@@ -1333,6 +1332,34 @@ QWidget *SettingsDialog::buildGeneralPage()
     aboutRow->addStretch();
     layout->addLayout(aboutRow);
     return page;
+}
+
+void SettingsDialog::fillThemes(const QString &theme, const QString &light, const QString &dark)
+{
+    const QList<AppTheme::Info> themes = AppTheme::available();
+    for (const auto &[box, current] : {std::pair{m_theme, theme}, std::pair{m_themeLight, light}, std::pair{m_themeDark, dark}}) {
+        const QSignalBlocker block(box);
+        box->clear();
+        if (box == m_theme) {
+            box->addItem(QStringLiteral("System (follows light and dark mode)"), AppTheme::system());
+        }
+        for (const AppTheme::Info &t : themes) {
+            box->addItem(t.builtin ? t.name : QStringLiteral("%1 (%2.json)").arg(t.name, t.id), t.id);
+        }
+        if (box->findData(current) < 0 && !current.isEmpty()) {
+            box->addItem(QStringLiteral("%1 (missing)").arg(current), current);
+        }
+        box->setCurrentIndex(std::max(0, box->findData(current)));
+    }
+}
+
+void SettingsDialog::themesChanged(const QString &select)
+{
+    const bool system = m_theme->currentData() == AppTheme::system();
+    // A theme saved from System's dark-mode slot goes back into that slot.
+    fillThemes(system ? AppTheme::system() : select, m_themeLight->currentData().toString(),
+               system ? select : m_themeDark->currentData().toString());
+    previewTheme();
 }
 
 void SettingsDialog::previewTheme()

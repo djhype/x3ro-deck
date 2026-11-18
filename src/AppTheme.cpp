@@ -194,6 +194,69 @@ bool AppTheme::apply(const QByteArray &json, QString *error)
     return true;
 }
 
+bool AppTheme::preview(const QJsonObject &theme, QString *error)
+{
+    AppTheme next;
+    if (!next.apply(QJsonDocument(theme).toJson(), error)) {
+        return false;
+    }
+    m_name = next.m_name;
+    m_colors = next.m_colors;
+    m_checkoutColors = next.m_checkoutColors;
+    m_fonts = next.m_fonts;
+    Q_EMIT changed();
+    return true;
+}
+
+QJsonObject AppTheme::toJson() const
+{
+    return QJsonObject{{QStringLiteral("name"), m_name},
+                       {QStringLiteral("colors"), QJsonObject::fromVariantMap(m_colors)},
+                       {QStringLiteral("checkoutColors"), QJsonArray::fromStringList(m_checkoutColors)},
+                       {QStringLiteral("fonts"), QJsonObject::fromVariantMap(m_fonts)}};
+}
+
+bool AppTheme::isBuiltin(const QString &id)
+{
+    return QFile::exists(builtinPath(id));
+}
+
+QString AppTheme::idFor(const QString &name, const QString &keep)
+{
+    QString base;
+    for (const QChar c : name.toLower()) {
+        if (c.isLetterOrNumber()) {
+            base += c;
+        } else if (!base.isEmpty() && !base.endsWith(QLatin1Char('-'))) {
+            base += QLatin1Char('-');
+        }
+    }
+    while (base.endsWith(QLatin1Char('-'))) {
+        base.chop(1);
+    }
+    if (base.isEmpty()) {
+        base = QStringLiteral("theme");
+    }
+    QString id = base;
+    for (int n = 2; id != keep && (isBuiltin(id) || QFile::exists(userDir() + QLatin1Char('/') + id + QStringLiteral(".json"))); ++n) {
+        id = QStringLiteral("%1-%2").arg(base).arg(n);
+    }
+    return id;
+}
+
+bool AppTheme::save(const QString &id, const QJsonObject &theme, QString *error)
+{
+    QDir().mkpath(userDir());
+    QSaveFile f(userDir() + QLatin1Char('/') + id + QStringLiteral(".json"));
+    if (f.open(QIODevice::WriteOnly) && f.write(QJsonDocument(theme).toJson(QJsonDocument::Indented)) >= 0 && f.commit()) {
+        return true;
+    }
+    if (error) {
+        *error = f.errorString();
+    }
+    return false;
+}
+
 QColor AppTheme::color(const QString &token) const
 {
     return QColor::fromString(m_colors.value(token).toString());

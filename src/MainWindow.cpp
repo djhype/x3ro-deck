@@ -9,6 +9,7 @@
 #include "TerminalHost.h"
 #include "TerminalProfile.h"
 #include "TerminalSettings.h"
+#include "ThemeEditor.h"
 #include "TrayIcon.h"
 #include "WindowActivation.h"
 
@@ -379,8 +380,26 @@ void MainWindow::openSettings(const QString &page)
     // The theme picker previews live; Cancel puts the saved theme back.
     connect(dialog, &SettingsDialog::themePreview, m_theme, &AppTheme::select);
     connect(dialog, &QDialog::rejected, this, &MainWindow::selectTheme);
+    connect(dialog, &SettingsDialog::editThemeRequested, this, &MainWindow::editTheme);
     m_settings = dialog;
     dialog->open();
+}
+
+void MainWindow::editTheme(const QString &id)
+{
+    if (!m_settings) {
+        openSettings(QStringLiteral("general"));
+    }
+    SettingsDialog *settings = m_settings;
+    if (!settings) {
+        return;
+    }
+    auto *editor = new ThemeEditor(m_theme, id.isEmpty() ? m_app->config().theme : id, settings);
+    editor->setAttribute(Qt::WA_DeleteOnClose);
+    connect(editor, &ThemeEditor::saved, settings, &SettingsDialog::themesChanged);
+    // Cancel: back to what the picker shows.
+    connect(editor, &QDialog::rejected, settings, &SettingsDialog::previewTheme);
+    editor->open();
 }
 
 void MainWindow::selectTheme()

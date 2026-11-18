@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QJsonObject>
 #include <QObject>
 #include <QStringList>
 #include <QVariantMap>
@@ -49,6 +50,18 @@ public:
     void setSystemDark(bool dark);
     // Overlays a theme document onto the current values.
     bool apply(const QByteArray &json, QString *error = nullptr);
+    // Shows `theme` (overlaid on the default) without saving it: the theme
+    // editor's live preview.
+    bool preview(const QJsonObject &theme, QString *error = nullptr);
+    // The current values as a complete theme document.
+    QJsonObject toJson() const;
+
+    static bool isBuiltin(const QString &id);
+    // A file name for a theme called `name`: lowercase, dashes, no clashes
+    // with files in userDir() or built-ins other than `keep`.
+    static QString idFor(const QString &name, const QString &keep = QString());
+    // Writes `theme` to userDir()/<id>.json.
+    static bool save(const QString &id, const QJsonObject &theme, QString *error = nullptr);
 
     QString name() const { return m_name; }
     QVariantMap colors() const { return m_colors; }

@@ -118,6 +118,7 @@ add_library(x3ro-deck-base STATIC
     src/AppTheme.cpp
     src/DeckDialog.h
     src/AboutDialog.cpp
+    src/ThemeEditor.cpp
     src/SingleInstance.cpp
     src/TrayIcon.cpp
     src/Notifier.h

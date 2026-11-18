@@ -41,8 +41,13 @@ Q_SIGNALS:
     void aboutRequested();
     // The theme picker changed; the window shows it until Save or Cancel.
     void themePreview(const QString &id, const QString &light, const QString &dark);
+    void editThemeRequested(const QString &id);
 
 public:
+    // Lists the themes again after the editor saved one, and picks `select`.
+    void themesChanged(const QString &select);
+    // Emits themePreview for the current picks (after the editor's own preview).
+    void previewTheme();
     void reject() override;
 
 private:
@@ -147,7 +152,7 @@ private:
     QComboBox *m_themeLight;
     QComboBox *m_themeDark;
     QList<QWidget *> m_themeSystemRows; // the light and dark rows, shown for System
-    void previewTheme();
+    void fillThemes(const QString &theme, const QString &light, const QString &dark);
     QListWidget *m_composeFiles;
     QLabel *m_composeFilesEmpty;
     QLineEdit *m_composeProfiles;

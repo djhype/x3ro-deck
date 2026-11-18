@@ -71,6 +71,9 @@ int main(int argc, char *argv[])
         if (const qsizetype settings = args.indexOf(QStringLiteral("--settings")); settings >= 0) {
             window.openSettings(settings + 1 < args.size() ? args.at(settings + 1) : QString());
         }
+        if (const qsizetype edit = args.indexOf(QStringLiteral("--edit-theme")); edit >= 0) {
+            window.editTheme(edit + 1 < args.size() && !args.at(edit + 1).startsWith(QLatin1Char('-')) ? args.at(edit + 1) : QString());
+        }
         if (args.contains(QStringLiteral("--about"))) {
             window.openAbout();
         }

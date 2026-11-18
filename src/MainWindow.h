@@ -34,6 +34,8 @@ public:
     void reveal(const QString &token = QString());
     // checkouts | agents | docker | general; empty opens the first page.
     void openSettings(const QString &page);
+    // The theme editor over Settings → General; empty edits the configured theme.
+    void editTheme(const QString &id);
     void openAbout();
     // Set when the app quit to start again; main() relaunches it.
     bool restartRequested() const { return m_restart; }
