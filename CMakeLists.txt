@@ -152,6 +152,8 @@ add_library(x3ro-deck-base STATIC
     src/SettingsDialog.cpp
     src/TerminalChannel.h
     $<IF:$<BOOL:${WIN32}>,src/PtyChannelNone.cpp,src/PtyChannel.cpp>
+    # Listed so AUTOMOC finds it when PtyChannel.cpp is left out.
+    src/PtyChannel.h
     src/SessiondChannel.cpp
     src/TerminalAppearance.cpp
     src/SessionShell.cpp
