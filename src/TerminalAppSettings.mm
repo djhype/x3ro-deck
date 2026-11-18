@@ -68,9 +68,10 @@ QList<TerminalSettingsSource::ProfileRef> TerminalAppSettings::profiles() const
     return out;
 }
 
+// Inside these members `id` is the source's id(); `::id` is Objective-C's type.
 QString TerminalAppSettings::defaultProfile() const
 {
-    id name = preferences()[@"Default Window Settings"];
+    ::id name = preferences()[@"Default Window Settings"];
     return [name isKindOfClass:[NSString class]] ? QString::fromNSString(name) : QStringLiteral("Basic");
 }
 
@@ -87,7 +88,7 @@ std::optional<TerminalProfile> TerminalAppSettings::load(const QString &profile)
     TerminalAppearance &a = p.appearance;
     a = TerminalAppearance::fallback();
     a.font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    if (id fontData = settings[@"Font"]; [fontData isKindOfClass:[NSData class]]) {
+    if (::id fontData = settings[@"Font"]; [fontData isKindOfClass:[NSData class]]) {
         NSError *error = nil;
         NSFont *font = [NSKeyedUnarchiver unarchivedObjectOfClass:[NSFont class] fromData:fontData error:&error];
         if (font) {
@@ -114,7 +115,7 @@ std::optional<TerminalProfile> TerminalAppSettings::load(const QString &profile)
     } else if (settings[@"ScrollbackLines"]) {
         p.scrollback = std::max(0, [settings[@"ScrollbackLines"] intValue]);
     }
-    if (id command = settings[@"CommandString"]; [command isKindOfClass:[NSString class]] && [settings[@"RunCommandAsShell"] boolValue]) {
+    if (::id command = settings[@"CommandString"]; [command isKindOfClass:[NSString class]] && [settings[@"RunCommandAsShell"] boolValue]) {
         const QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
         for (const QString &arg : QProcess::splitCommand(QString::fromNSString(command))) {
             p.shell.append(expandVariables(arg, env));
