@@ -8,8 +8,7 @@
 #include "TerminalProfile.h"
 #include "TerminalSettings.h"
 #include "TrayIcon.h"
-
-#include <KWindowSystem>
+#include "WindowActivation.h"
 
 #include <QAction>
 #include <QApplication>
@@ -168,6 +167,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
         }
     });
     m_notifier = Notifier::create(this);
+    connect(m_notifier, &Notifier::activationToken, this, [this](const QString &, const QString &token) { m_notificationToken = token; });
     connect(m_notifier, &Notifier::actionInvoked, this, &MainWindow::onNotificationAction);
     connect(m_app, &AppController::attentionRaised, this, &MainWindow::notify);
     connect(m_app, &AppController::railVisibleChanged, this, [this] { m_rail->setVisible(m_app->railVisible()); });
@@ -240,9 +240,9 @@ void MainWindow::buildShortcuts()
 
     m_hotkeys = GlobalHotkey::create(this);
     m_hotkeys->add(QStringLiteral("toggle-window"), QStringLiteral("Show/hide X3RO Deck"), toggle);
-    connect(m_hotkeys, &GlobalHotkey::activated, this, [this](const QString &id, const QString &) {
+    connect(m_hotkeys, &GlobalHotkey::activated, this, [this](const QString &id, const QString &token) {
         if (id == QLatin1String("toggle-window")) {
-            toggleVisible();
+            toggleVisible(token);
         }
     });
     m_hotkeys->start();
@@ -358,12 +358,12 @@ void MainWindow::applySettings(const QJsonObject &config)
     }
 }
 
-void MainWindow::toggleVisible()
+void MainWindow::toggleVisible(const QString &token)
 {
     if (isVisible() && isActiveWindow()) {
         hide();
     } else {
-        reveal();
+        reveal(token);
     }
 }
 
@@ -385,15 +385,9 @@ void MainWindow::changeEvent(QEvent *event)
     }
 }
 
-void MainWindow::reveal()
+void MainWindow::reveal(const QString &token)
 {
-    setWindowState(windowState() & ~Qt::WindowMinimized);
-    show();
-    raise();
-    activateWindow();
-    if (windowHandle()) {
-        KWindowSystem::activateWindow(windowHandle());
-    }
+    WindowActivation::activate(this, token);
 }
 
 void MainWindow::saveLayout()
@@ -620,8 +614,9 @@ void MainWindow::notify(const QVariantMap &item)
 
 void MainWindow::onNotificationAction(const QString &id, const QString &key)
 {
+    const QString token = std::exchange(m_notificationToken, QString());
     if (key == Notifier::defaultAction()) {
-        reveal();
+        reveal(token);
         m_app->attentionAction(id, QStringLiteral("open"));
     } else if (key == QLatin1String("allow") || key == QLatin1String("deny")) {
         m_app->attentionAction(id, key);

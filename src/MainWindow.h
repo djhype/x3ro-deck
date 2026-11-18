@@ -24,11 +24,12 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(AppController *app, QWidget *parent = nullptr);
 
-    void toggleVisible();
+    // `token` proves a user asked (see WindowActivation); may be empty.
+    void toggleVisible(const QString &token = QString());
     // A tray click deactivates the window before it arrives, so a window
     // that was active just before counts as active.
     void toggleFromTray();
-    void reveal();
+    void reveal(const QString &token = QString());
     // checkouts | agents | docker | general; empty opens the first page.
     void openSettings(const QString &page);
     // Set when the app quit to start again; main() relaunches it.
@@ -72,6 +73,8 @@ private:
     TrayIcon *m_tray = nullptr;
     Notifier *m_notifier = nullptr;
     GlobalHotkey *m_hotkeys = nullptr;
+    // From the notification whose action comes next.
+    QString m_notificationToken;
     QPointer<SettingsDialog> m_settings;
     bool m_quitting = false;
     bool m_confirmingQuit = false;

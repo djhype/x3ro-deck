@@ -71,8 +71,13 @@ target_link_libraries(x3ro-deck-attach PRIVATE x3ro-deck-sessionproto)
 # Desktop integration backends, one set per OS.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(Qt6 6.4 REQUIRED COMPONENTS DBus)
+    # X11 window activation; Wayland needs nothing beyond Qt.
+    pkg_check_modules(xcb IMPORTED_TARGET xcb)
     set(X3RO_DECK_DESKTOP_PLATFORM src/FreedesktopNotifier.cpp src/PortalGlobalHotkey.cpp)
     set(X3RO_DECK_DESKTOP_LIBS Qt6::DBus)
+    if(xcb_FOUND)
+        list(APPEND X3RO_DECK_DESKTOP_LIBS PkgConfig::xcb)
+    endif()
 else()
     set(X3RO_DECK_DESKTOP_PLATFORM src/NotifierNone.cpp src/GlobalHotkeyNone.cpp)
     set(X3RO_DECK_DESKTOP_LIBS)
@@ -105,6 +110,7 @@ add_library(x3ro-deck-base STATIC
     src/TrayIcon.cpp
     src/Notifier.h
     src/GlobalHotkey.h
+    src/WindowActivation.cpp
     ${X3RO_DECK_DESKTOP_PLATFORM}
     src/TerminalProfile.cpp
     src/TerminalSettingsSource.cpp
@@ -116,10 +122,10 @@ add_library(x3ro-deck-base STATIC
 x3ro_deck_set_warnings(x3ro-deck-base)
 target_include_directories(x3ro-deck-base PUBLIC src common)
 target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util ${X3RO_DECK_DESKTOP_LIBS})
+target_compile_definitions(x3ro-deck-base PRIVATE X3RO_DECK_HAVE_XCB=$<BOOL:${xcb_FOUND}>)
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)
-    find_package(KF6WindowSystem REQUIRED)
 
     add_executable(x3ro-deck
         src/main.cpp
@@ -131,7 +137,6 @@ if(NOT X3RO_DECK_CORE_ONLY)
     target_link_libraries(x3ro-deck PRIVATE
         x3ro-deck-base
         Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
-        KF6::WindowSystem
     )
 endif()
 

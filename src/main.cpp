@@ -53,7 +53,8 @@ int main(int argc, char *argv[])
     {
         AppController controller;
         MainWindow window(&controller);
-        QObject::connect(&instance, &SingleInstance::activateRequested, &window, [&window] { window.reveal(); });
+        QObject::connect(&instance, &SingleInstance::activateRequested, &window,
+                         [&window](const QStringList &, const QString &token) { window.reveal(token); });
 
         controller.start();
         window.show();

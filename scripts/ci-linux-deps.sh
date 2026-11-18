@@ -6,5 +6,4 @@ set -euo pipefail
 pacman -Syu --noconfirm --needed \
     base-devel git cmake ninja clang \
     qt6-base qt6-declarative \
-    kwindowsystem \
     tmux libvterm dbus ttf-dejavu
