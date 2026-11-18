@@ -1,7 +1,7 @@
 #pragma once
 
 // The hook socket's path, shared by the app (AgentBus) and x3ro-deck-hook,
-// and the session daemon's (x3ro-deck-sessiond). Plain C++ and libc only,
+// the session daemon's (x3ro-deck-sessiond) and the app's single-instance one. Plain C++ and libc only,
 // because the hook links nothing else.
 //
 // Resolution:
@@ -76,6 +76,13 @@ inline SocketPath hookSocketPath()
 inline SocketPath sessiondSocketPath()
 {
     return socketPathFor("X3RO_DECK_SESSIOND_SOCKET", "x3ro-deck-sessiond.sock");
+}
+
+// The running app's single-instance socket (SingleInstance), with
+// $X3RO_DECK_INSTANCE_SOCKET as its override.
+inline SocketPath instanceSocketPath()
+{
+    return socketPathFor("X3RO_DECK_INSTANCE_SOCKET", "x3ro-deck-instance.sock");
 }
 
 } // namespace x3ro_deck

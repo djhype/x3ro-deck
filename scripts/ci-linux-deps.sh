@@ -6,5 +6,5 @@ set -euo pipefail
 pacman -Syu --noconfirm --needed \
     base-devel git cmake ninja clang \
     qt6-base qt6-declarative \
-    knotifications kstatusnotifieritem kglobalaccel kdbusaddons kwindowsystem \
+    knotifications kstatusnotifieritem kglobalaccel kwindowsystem \
     tmux libvterm dbus ttf-dejavu

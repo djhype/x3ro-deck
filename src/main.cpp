@@ -1,12 +1,13 @@
 #include "AppController.h"
 #include "AttachClient.h"
 #include "MainWindow.h"
-
-#include <KDBusService>
+#include "SingleInstance.h"
 
 #include <QApplication>
 #include <QProcess>
 #include <QTimer>
+
+#include <cstdio>
 
 int main(int argc, char *argv[])
 {
@@ -15,6 +16,9 @@ int main(int argc, char *argv[])
     if (argc > 1 && qstrcmp(argv[1], "attach") == 0) {
         return runAttach(argc - 1, argv + 1);
     }
+
+    // Qt's platform plugins consume these while the application starts.
+    const QString token = qEnvironmentVariable("XDG_ACTIVATION_TOKEN", qEnvironmentVariable("DESKTOP_STARTUP_ID"));
 
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("x3ro-deck"));
@@ -30,14 +34,26 @@ int main(int argc, char *argv[])
     const QString executable = QApplication::applicationFilePath();
 
     // A second launch raises the running window instead of starting another.
-    KDBusService service(KDBusService::Unique);
+    // The activation token lets the compositor hand focus to that window.
+    SingleInstance instance;
+    QString instanceError;
+    switch (instance.claim(QApplication::arguments().mid(1), token, &instanceError)) {
+    case SingleInstance::Result::Forwarded:
+        return 0;
+    case SingleInstance::Result::Failed:
+        // Running unguarded beats not running at all.
+        std::fprintf(stderr, "x3ro-deck: single-instance check failed: %s\n", qPrintable(instanceError));
+        break;
+    case SingleInstance::Result::Primary:
+        break;
+    }
 
     int exitCode = 0;
     bool restart = false;
     {
         AppController controller;
         MainWindow window(&controller);
-        QObject::connect(&service, &KDBusService::activateRequested, &window, [&window] { window.reveal(); });
+        QObject::connect(&instance, &SingleInstance::activateRequested, &window, [&window] { window.reveal(); });
 
         controller.start();
         window.show();
@@ -67,10 +83,10 @@ int main(int argc, char *argv[])
         exitCode = app.exec();
         restart = window.restartRequested();
     }
-    // The hook socket closed with the controller; with the D-Bus name released
-    // too, the new instance gets both.
+    // The hook socket closed with the controller; with the instance lock
+    // released too, the new instance gets both.
     if (restart) {
-        service.unregister();
+        instance.release();
         QProcess::startDetached(executable, {});
     }
     return exitCode;

@@ -91,6 +91,7 @@ add_library(x3ro-deck-base STATIC
     src/SessiondChannel.cpp
     src/TerminalAppearance.cpp
     src/SessionShell.cpp
+    src/SingleInstance.cpp
     src/TerminalProfile.cpp
     src/TerminalSettingsSource.cpp
     src/TerminalSettings.cpp
@@ -107,7 +108,6 @@ if(NOT X3RO_DECK_CORE_ONLY)
     find_package(KF6Notifications REQUIRED)
     find_package(KF6StatusNotifierItem 6.5 REQUIRED) # quitRequested/abortQuit
     find_package(KF6GlobalAccel REQUIRED)
-    find_package(KF6DBusAddons REQUIRED)
     find_package(KF6WindowSystem REQUIRED)
 
     add_executable(x3ro-deck
@@ -121,7 +121,7 @@ if(NOT X3RO_DECK_CORE_ONLY)
         x3ro-deck-base
         Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
         KF6::Notifications KF6::StatusNotifierItem
-        KF6::GlobalAccel KF6::DBusAddons KF6::WindowSystem
+        KF6::GlobalAccel KF6::WindowSystem
     )
 endif()
 
