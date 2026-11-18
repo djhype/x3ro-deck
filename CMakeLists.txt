@@ -181,6 +181,7 @@ add_library(x3ro-deck-base STATIC
     src/DconfTerminalSettings.cpp
     src/DesktopTerminalSettings.cpp
     src/ITerm2Settings.cpp
+    src/WindowsTerminalSettings.cpp
     src/TerminalScreen.cpp
     src/TerminalView.cpp
 )

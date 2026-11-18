@@ -5,6 +5,7 @@
 #include "GpuTerminalSettings.h"
 #include "KonsoleSettings.h"
 #include "MacTerminalSettings.h"
+#include "WindowsTerminalSettings.h"
 
 #include <QDir>
 #include <QFile>
@@ -65,6 +66,12 @@ QStringList preferredTerminals(const QString &configDir)
 TerminalSettings::Sources TerminalSettings::builtinSources()
 {
     Sources sources;
+#if defined(Q_OS_WIN)
+    // Windows Terminal is the default terminal app on Windows 11.
+    sources.push_back(std::make_unique<WindowsTerminalSettings>());
+    sources.push_back(std::make_unique<WindowsTerminalSettings>(true));
+    sources.push_back(std::make_unique<ConsoleHostSettings>());
+#endif
 #if defined(Q_OS_MACOS)
     // The first detected source is the default where no desktop names one.
     sources.push_back(std::make_unique<ITerm2Settings>());

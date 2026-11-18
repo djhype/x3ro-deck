@@ -19,10 +19,10 @@ UINT virtualKey(Qt::Key key)
     if (key >= Qt::Key_F1 && key <= Qt::Key_F24) {
         return UINT(VK_F1 + (key - Qt::Key_F1));
     }
-    static const QHash<int, UINT> keys{{Qt::Key_Space, VK_SPACE}, {Qt::Key_Return, VK_RETURN}, {Qt::Key_Escape, VK_ESCAPE},
-                                       {Qt::Key_Tab, VK_TAB},     {Qt::Key_Left, VK_LEFT},     {Qt::Key_Right, VK_RIGHT},
-                                       {Qt::Key_Up, VK_UP},       {Qt::Key_Down, VK_DOWN},     {Qt::Key_PageUp, VK_PRIOR},
-                                       {Qt::Key_PageDown, VK_NEXT}, {Qt::Key_Home, VK_HOME},   {Qt::Key_End, VK_END}};
+    static const QHash<int, UINT> keys{{Qt::Key_Space, VK_SPACE},   {Qt::Key_Return, VK_RETURN}, {Qt::Key_Escape, VK_ESCAPE},
+                                       {Qt::Key_Tab, VK_TAB},       {Qt::Key_Left, VK_LEFT},     {Qt::Key_Right, VK_RIGHT},
+                                       {Qt::Key_Up, VK_UP},         {Qt::Key_Down, VK_DOWN},     {Qt::Key_PageUp, VK_PRIOR},
+                                       {Qt::Key_PageDown, VK_NEXT}, {Qt::Key_Home, VK_HOME},     {Qt::Key_End, VK_END}};
     return keys.value(key, 0);
 }
 
@@ -76,8 +76,8 @@ public:
             if (RegisterHotKey(nullptr, next, modifiers(combo.keyboardModifiers()), vk)) {
                 m_ids.insert(next, h.id);
             } else {
-                qWarning("x3ro-deck: another app holds %s (error %lu); the system-wide shortcut is off",
-                         qPrintable(h.sequence.toString()), GetLastError());
+                qWarning("x3ro-deck: another app holds %s (error %lu); the system-wide shortcut is off", qPrintable(h.sequence.toString()),
+                         GetLastError());
             }
             ++next;
         }

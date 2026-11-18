@@ -98,7 +98,8 @@ public:
             m_notifier = winrt::Windows::UI::Notifications::ToastNotificationManager::CreateToastNotifier(kAumid);
             m_usable = true;
         } catch (const winrt::hresult_error &e) {
-            qWarning("x3ro-deck: toasts unavailable (%s); showing plain tray messages", qPrintable(QString::fromWCharArray(e.message().c_str())));
+            qWarning("x3ro-deck: toasts unavailable (%s); showing plain tray messages",
+                     qPrintable(QString::fromWCharArray(e.message().c_str())));
         }
     }
 
@@ -109,10 +110,12 @@ public:
         if (!m_usable) {
             return;
         }
-        QString xml = QStringLiteral("<toast launch=\"%1\"%2><visual><binding template=\"ToastGeneric\"><text>%3</text><text>%4</text></binding></visual>")
-                          .arg(arguments(tag, defaultAction()),
-                               n.urgency == Urgency::Critical ? QStringLiteral(" scenario=\"reminder\"") : QString(), escapeXml(n.title),
-                               escapeXml(n.body));
+        QString xml
+            = QStringLiteral(
+                  "<toast launch=\"%1\"%2><visual><binding template=\"ToastGeneric\"><text>%3</text><text>%4</text></binding></visual>")
+                  .arg(arguments(tag, defaultAction()),
+                       n.urgency == Urgency::Critical ? QStringLiteral(" scenario=\"reminder\"") : QString(), escapeXml(n.title),
+                       escapeXml(n.body));
         if (!n.actions.isEmpty()) {
             xml += QStringLiteral("<actions>");
             for (const Action &a : n.actions) {
@@ -134,18 +137,24 @@ public:
                 const QUrlQuery q(QString::fromWCharArray(activated.Arguments().c_str()));
                 const QString tag = q.queryItemValue(QStringLiteral("tag"), QUrl::FullyDecoded);
                 const QString action = q.queryItemValue(QStringLiteral("action"), QUrl::FullyDecoded);
-                QMetaObject::invokeMethod(qApp, [self, tag, action] {
-                    if (self) {
-                        Q_EMIT self->actionInvoked(tag, action);
-                    }
-                }, Qt::QueuedConnection);
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [self, tag, action] {
+                        if (self) {
+                            Q_EMIT self->actionInvoked(tag, action);
+                        }
+                    },
+                    Qt::QueuedConnection);
             });
             toast.Dismissed([self, tag](const auto &, const auto &) {
-                QMetaObject::invokeMethod(qApp, [self, tag] {
-                    if (self) {
-                        Q_EMIT self->closed(tag);
-                    }
-                }, Qt::QueuedConnection);
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [self, tag] {
+                        if (self) {
+                            Q_EMIT self->closed(tag);
+                        }
+                    },
+                    Qt::QueuedConnection);
             });
             m_notifier.Show(toast);
         } catch (const winrt::hresult_error &e) {

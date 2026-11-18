@@ -1,0 +1,37 @@
+// Windows Terminal settings fixture
+{
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+    "defaultProfile": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+    "profiles": {
+        "defaults": {
+            "font": { "face": "CaskaydiaCove Nerd Font", "size": 11 },
+            "cursorShape": "filledBox", // block cursors everywhere
+        },
+        "list": [
+            {
+                "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+                "name": "Windows PowerShell",
+                "commandline": "powershell.exe -NoLogo",
+                "colorScheme": "One Half Dark",
+                "historySize": 12000
+            },
+            {
+                "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+                "name": "Command Prompt",
+                "commandline": "cmd.exe",
+                "background": "#202020"
+            },
+            { "guid": "{b453ae62-4e3d-5e58-b989-0a998ec441b8}", "name": "Azure Cloud Shell", "hidden": true },
+        ]
+    },
+    "schemes": [
+        {
+            "name": "One Half Dark",
+            "foreground": "#DCDFE4",
+            "background": "#282C34",
+            "cursorColor": "#FFFFFF",
+            "red": "#E06C75",
+            "brightWhite": "#DCDFE4"
+        },
+    ]
+}
