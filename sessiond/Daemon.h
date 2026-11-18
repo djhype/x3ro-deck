@@ -12,11 +12,15 @@
 #include <functional>
 #include <memory>
 
+#if !defined(Q_OS_WIN)
 #include <sys/types.h>
+#endif
 
 class QLocalServer;
 class QLocalSocket;
 class QSocketNotifier;
+class QThread;
+class QWinEventNotifier;
 class SessionScreen;
 
 // x3ro-deck-sessiond: owns agent PTYs so agents outlive the GUI. Clients speak
@@ -43,8 +47,18 @@ private:
         QString cwd;
         QJsonObject env;
         QJsonArray shell;
-        pid_t pid = -1;
-        int fd = -1;
+        qint64 pid = -1;
+        int fd = -1; // the PTY master; -1 on Windows
+#if defined(Q_OS_WIN)
+        // ConPTY: the pseudo console, our ends of its pipes, the process, a
+        // thread blocking on its output, and a notifier for its exit.
+        void *console = nullptr;
+        void *input = nullptr;
+        void *output = nullptr;
+        void *process = nullptr;
+        QThread *readerThread = nullptr;
+        QWinEventNotifier *exitNotifier = nullptr;
+#endif
         int cols = 0;
         int rows = 0;
         QSocketNotifier *reader = nullptr;
@@ -67,6 +81,10 @@ private:
     Session *find(const QJsonObject &req) const;
     // Returns the number of bytes read; 0 at EOF or when nothing was ready.
     qsizetype readPty(Session *s);
+    // Hands PTY output to the screen and to attached clients.
+    void deliver(Session *s, const QByteArray &chunk);
+    // Starts the session's process; fills pid and the PTY fields.
+    bool spawn(Session *s, const QString &program, const QStringList &args, const QStringList &env, bool login, QString *error);
     void writePty(Session *s, const QByteArray &bytes);
     void flushPty(Session *s);
     void resize(Session *s, int cols, int rows);
@@ -84,8 +102,13 @@ private:
     quint32 m_nextId = 1;
     QSocketNotifier *m_childNotifier = nullptr;
     int m_lockFd = -1;
+#if defined(Q_OS_WIN)
+    class QLockFile *m_lock = nullptr;
+#endif
     QTimer m_idle;
     QElapsedTimer m_idleFor;
+#if !defined(Q_OS_WIN)
     ino_t m_socketInode = 0;
+#endif
     bool m_shuttingDown = false;
 };

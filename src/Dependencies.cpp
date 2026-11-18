@@ -125,7 +125,7 @@ void Dependencies::setConfig(const Config &config)
                      QStringLiteral("x3ro-deck-sessiond"),
                      QStringLiteral("Agent sessions"),
 #if defined(Q_OS_WIN)
-                     QStringLiteral("Agent sessions on Windows run in x3ro-deck-sessiond, which this build does not include yet."),
+                     QStringLiteral("Agent sessions on Windows run in x3ro-deck-sessiond, which ships with X3RO Deck: reinstall it."),
 #else
                      QStringLiteral("It ships with X3RO Deck: reinstall it, or set the session backend to tmux."),
 #endif
@@ -201,7 +201,11 @@ void Dependencies::check()
         // then next to the app.
         if (d.id == QLatin1String("sessiond") && d.path.isEmpty()) {
             for (const QString &candidate : {qEnvironmentVariable("X3RO_DECK_SESSIOND_BIN"),
-                                             QCoreApplication::applicationDirPath() + QStringLiteral("/x3ro-deck-sessiond")}) {
+                                             QCoreApplication::applicationDirPath() + QStringLiteral("/x3ro-deck-sessiond")
+#if defined(Q_OS_WIN)
+                                                 + QStringLiteral(".exe")
+#endif
+                 }) {
                 if (!candidate.isEmpty() && QFileInfo(candidate).isExecutable()) {
                     d.path = candidate;
                     break;

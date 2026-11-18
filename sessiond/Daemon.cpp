@@ -10,7 +10,9 @@
 #include <QJsonArray>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QPointer>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QSocketNotifier>
 #include <QStandardPaths>
 
@@ -19,6 +21,14 @@
 #include <cstring>
 #include <vector>
 
+#if defined(Q_OS_WIN)
+#include <QDir>
+#include <QLockFile>
+#include <QThread>
+#include <QWinEventNotifier>
+
+#include <windows.h>
+#else
 #include <fcntl.h>
 #if defined(Q_OS_MACOS)
 #include <util.h>
@@ -33,6 +43,7 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+#endif
 
 namespace
 {
@@ -43,6 +54,15 @@ constexpr qint64 kClientBacklog = 8 * 1024 * 1024;
 constexpr qint64 kIdleExitMs = 60 * 1000;
 constexpr int kKillGraceMs = 3000;
 
+#if defined(Q_OS_WIN)
+// The deepest process under the session's shell: what runs in it now.
+QString foregroundName(qint64 shell, int)
+{
+    const QList<ProcessInfo::Process> tree = ProcessInfo::tree(shell);
+    return tree.isEmpty() ? QString() : ProcessInfo::commandName(tree.last());
+}
+
+#else
 int g_childPipe[2] = {-1, -1};
 
 void onSigchld(int)
@@ -69,20 +89,36 @@ QString foregroundName(pid_t shell, int fd)
     return name;
 }
 
+#endif
+
 int clampSize(const QJsonValue &v, int fallback)
 {
     const int n = v.toInt(fallback);
     return n < 1 ? fallback : qMin(n, kMaxSize);
 }
 
+#if !defined(Q_OS_WIN)
 void signalGroup(pid_t pg, int sig)
 {
     if (pg > 1) {
         kill(-pg, sig);
     }
 }
+#endif
 } // namespace
 
+#if defined(Q_OS_WIN)
+Daemon::Daemon(const QString &socketPath, QObject *parent)
+    : QObject(parent)
+    , m_path(socketPath)
+    , m_server(new QLocalServer(this))
+{
+    m_server->setSocketOptions(QLocalServer::UserAccessOption);
+    connect(m_server, &QLocalServer::newConnection, this, &Daemon::onNewConnection);
+    m_idle.setInterval(5000);
+    connect(&m_idle, &QTimer::timeout, this, &Daemon::checkIdle);
+}
+#else
 Daemon::Daemon(const QString &socketPath, QObject *parent)
     : QObject(parent)
     , m_path(socketPath)
@@ -104,7 +140,17 @@ Daemon::Daemon(const QString &socketPath, QObject *parent)
     m_idle.setInterval(5000);
     connect(&m_idle, &QTimer::timeout, this, &Daemon::checkIdle);
 }
+#endif
 
+#if defined(Q_OS_WIN)
+Daemon::~Daemon()
+{
+    for (Session *s : std::as_const(m_sessions)) {
+        endSession(s, -1);
+    }
+    delete m_lock;
+}
+#else
 Daemon::~Daemon()
 {
     for (Session *s : std::as_const(m_sessions)) {
@@ -119,7 +165,28 @@ Daemon::~Daemon()
         ::close(m_lockFd);
     }
 }
+#endif
 
+#if defined(Q_OS_WIN)
+Daemon::ListenResult Daemon::listen(QString *error)
+{
+    // One daemon per pipe name, guarded by a lock file in the temp directory.
+    QString name = m_path;
+    name.replace(QLatin1Char('\\'), QLatin1Char('_'));
+    m_lock = new QLockFile(QDir::temp().filePath(name + QStringLiteral(".lock")));
+    m_lock->setStaleLockTime(0);
+    if (!m_lock->tryLock()) {
+        return ListenResult::Running;
+    }
+    if (!m_server->listen(m_path)) {
+        *error = m_server->errorString();
+        return ListenResult::Failed;
+    }
+    m_idleFor.start();
+    m_idle.start();
+    return ListenResult::Listening;
+}
+#else
 Daemon::ListenResult Daemon::listen(QString *error)
 {
     // One daemon per socket. The lock outlives a crash only as long as the
@@ -146,6 +213,7 @@ Daemon::ListenResult Daemon::listen(QString *error)
     m_idle.start();
     return ListenResult::Listening;
 }
+#endif
 
 void Daemon::onNewConnection()
 {
@@ -309,7 +377,9 @@ void Daemon::handle(QLocalSocket *sock, const QJsonObject &req)
                 } else {
                     // Nothing to show until the program repaints, which a TUI
                     // does on SIGWINCH even when the size stayed the same.
+#if !defined(Q_OS_WIN)
                     signalGroup(tcgetpgrp(x->fd), SIGWINCH);
+#endif
                 }
             };
         } else {
@@ -325,7 +395,12 @@ void Daemon::handle(QLocalSocket *sock, const QJsonObject &req)
                                         {QStringLiteral("name"), ProcessInfo::commandName(p)},
                                         {QStringLiteral("args"), QJsonArray::fromStringList(p.args)}});
             }
+#if defined(Q_OS_WIN)
+            const QList<ProcessInfo::Process> tree = ProcessInfo::tree(s->pid);
+            reply.insert(QStringLiteral("foreground"), tree.isEmpty() ? qint64(0) : tree.last().pid);
+#else
             reply.insert(QStringLiteral("foreground"), ProcessInfo::foregroundGroup(s->fd));
+#endif
             reply.insert(QStringLiteral("processes"), list);
         } else {
             error = noSession;
@@ -398,6 +473,187 @@ QJsonObject Daemon::create(const QJsonObject &req, QString *error)
     for (const QJsonValue &v : req.value(QStringLiteral("command")).toArray()) {
         command.append(v.toString());
     }
+#if defined(Q_OS_WIN)
+    if (command.isEmpty()) {
+        // PowerShell 7 when installed, else Windows PowerShell.
+        const QString pwsh = QStandardPaths::findExecutable(QStringLiteral("pwsh"));
+        command = {pwsh.isEmpty() ? QStringLiteral("powershell.exe") : pwsh, QStringLiteral("-NoLogo")};
+    }
+    QString exe = command.first();
+    if (!QFileInfo(exe).isAbsolute()) {
+        exe = QStandardPaths::findExecutable(exe, pe.value(QStringLiteral("PATH")).split(QLatin1Char(';'), Qt::SkipEmptyParts));
+    }
+    if (exe.isEmpty()) {
+        *error = QStringLiteral("command not found: %1").arg(command.first());
+        return {};
+    }
+    auto *s = new Session;
+    s->id = m_nextId++;
+    s->name = name;
+    s->cwd = cwd;
+    s->env = env;
+    s->shell = req.value(QStringLiteral("shell")).toArray();
+    s->cols = cols;
+    s->rows = rows;
+    s->screen = std::make_unique<SessionScreen>(rows, cols);
+    if (!spawn(s, exe, command.mid(1), pe.toStringList(), req.value(QStringLiteral("login")).toBool(), error)) {
+        delete s;
+        return {};
+    }
+    m_sessions.insert(s->id, s);
+    return {{QStringLiteral("session"), qint64(s->id)}};
+}
+
+namespace
+{
+// One argument quoted for CommandLineToArgvW.
+QString quoteArg(const QString &a)
+{
+    if (!a.isEmpty() && !a.contains(QRegularExpression(QStringLiteral(R"re([\s"])re")))) {
+        return a;
+    }
+    QString out = QStringLiteral("\"");
+    int slashes = 0;
+    for (const QChar c : a) {
+        if (c == QLatin1Char('\\')) {
+            ++slashes;
+            continue;
+        }
+        if (c == QLatin1Char('"')) {
+            out += QString(slashes * 2 + 1, QLatin1Char('\\'));
+        } else {
+            out += QString(slashes, QLatin1Char('\\'));
+        }
+        slashes = 0;
+        out += c;
+    }
+    out += QString(slashes * 2, QLatin1Char('\\'));
+    out += QLatin1Char('"');
+    return out;
+}
+
+// Blocks on the console's output pipe and hands each chunk to the daemon's thread.
+class ConsoleReader : public QThread
+{
+public:
+    ConsoleReader(HANDLE output, std::function<void(QByteArray)> deliver)
+        : m_output(output)
+        , m_deliver(std::move(deliver))
+    {
+    }
+
+protected:
+    void run() override
+    {
+        char buf[65536];
+        DWORD n = 0;
+        while (ReadFile(m_output, buf, sizeof buf, &n, nullptr) && n > 0) {
+            m_deliver(QByteArray(buf, qsizetype(n)));
+        }
+    }
+
+private:
+    HANDLE m_output;
+    std::function<void(QByteArray)> m_deliver;
+};
+} // namespace
+
+bool Daemon::spawn(Session *s, const QString &program, const QStringList &args, const QStringList &env, bool login, QString *error)
+{
+    Q_UNUSED(login)
+    auto fail = [error](const char *what) {
+        *error = QStringLiteral("%1 failed (error %2)").arg(QLatin1String(what)).arg(GetLastError());
+        return false;
+    };
+    // Pipes: we write the console's input and read its output.
+    HANDLE inRead = nullptr, inWrite = nullptr, outRead = nullptr, outWrite = nullptr;
+    if (!CreatePipe(&inRead, &inWrite, nullptr, 0) || !CreatePipe(&outRead, &outWrite, nullptr, 0)) {
+        return fail("CreatePipe");
+    }
+    HPCON console = nullptr;
+    if (FAILED(CreatePseudoConsole(COORD{SHORT(s->cols), SHORT(s->rows)}, inRead, outWrite, 0, &console))) {
+        return fail("CreatePseudoConsole");
+    }
+    // The console holds its own copies of these ends.
+    CloseHandle(inRead);
+    CloseHandle(outWrite);
+
+    SIZE_T attrSize = 0;
+    InitializeProcThreadAttributeList(nullptr, 1, 0, &attrSize);
+    std::vector<char> attrBuf(attrSize);
+    auto *attrs = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attrBuf.data());
+    if (!InitializeProcThreadAttributeList(attrs, 1, 0, &attrSize)
+        || !UpdateProcThreadAttribute(attrs, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, console, sizeof(console), nullptr, nullptr)) {
+        ClosePseudoConsole(console);
+        return fail("UpdateProcThreadAttribute");
+    }
+    STARTUPINFOEXW si{};
+    si.StartupInfo.cb = sizeof(si);
+    si.lpAttributeList = attrs;
+
+    QStringList parts{quoteArg(QDir::toNativeSeparators(program))};
+    for (const QString &a : args) {
+        parts.append(quoteArg(a));
+    }
+    std::wstring cmd = parts.join(QLatin1Char(' ')).toStdWString();
+    // A double-NUL-terminated UTF-16 block of KEY=value strings.
+    std::wstring envBlock;
+    for (const QString &kv : env) {
+        envBlock += kv.toStdWString();
+        envBlock.push_back(L'\0');
+    }
+    envBlock.push_back(L'\0');
+    const std::wstring dir = QDir::toNativeSeparators(s->cwd.isEmpty() ? QDir::homePath() : s->cwd).toStdWString();
+    PROCESS_INFORMATION pi{};
+    const BOOL ok = CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                                   envBlock.data(), dir.c_str(), &si.StartupInfo, &pi);
+    DeleteProcThreadAttributeList(attrs);
+    if (!ok) {
+        ClosePseudoConsole(console);
+        CloseHandle(inWrite);
+        CloseHandle(outRead);
+        return fail("CreateProcess");
+    }
+    CloseHandle(pi.hThread);
+    s->console = console;
+    s->input = inWrite;
+    s->output = outRead;
+    s->process = pi.hProcess;
+    s->pid = qint64(pi.dwProcessId);
+
+    const quint32 id = s->id;
+    QPointer<Daemon> self(this);
+    s->readerThread = new ConsoleReader(outRead, [self, id](QByteArray chunk) {
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, id, chunk] {
+                if (self) {
+                    if (Session *x = self->m_sessions.value(id)) {
+                        self->deliver(x, chunk);
+                    }
+                }
+            },
+            Qt::QueuedConnection);
+    });
+    s->readerThread->start();
+    s->exitNotifier = new QWinEventNotifier(pi.hProcess, this);
+    connect(s->exitNotifier, &QWinEventNotifier::activated, this, [this, id] {
+        Session *x = m_sessions.value(id);
+        if (!x) {
+            return;
+        }
+        DWORD code = 0;
+        GetExitCodeProcess(x->process, &code);
+        // Let the reader pass on the last output first.
+        QTimer::singleShot(100, this, [this, id, code] {
+            if (Session *y = m_sessions.value(id)) {
+                endSession(y, int(code));
+            }
+        });
+    });
+    return true;
+}
+#else
     QByteArray program;
     QList<QByteArray> args;
     if (command.isEmpty()) {
@@ -503,7 +759,15 @@ QJsonObject Daemon::create(const QJsonObject &req, QString *error)
     m_sessions.insert(id, s);
     return {{QStringLiteral("session"), qint64(id)}};
 }
+#endif
 
+#if defined(Q_OS_WIN)
+qsizetype Daemon::readPty(Session *s)
+{
+    Q_UNUSED(s)
+    return 0; // the reader thread delivers output on Windows
+}
+#else
 qsizetype Daemon::readPty(Session *s)
 {
     char buf[65536];
@@ -517,7 +781,13 @@ qsizetype Daemon::readPty(Session *s)
         s->reader->setEnabled(false);
         return 0;
     }
-    const QByteArray chunk(buf, n);
+    deliver(s, QByteArray(buf, n));
+    return n;
+}
+#endif
+
+void Daemon::deliver(Session *s, const QByteArray &chunk)
+{
     s->screen->feed(chunk);
     const QByteArray frame = Sessiond::encodeData(Sessiond::Output, s->id, chunk);
     const QList<QLocalSocket *> socks = m_clients.keys();
@@ -527,7 +797,6 @@ qsizetype Daemon::readPty(Session *s)
             send(sock, frame);
         }
     }
-    return n;
 }
 
 void Daemon::writePty(Session *s, const QByteArray &bytes)
@@ -536,6 +805,21 @@ void Daemon::writePty(Session *s, const QByteArray &bytes)
     flushPty(s);
 }
 
+#if defined(Q_OS_WIN)
+void Daemon::flushPty(Session *s)
+{
+    // The console's input pipe takes what fits and blocks briefly otherwise;
+    // agent input is small.
+    while (!s->pending.isEmpty() && s->input) {
+        DWORD written = 0;
+        if (!WriteFile(s->input, s->pending.constData(), DWORD(s->pending.size()), &written, nullptr) || written == 0) {
+            s->pending.clear();
+            return;
+        }
+        s->pending.remove(0, qsizetype(written));
+    }
+}
+#else
 void Daemon::flushPty(Session *s)
 {
     while (!s->pending.isEmpty()) {
@@ -553,7 +837,21 @@ void Daemon::flushPty(Session *s)
     }
     s->writer->setEnabled(false);
 }
+#endif
 
+#if defined(Q_OS_WIN)
+void Daemon::resize(Session *s, int cols, int rows)
+{
+    if (cols == s->cols && rows == s->rows) {
+        return;
+    }
+    if (SUCCEEDED(ResizePseudoConsole(static_cast<HPCON>(s->console), COORD{SHORT(cols), SHORT(rows)}))) {
+        s->cols = cols;
+        s->rows = rows;
+        s->screen->resize(rows, cols);
+    }
+}
+#else
 void Daemon::resize(Session *s, int cols, int rows)
 {
     if (cols == s->cols && rows == s->rows) {
@@ -569,7 +867,11 @@ void Daemon::resize(Session *s, int cols, int rows)
         s->screen->resize(rows, cols);
     }
 }
+#endif
 
+#if defined(Q_OS_WIN)
+void Daemon::onChildSignal() { }
+#else
 void Daemon::onChildSignal()
 {
     char buf[64];
@@ -593,7 +895,45 @@ void Daemon::onChildSignal()
         }
     }
 }
+#endif
 
+#if defined(Q_OS_WIN)
+void Daemon::endSession(Session *s, int status)
+{
+    const QJsonObject event{{QStringLiteral("event"), QStringLiteral("exited")},
+                            {QStringLiteral("session"), qint64(s->id)},
+                            {QStringLiteral("name"), s->name},
+                            {QStringLiteral("status"), status}};
+    const QByteArray frame = Sessiond::encodeControl(event);
+    const QList<QLocalSocket *> socks = m_clients.keys();
+    for (QLocalSocket *sock : socks) {
+        auto it = m_clients.find(sock);
+        if (it != m_clients.end() && it->attached.remove(s->id)) {
+            send(sock, frame);
+        }
+    }
+    m_sessions.remove(s->id);
+    delete s->exitNotifier;
+    // Closing the console ends the reader's ReadFile with an error.
+    if (s->console) {
+        ClosePseudoConsole(static_cast<HPCON>(s->console));
+    }
+    if (s->input) {
+        CloseHandle(s->input);
+    }
+    if (s->readerThread) {
+        s->readerThread->wait(2000);
+        delete s->readerThread;
+    }
+    if (s->output) {
+        CloseHandle(s->output);
+    }
+    if (s->process) {
+        CloseHandle(s->process);
+    }
+    delete s;
+}
+#else
 void Daemon::endSession(Session *s, int status)
 {
     const QJsonObject event{{QStringLiteral("event"), QStringLiteral("exited")},
@@ -614,13 +954,30 @@ void Daemon::endSession(Session *s, int status)
     ::close(s->fd);
     delete s;
 }
+#endif
 
+#if defined(Q_OS_WIN)
+void Daemon::killSession(Session *s)
+{
+    // Closing the pseudo console tells the process tree to exit; what is
+    // still there after the grace period goes the hard way.
+    HANDLE process = nullptr;
+    DuplicateHandle(GetCurrentProcess(), s->process, GetCurrentProcess(), &process, 0, FALSE, DUPLICATE_SAME_ACCESS);
+    endSession(s, -1);
+    QTimer::singleShot(kKillGraceMs, [process] {
+        if (WaitForSingleObject(process, 0) == WAIT_TIMEOUT) {
+            TerminateProcess(process, 1);
+        }
+        CloseHandle(process);
+    });
+}
+#else
 void Daemon::killSession(Session *s)
 {
     // Closing the master hangs up the terminal, which sends SIGHUP to the
     // shell and the foreground job; tell both directly as well, and kill
     // whatever is left after a grace period.
-    const QList<pid_t> groups{s->pid, tcgetpgrp(s->fd)};
+    const QList<pid_t> groups{pid_t(s->pid), tcgetpgrp(s->fd)};
     for (pid_t pg : groups) {
         signalGroup(pg, SIGHUP);
     }
@@ -633,7 +990,25 @@ void Daemon::killSession(Session *s)
         }
     });
 }
+#endif
 
+#if defined(Q_OS_WIN)
+void Daemon::shutdown()
+{
+    if (m_shuttingDown) {
+        return;
+    }
+    m_shuttingDown = true;
+    m_server->close();
+    delete m_lock;
+    m_lock = nullptr;
+    const QList<Session *> sessions = m_sessions.values();
+    for (Session *s : sessions) {
+        killSession(s);
+    }
+    QTimer::singleShot(sessions.isEmpty() ? 0 : kKillGraceMs + 100, qApp, &QCoreApplication::quit);
+}
+#else
 void Daemon::shutdown()
 {
     if (m_shuttingDown) {
@@ -658,7 +1033,21 @@ void Daemon::shutdown()
     }
     QTimer::singleShot(sessions.isEmpty() ? 0 : kKillGraceMs + 100, qApp, &QCoreApplication::quit);
 }
+#endif
 
+#if defined(Q_OS_WIN)
+void Daemon::checkIdle()
+{
+    if (m_shuttingDown) {
+        return;
+    }
+    if (!m_sessions.isEmpty() || !m_clients.isEmpty()) {
+        m_idleFor.restart();
+    } else if (m_idleFor.elapsed() > kIdleExitMs) {
+        shutdown();
+    }
+}
+#else
 void Daemon::checkIdle()
 {
     if (m_shuttingDown) {
@@ -680,3 +1069,4 @@ void Daemon::checkIdle()
         shutdown();
     }
 }
+#endif

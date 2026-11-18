@@ -1,7 +1,5 @@
 #include "AppController.h"
-#if !defined(_WIN32)
 #include "AttachClient.h"
-#endif
 #include "MainWindow.h"
 #include "SingleInstance.h"
 
@@ -20,11 +18,10 @@ int main(int argc, char *argv[])
 {
     // `x3ro-deck attach <checkout>` is a terminal client: no window, no
     // single-instance guard.
-#if !defined(_WIN32)
     if (argc > 1 && qstrcmp(argv[1], "attach") == 0) {
         return runAttach(argc - 1, argv + 1);
     }
-#else
+#if defined(_WIN32)
     // Groups the windows under one taskbar entry with the app's icon, and
     // names the app in toast notifications.
     SetCurrentProcessExplicitAppUserModelID(L"life.x3ro.deck");

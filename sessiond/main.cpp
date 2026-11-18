@@ -7,6 +7,98 @@
 // (exit 0, also when one is already running), so callers can start it and
 // connect right away.
 
+#if defined(_WIN32)
+#include "Daemon.h"
+
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QLocalSocket>
+#include <QThread>
+
+#include <x3ro-deck-socket.h>
+
+#include <cstdio>
+#include <cstring>
+
+#include <windows.h>
+
+// Windows: --detach starts a second copy outside the GUI's job object and
+// console (so it outlives both) and returns once its pipe accepts clients.
+int main(int argc, char *argv[])
+{
+    bool detach = false;
+    x3ro_deck::SocketPath sock = x3ro_deck::sessiondSocketPath();
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--detach") == 0) {
+            detach = true;
+        } else if (std::strcmp(argv[i], "--socket") == 0 && i + 1 < argc) {
+            sock = x3ro_deck::SocketPath{argv[++i], {}};
+        } else if (std::strcmp(argv[i], "-h") == 0 || std::strcmp(argv[i], "--help") == 0) {
+            std::fputs("usage: x3ro-deck-sessiond [--socket PATH] [--detach]\n", stdout);
+            return 0;
+        } else {
+            std::fputs("usage: x3ro-deck-sessiond [--socket PATH] [--detach]\n", stderr);
+            return 2;
+        }
+    }
+    const QString path = QString::fromStdString(sock.path);
+    if (detach) {
+        {
+            QLocalSocket probe;
+            probe.connectToServer(path);
+            if (probe.waitForConnected(300)) {
+                return 0; // already running
+            }
+        }
+        wchar_t self[MAX_PATH];
+        GetModuleFileNameW(nullptr, self, MAX_PATH);
+        std::wstring cmd = L"\"" + std::wstring(self) + L"\" --socket \"" + path.toStdWString() + L"\"";
+        STARTUPINFOW si{};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi{};
+        DWORD flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB;
+        BOOL ok = CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, flags, nullptr, nullptr, &si, &pi);
+        if (!ok) {
+            // A job that forbids breakaway: start inside it rather than not at all.
+            flags &= ~DWORD(CREATE_BREAKAWAY_FROM_JOB);
+            ok = CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, flags, nullptr, nullptr, &si, &pi);
+        }
+        if (!ok) {
+            std::fprintf(stderr, "x3ro-deck-sessiond: cannot start the daemon (error %lu)\n", GetLastError());
+            return 1;
+        }
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        QElapsedTimer waited;
+        waited.start();
+        while (waited.elapsed() < 5000) {
+            QLocalSocket probe;
+            probe.connectToServer(path);
+            if (probe.waitForConnected(200)) {
+                return 0;
+            }
+            QThread::msleep(50);
+        }
+        return 1;
+    }
+
+    QCoreApplication app(argc, argv);
+    QCoreApplication::setApplicationName(QStringLiteral("x3ro-deck-sessiond"));
+    Daemon daemon(path);
+    QString error;
+    switch (daemon.listen(&error)) {
+    case Daemon::ListenResult::Running:
+        std::fprintf(stderr, "x3ro-deck-sessiond: already running on %s\n", sock.path.c_str());
+        return 0;
+    case Daemon::ListenResult::Failed:
+        std::fprintf(stderr, "x3ro-deck-sessiond: cannot listen on %s: %s\n", sock.path.c_str(), qPrintable(error));
+        return 1;
+    case Daemon::ListenResult::Listening:
+        break;
+    }
+    return app.exec();
+}
+#else
 #include "Daemon.h"
 
 #include <QCoreApplication>
@@ -139,3 +231,4 @@ int main(int argc, char *argv[])
     }
     return app.exec();
 }
+#endif

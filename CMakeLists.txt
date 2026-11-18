@@ -62,14 +62,11 @@ else()
 endif()
 
 # The x3ro-deck-sessiond wire protocol and the attach client: QtCore only.
-add_library(x3ro-deck-sessionproto STATIC src/SessiondProtocol.cpp)
-if(NOT WIN32)
-    # Raw-mode terminal client; Windows gets one with its ConPTY daemon.
-    target_sources(x3ro-deck-sessionproto PRIVATE attach/AttachClient.cpp)
-endif()
+add_library(x3ro-deck-sessionproto STATIC src/SessiondProtocol.cpp
+    $<IF:$<BOOL:${WIN32}>,attach/AttachClientWin.cpp,attach/AttachClient.cpp>)
 x3ro_deck_set_warnings(x3ro-deck-sessionproto)
 target_include_directories(x3ro-deck-sessionproto PUBLIC src attach common)
-target_link_libraries(x3ro-deck-sessionproto PUBLIC Qt6::Core)
+target_link_libraries(x3ro-deck-sessionproto PUBLIC Qt6::Core Qt6::Network)
 
 # What runs in a session's terminal, for the daemon's pane poll. One platform
 # file per OS; the others report nothing for now.
@@ -77,6 +74,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoLinux.cpp)
 elseif(APPLE)
     set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoMac.cpp)
+elseif(WIN32)
+    set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoWin.cpp)
 else()
     set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoNone.cpp)
 endif()
@@ -91,9 +90,9 @@ x3ro_deck_set_warnings(x3ro-deck-sessionscreen)
 target_include_directories(x3ro-deck-sessionscreen PUBLIC src)
 target_link_libraries(x3ro-deck-sessionscreen PUBLIC Qt6::Core PkgConfig::vterm)
 
-if(NOT WIN32)
-    # Owns agent PTYs so agents outlive the GUI (sessionBackend "daemon").
-    # Windows gets a ConPTY daemon in its own ticket.
+if(TRUE)
+    # Owns agent PTYs (forkpty, or ConPTY on Windows) so agents outlive the
+    # GUI (sessionBackend "daemon").
     add_executable(x3ro-deck-sessiond sessiond/main.cpp sessiond/Daemon.cpp)
     x3ro_deck_set_warnings(x3ro-deck-sessiond)
     target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Network ${X3RO_DECK_PTY_LIBS})
@@ -268,8 +267,9 @@ else()
     if(NOT X3RO_DECK_CORE_ONLY)
         install(TARGETS x3ro-deck RUNTIME DESTINATION bin)
     endif()
+    install(TARGETS x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
     if(NOT WIN32)
-        install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
+        install(TARGETS x3ro-deck-hook RUNTIME DESTINATION bin)
     endif()
 endif()
 if(UNIX AND NOT APPLE)

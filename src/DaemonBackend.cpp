@@ -20,7 +20,11 @@ constexpr int kReplyTimeoutMs = 3000;
 
 QString sibling(const QString &program)
 {
+#if defined(Q_OS_WIN)
+    const QString local = QCoreApplication::applicationDirPath() + QLatin1Char('/') + program + QStringLiteral(".exe");
+#else
     const QString local = QCoreApplication::applicationDirPath() + QLatin1Char('/') + program;
+#endif
     if (QFileInfo(local).isExecutable()) {
         return local;
     }
