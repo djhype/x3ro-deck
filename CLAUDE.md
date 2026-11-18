@@ -1,19 +1,19 @@
 # x3ro-deck
 
-Qt 6 / KF6 desktop app (C++20, Widgets + QML panels) for running coding agents and Docker Compose stacks across several checkouts. It drives Claude Code and Codex, and local models (for example A model on a local server) through either CLI. It targets Linux with KDE Plasma only, so portability is a non-goal.
+Qt 6 desktop app (C++20, Widgets + QML panels), with no KDE Frameworks dependency, for running coding agents and Docker Compose stacks across several checkouts. It drives Claude Code and Codex, and local models (for example A model on a local server) through either CLI. It targets Linux with KDE Plasma only, so portability is a non-goal.
 
 # Commands
 
 - `cmake --preset linux`: configure into `build/` with Ninja, RelWithDebInfo and `CMAKE_INSTALL_PREFIX=$HOME/.local`. Plain CMake, without extra-cmake-modules. `CMakePresets.json` also has `macos` and `windows` presets; each shows only on its own host.
 - `cmake --build --preset linux`: build both targets. The build must stay warning-free on GCC, Clang and MSVC; `x3ro_deck_set_warnings` in `CMakeLists.txt` picks the flags. Add `-DX3RO_DECK_WERROR=ON` to the configure step to turn warnings into errors (CI does).
 - `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file and hicolor icons. The desktop and icon rules apply only on `UNIX AND NOT APPLE`. The desktop file comes from `data/x3ro-deck.desktop.in` with an absolute `Exec`, because Plasma's session PATH lacks `~/.local/bin`.
-- `kbuildsycoca6`: refresh KDE's caches after changing the desktop file or icons.
-- `-DX3RO_DECK_CORE_ONLY=ON`: build without KF6, which leaves out the app itself but keeps the hook, `x3ro-deck-sessiond`, `x3ro-deck-attach` and every test. The Qt floor is 6.4 (Ubuntu 24.04 and Debian 12). KF6 needs Qt 6.5+, so the full app can't build on those distros until KF6 is gone.
+- After changing the desktop file or icons, refresh the desktop's caches (`update-desktop-database ~/.local/share/applications`; on Plasma, its sycoca rebuild).
+- `-DX3RO_DECK_CORE_ONLY=ON`: skip the GUI app and its Qt Quick dependency, keeping the hook, `x3ro-deck-sessiond`, `x3ro-deck-attach` and every test. The Qt floor is 6.4 (Ubuntu 24.04 and Debian 12), and the full app builds there.
 - `scripts/check-format.sh [--fix]`: check (or apply) `.clang-format` on every tracked C++ file.
 - `scripts/smoke-test.sh [binary] [out.png]`: headless screenshot in an isolated environment. It fails without a PNG or on any QML error.
-- `ctest --test-dir build`: run the QtTest suites in `tests/`. They link `x3ro-deck-base`, the static library holding everything except the KF6-dependent `main.cpp`, `MainWindow` and `TerminalHost`. `tst_qml` compiles every panel in `qml/`. `tst_sessionflow` drives AppController against a private tmux server, and again as `sessionflow-daemon` against a private `x3ro-deck-sessiond`. `tst_sessiond` covers the daemon's protocol (including the foreground job and process tree), `DaemonBackend`, the attach client in a PTY, `SessiondChannel` and `SessionScreen` redraws (checked against a `TerminalScreen` fed the raw output).
+- `ctest --test-dir build`: run the QtTest suites in `tests/`. They link `x3ro-deck-base`, the static library holding everything except the app executable's `main.cpp`, `MainWindow` and `TerminalHost`. `tst_qml` compiles every panel in `qml/`. `tst_sessionflow` drives AppController against a private tmux server, and again as `sessionflow-daemon` against a private `x3ro-deck-sessiond`. `tst_sessiond` covers the daemon's protocol (including the foreground job and process tree), `DaemonBackend`, the attach client in a PTY, `SessiondChannel` and `SessionScreen` redraws (checked against a `TerminalScreen` fed the raw output).
 
-CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-only job on `ubuntu:24.04` with its distro Qt 6.4 and tmux 3.4. It checks formatting, builds with `-DX3RO_DECK_WERROR=ON`, runs `ctest` and the smoke test, and uploads the screenshot. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
+CI (`.github/workflows/ci.yml`) runs in an `archlinux` container and on `ubuntu:24.04` with its distro Qt 6.4 and tmux 3.4, neither with KDE Frameworks. Both build the full app with `-DX3RO_DECK_WERROR=ON`, run `ctest` and the smoke test, and upload the screenshot; the Arch job also checks formatting. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
 
 # Architecture
 
@@ -41,7 +41,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
   - Ctrl+Q and the tray's Quit go through `confirmQuit`, which offers to stop the agents by killing the tmux server.
   - Layout state persists in `~/.config/x3ro-deck/x3ro-deck.conf`.
 - `src/TerminalHost.cpp`: hosts one built-in terminal (`TerminalView`). An agent terminal reads the backend's `attachChannel()` when it has one (the daemon); otherwise it runs the backend's attach command (or the imported shell for shell tabs) in a `PtyChannel`. `setProfile` applies imported settings to every open terminal at once.
-- The built-in terminal lives in `x3ro-deck-base`, so it needs no KF6 and `tst_terminal` covers it:
+- The built-in terminal lives in `x3ro-deck-base`, so `tst_terminal` covers it:
   - `TerminalScreen` wraps libvterm. It holds the cell grid and turns keys and pastes into bytes, honoring the program's modes. Ctrl combos use legacy control bytes, because libvterm would send CSI u.
     - Lines scrolling off the primary screen go to its scrollback, capped by the imported profile's history or else config `terminalScrollback` (default 10 000; unlimited means 100 000). "Line" numbers run through the history and then the screen. `droppedLines()` turns them into positions that survive lines dropping off the top.
     - libvterm has already shifted its line info when `sb_pushline` fires, so row 0's `continuation` flag says whether the pushed line soft-wraps. `text()` joins wrapped lines without a break, so a wrapped answer copies with its original line breaks.
@@ -89,7 +89,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
 - `src/GitWatcher.cpp`: watches `HEAD` and `logs/HEAD` with `QFileSystemWatcher`.
 - `src/PrWatcher.cpp`: polls `gh pr view <branch> --json …` per checkout.
 - `qml/`: `Theme.qml` holds every color and font. Use its tokens and helpers (`agentColor`, `healthColor`, `elapsed`) and do not hardcode colors.
-- New QML files and data files must be added to `resources.qrc`. New C++ sources must be added to `CMakeLists.txt`, to `x3ro-deck-base` unless they need KF6, and new tests to `tests/CMakeLists.txt`.
+- New QML files and data files must be added to `resources.qrc`. New C++ sources must be added to `CMakeLists.txt`, to `x3ro-deck-base` unless they need Qt Quick, and new tests to `tests/CMakeLists.txt`.
 
 # Code style
 

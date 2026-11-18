@@ -23,7 +23,7 @@ function(x3ro_deck_set_warnings target)
     set_target_properties(${target} PROPERTIES COMPILE_WARNING_AS_ERROR ${X3RO_DECK_WERROR})
 endfunction()
 
-option(X3RO_DECK_CORE_ONLY "Build without KF6: the controller, backends, hook and tests, but not the app" OFF)
+option(X3RO_DECK_CORE_ONLY "Skip the GUI app and its Qt Quick dependency: build the controller, backends, hook, daemon and tests" OFF)
 
 # 6.4 is what Ubuntu 24.04 and Debian 12 ship.
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network)
@@ -83,8 +83,8 @@ else()
     set(X3RO_DECK_DESKTOP_LIBS)
 endif()
 
-# The app minus its KF6-dependent window and terminal, so tests and older
-# distros can build it.
+# The app minus its Qt Quick window, so tests and headless builders can link
+# it.
 add_library(x3ro-deck-base STATIC
     src/Config.cpp
     src/ConfigMigrations.cpp

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Installs the Linux CI toolchain in an archlinux container. Arch is the one
-# common image that ships Qt 6.6+ and every KF6 framework the app links.
+# Installs the Linux CI toolchain in an archlinux container: Qt and the
+# build and test tools, no KDE Frameworks.
 set -euo pipefail
 
 pacman -Syu --noconfirm --needed \
