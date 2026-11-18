@@ -148,3 +148,8 @@ x3ro_deck_set_warnings(tst_backendswitch)
 target_link_libraries(tst_backendswitch PRIVATE x3ro-deck-base Qt6::Test)
 add_test(NAME backendswitch COMMAND tst_backendswitch)
 set_tests_properties(backendswitch PROPERTIES TIMEOUT 60 ENVIRONMENT "X3RO_DECK_SESSIOND_BIN=$<TARGET_FILE:x3ro-deck-sessiond>")
+
+add_executable(tst_compose tst_compose.cpp)
+x3ro_deck_set_warnings(tst_compose)
+target_link_libraries(tst_compose PRIVATE x3ro-deck-base Qt6::Test)
+add_test(NAME compose COMMAND tst_compose)

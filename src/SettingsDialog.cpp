@@ -1,6 +1,7 @@
 #include "SettingsDialog.h"
 
 #include "AppTheme.h"
+#include "ComposeFiles.h"
 #include "Config.h"
 #include "Dependencies.h"
 #include "DockerEndpoint.h"
@@ -360,7 +361,6 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     for (const auto &[which, edit] :
          {std::pair{"up", &m_composeUp}, std::pair{"down", &m_composeDown}, std::pair{"restart", &m_composeRestart}}) {
         *edit = lineEdit(true);
-        (*edit)->setPlaceholderText(CheckoutConfig::defaultCompose(QLatin1String(which)));
         connect(*edit, &QLineEdit::textEdited, this, [this, key = QLatin1String(which)](const QString &text) {
             editCheckout(QStringLiteral("compose.") + key, text.trimmed());
         });
@@ -379,24 +379,67 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     addField(m_checkoutFields, QStringLiteral("Custom args"), m_checkoutArgs,
              hint(QStringLiteral("Added to the agent's command line. A flag set here replaces the same flag in the agent's command. "
                                  "Quote values with spaces.")));
+    m_composeFiles = new QListWidget;
+    m_composeFiles->setFixedHeight(120);
+    m_composeFiles->setDragDropMode(QAbstractItemView::InternalMove);
+    m_composeFilesEmpty = hint(QStringLiteral("No compose file found in this folder."), "warning");
+    auto *filesBox = new QWidget;
+    auto *filesLayout = new QVBoxLayout(filesBox);
+    filesLayout->setContentsMargins(0, 0, 0, 0);
+    filesLayout->setSpacing(4);
+    filesLayout->addWidget(m_composeFiles);
+    filesLayout->addWidget(m_composeFilesEmpty);
+    m_composeProfiles = lineEdit(true);
+    m_composeProfiles->setPlaceholderText(QStringLiteral("worker, debug"));
+    m_composeEnvFile = lineEdit(true);
+    m_composeEnvFile->setPlaceholderText(QStringLiteral(".env"));
+    m_composeProject = lineEdit(true);
     m_checkoutFields->addWidget(section(QStringLiteral("Docker Compose")), nextRow(m_checkoutFields), 0, 1, 2);
+    addField(m_checkoutFields, QStringLiteral("Files"), filesBox,
+             hint(QStringLiteral("Checked files go to compose with -f, top to bottom; drag to reorder. With none checked, compose "
+                                 "finds compose.yaml or docker-compose.yml itself.")),
+             true);
+    addField(m_checkoutFields, QStringLiteral("Profiles"), m_composeProfiles, hint(QStringLiteral("Each becomes --profile.")));
+    addField(m_checkoutFields, QStringLiteral("Env file"), m_composeEnvFile);
+    addField(m_checkoutFields, QStringLiteral("Project name"), m_composeProject,
+             hint(QStringLiteral("Passed with -p. The Docker panel then shows that project's containers.")));
     addField(m_checkoutFields, QStringLiteral("Up"), m_composeUp);
     addField(m_checkoutFields, QStringLiteral("Down"), m_composeDown);
     addField(m_checkoutFields, QStringLiteral("Restart"), m_composeRestart,
              hint(QStringLiteral("The Docker panel's buttons run these in a shell tab in the checkout's folder. Empty runs the "
-                                 "default shown; {compose} becomes the compose binary from the Docker page.")));
+                                 "default shown, built from the options above; {compose} becomes the compose binary from the "
+                                 "Docker page.")));
     m_checkoutForm = new QWidget;
+    m_checkoutForm->setObjectName(QStringLiteral("scrollContent"));
     auto *formLayout = new QVBoxLayout(m_checkoutForm);
-    formLayout->setContentsMargins(0, 0, 0, 0);
+    formLayout->setContentsMargins(0, 0, 12, 0);
     formLayout->addLayout(m_checkoutFields);
     formLayout->addStretch();
+    auto *checkoutScroll = new QScrollArea;
+    checkoutScroll->setWidget(m_checkoutForm);
+    checkoutScroll->setWidgetResizable(true);
+    checkoutScroll->setFrameShape(QFrame::NoFrame);
+
+    connect(m_composeFiles, &QListWidget::itemChanged, this, &SettingsDialog::storeComposeFiles);
+    connect(m_composeFiles->model(), &QAbstractItemModel::rowsMoved, this, &SettingsDialog::storeComposeFiles);
+    connect(m_composeProfiles, &QLineEdit::textEdited, this, [this](const QString &text) {
+        QJsonArray profiles;
+        for (const QString &p : text.split(QRegularExpression(QStringLiteral(R"([,\s]+)")), Qt::SkipEmptyParts)) {
+            profiles.append(p);
+        }
+        editCheckout(QStringLiteral("compose.profiles"), profiles);
+    });
+    connect(m_composeEnvFile, &QLineEdit::textEdited, this,
+            [this](const QString &text) { editCheckout(QStringLiteral("compose.envFile"), text.trimmed()); });
+    connect(m_composeProject, &QLineEdit::textEdited, this,
+            [this](const QString &text) { editCheckout(QStringLiteral("compose.project"), text.trimmed()); });
 
     auto *page = new QWidget;
     auto *layout = new QHBoxLayout(page);
     layout->setContentsMargins(20, 20, 20, 8);
     layout->setSpacing(24);
     layout->addWidget(left);
-    layout->addWidget(m_checkoutForm, 1);
+    layout->addWidget(checkoutScroll, 1);
 
     connect(m_checkoutList, &QListWidget::currentRowChanged, this, &SettingsDialog::loadCheckout);
     connect(m_checkoutButtons.add, &QPushButton::clicked, this, &SettingsDialog::addCheckout);
@@ -464,11 +507,72 @@ void SettingsDialog::loadCheckout(int row)
     m_checkoutAgent->setCurrentIndex(std::max(0, m_checkoutAgent->findData(c.value(QStringLiteral("agent")).toString())));
     m_checkoutArgs->setText(c.value(QStringLiteral("args")).toString());
     const QJsonObject compose = c.value(QStringLiteral("compose")).toObject();
+    m_composeFiles->clear();
+    if (valid) {
+        // The configured files first, checked and in order, then the other
+        // compose files in the folder.
+        QStringList chosen;
+        for (const QJsonValue &v : compose.value(QStringLiteral("files")).toArray()) {
+            chosen.append(v.toString());
+        }
+        QStringList all = chosen;
+        for (const QString &f : ComposeFiles::detect(Paths::expandTilde(c.value(QStringLiteral("path")).toString()))) {
+            if (!all.contains(f)) {
+                all.append(f);
+            }
+        }
+        for (const QString &f : std::as_const(all)) {
+            auto *item = new QListWidgetItem(f, m_composeFiles);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsDragEnabled);
+            item->setCheckState(chosen.contains(f) ? Qt::Checked : Qt::Unchecked);
+        }
+    }
+    m_composeFilesEmpty->setVisible(valid && m_composeFiles->count() == 0);
+    QStringList profiles;
+    for (const QJsonValue &v : compose.value(QStringLiteral("profiles")).toArray()) {
+        profiles.append(v.toString());
+    }
+    m_composeProfiles->setText(profiles.join(QStringLiteral(", ")));
+    m_composeEnvFile->setText(compose.value(QStringLiteral("envFile")).toString());
+    m_composeProject->setText(compose.value(QStringLiteral("project")).toString());
+    m_composeProject->setPlaceholderText(QFileInfo(c.value(QStringLiteral("path")).toString()).fileName());
     m_composeUp->setText(compose.value(QStringLiteral("up")).toString());
     m_composeDown->setText(compose.value(QStringLiteral("down")).toString());
     m_composeRestart->setText(compose.value(QStringLiteral("restart")).toString());
     m_loading = loading;
     checkPath();
+    refreshComposePlaceholders();
+}
+
+void SettingsDialog::storeComposeFiles()
+{
+    QJsonArray files;
+    for (int i = 0; i < m_composeFiles->count(); ++i) {
+        if (m_composeFiles->item(i)->checkState() == Qt::Checked) {
+            files.append(m_composeFiles->item(i)->text());
+        }
+    }
+    editCheckout(QStringLiteral("compose.files"), files);
+}
+
+void SettingsDialog::refreshComposePlaceholders()
+{
+    const int row = m_checkoutList->currentRow();
+    CheckoutConfig cc;
+    if (row >= 0 && row < m_checkouts.size()) {
+        const QJsonObject compose = m_checkouts.at(row).value(QStringLiteral("compose")).toObject();
+        for (const QJsonValue &v : compose.value(QStringLiteral("files")).toArray()) {
+            cc.composeFiles.append(v.toString());
+        }
+        for (const QJsonValue &v : compose.value(QStringLiteral("profiles")).toArray()) {
+            cc.composeProfiles.append(v.toString());
+        }
+        cc.composeEnvFile = compose.value(QStringLiteral("envFile")).toString();
+        cc.composeProject = compose.value(QStringLiteral("project")).toString();
+    }
+    m_composeUp->setPlaceholderText(cc.defaultCompose(QStringLiteral("up")));
+    m_composeDown->setPlaceholderText(cc.defaultCompose(QStringLiteral("down")));
+    m_composeRestart->setPlaceholderText(cc.defaultCompose(QStringLiteral("restart")));
 }
 
 void SettingsDialog::editCheckout(const QString &key, const QJsonValue &value)
@@ -480,7 +584,7 @@ void SettingsDialog::editCheckout(const QString &key, const QJsonValue &value)
     if (key.startsWith(QLatin1String("compose."))) {
         QJsonObject compose = m_checkouts[row].value(QStringLiteral("compose")).toObject();
         const QString which = key.mid(8);
-        if (value.toString().isEmpty()) {
+        if (value.isArray() ? value.toArray().isEmpty() : value.toString().isEmpty()) {
             compose.remove(which);
         } else {
             compose.insert(which, value);
@@ -490,6 +594,7 @@ void SettingsDialog::editCheckout(const QString &key, const QJsonValue &value)
         } else {
             m_checkouts[row].insert(QStringLiteral("compose"), compose);
         }
+        refreshComposePlaceholders();
         return;
     }
     // No agent key means the default agent.

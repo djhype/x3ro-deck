@@ -1,5 +1,6 @@
 #include "AppController.h"
 
+#include "ComposeFiles.h"
 #include "DaemonBackend.h"
 #include "DockerEndpoint.h"
 #include "Paths.h"
@@ -298,7 +299,7 @@ AppController::AppController(QObject *parent)
         Checkout c;
         c.cfg = cc;
         c.session = sessionName(cc.name);
-        c.project = cc.name;
+        c.project = cc.composeProject.isEmpty() ? cc.name : cc.composeProject;
         c.agent.profile = m_config.agent(settings.value(QStringLiteral("agents/") + cc.name, cc.agent).toString()).id;
         m_checkouts.append(c);
     }
@@ -405,6 +406,9 @@ QVariantMap AppController::current() const
         {QStringLiteral("title"), c.title},
         {QStringLiteral("commit"), c.git.commit},
         {QStringLiteral("project"), c.project},
+        // Whether the Up button has anything to start.
+        {QStringLiteral("composeFound"),
+         !c.cfg.composeFiles.isEmpty() || !c.cfg.composeUp.isEmpty() || !ComposeFiles::detect(c.cfg.path).isEmpty()},
         {QStringLiteral("session"), c.session},
         {QStringLiteral("attachHint"), m_sessions->attachHint(c.session)},
         {QStringLiteral("offset"), c.cfg.portOffset},
@@ -598,17 +602,29 @@ int AppController::checkoutForPath(const QString &path) const
 
 void AppController::onContainers(const QList<ContainerInfo> &containers)
 {
+    m_containers = containers;
     const QDateTime now = QDateTime::currentDateTime();
     for (Checkout &c : m_checkouts) {
         c.containers.clear();
     }
     QSet<QString> liveIssues;
     for (const ContainerInfo &ci : containers) {
-        const QString dir = Paths::normalize(ci.workingDir);
-        const int idx = checkoutForPath(dir);
-        // Only compose projects rooted exactly at a checkout, not ones in subdirectories.
-        if (idx < 0 || !Paths::same(m_checkouts[idx].cfg.path, dir)) {
-            continue;
+        // A checkout with a project name set takes that project's containers,
+        // wherever they run.
+        int idx = -1;
+        for (int i = 0; i < m_checkouts.size() && idx < 0; ++i) {
+            if (!m_checkouts[i].cfg.composeProject.isEmpty() && ci.project == m_checkouts[i].cfg.composeProject) {
+                idx = i;
+            }
+        }
+        if (idx < 0) {
+            const QString dir = Paths::normalize(ci.workingDir);
+            idx = checkoutForPath(dir);
+            // Only compose projects rooted exactly at a checkout, not ones in
+            // subdirectories, and only its own project when it names one.
+            if (idx < 0 || !Paths::same(m_checkouts[idx].cfg.path, dir) || !m_checkouts[idx].cfg.composeProject.isEmpty()) {
+                continue;
+            }
         }
         m_checkouts[idx].containers.append(ci);
         m_checkouts[idx].project = ci.project;
@@ -1252,6 +1268,9 @@ bool AppController::reloadConfig()
         for (const CheckoutConfig &cc : std::as_const(m_config.checkouts)) {
             if (cc.name == c.cfg.name && cc.path == c.cfg.path) {
                 c.cfg = cc;
+                if (!cc.composeProject.isEmpty()) {
+                    c.project = cc.composeProject;
+                }
             }
         }
         // A changed agent applies now unless one is running. Re-resolving the
@@ -1259,6 +1278,8 @@ bool AppController::reloadConfig()
         const QString configured = m_config.agent(c.cfg.agent).id;
         useProfile(i, !c.agent.running && configured != configuredBefore ? configured : QString(c.agent.profile));
     }
+    // A changed compose project name changes which containers are whose.
+    onContainers(QList<ContainerInfo>(m_containers));
     publishCheckouts();
     publishAttention();
     Q_EMIT configChanged();

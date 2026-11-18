@@ -79,6 +79,8 @@ private:
     void addCheckout();
     void moveCheckout(int delta);
     void checkPath();
+    void storeComposeFiles();
+    void refreshComposePlaceholders();
 
     void loadAgent(int row);
     void editAgent(const QString &key, const QJsonValue &value);
@@ -147,6 +149,11 @@ private:
     QComboBox *m_themeDark;
     QList<QWidget *> m_themeSystemRows; // the light and dark rows, shown for System
     void previewTheme();
+    QListWidget *m_composeFiles;
+    QLabel *m_composeFilesEmpty;
+    QLineEdit *m_composeProfiles;
+    QLineEdit *m_composeEnvFile;
+    QLineEdit *m_composeProject;
     QLineEdit *m_composeUp;
     QLineEdit *m_composeDown;
     QLineEdit *m_composeRestart;

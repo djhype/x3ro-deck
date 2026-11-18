@@ -124,6 +124,7 @@ public:
     const Checkout &checkout(int i) const { return m_checkouts.at(i); }
     const AgentProfile &profile(int i) const { return m_config.agent(m_checkouts.at(i).agent.profile); }
     SessionBackend *sessions() const { return m_sessions; }
+    DockerClient *docker() const { return m_docker; }
     // How a change of sessionBackend treats sessions in the old backend; both
     // take effect at the next start.
     enum class BackendSwitch {
@@ -226,6 +227,7 @@ private:
     QString m_configError;
     Config m_config;
     QList<Checkout> m_checkouts;
+    QList<ContainerInfo> m_containers; // the last list from Docker
     int m_current = 0;
     QString m_tab = QStringLiteral("docker");
     bool m_railVisible = true;

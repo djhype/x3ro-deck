@@ -178,8 +178,9 @@ Rectangle {
         Text {
             anchors.centerIn: services
             visible: services.count === 0
-            text: app.dockerConnected ? "Nothing running for this checkout.\nUse ▲ Up to start the compose services."
-                                      : "Waiting for /var/run/docker.sock …"
+            text: !app.dockerConnected ? "Waiting for /var/run/docker.sock …"
+                  : app.current.composeFound === false ? "No compose file found.\nAdd compose.yaml to the checkout, or pick files in Settings → Checkouts."
+                  : "Nothing running for this checkout.\nUse ▲ Up to start the compose services."
             horizontalAlignment: Text.AlignHCenter
             color: t.dim
             font.family: t.sans; font.pixelSize: 13

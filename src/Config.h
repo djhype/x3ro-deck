@@ -19,10 +19,19 @@ struct CheckoutConfig
     QString composeUp;
     QString composeDown;
     QString composeRestart;
+    // Global compose options the default commands pass: -f per file (in
+    // order; none = compose's own lookup), --profile, --env-file and -p.
+    QStringList composeFiles;
+    QStringList composeProfiles;
+    QString composeEnvFile;
+    QString composeProject; // empty = compose's default, the folder name
 
     // `which` is up, down or restart.
     QString composeCommand(const QString &which) const;
-    static QString defaultCompose(const QString &which);
+    // The command for `which` built from the options above.
+    QString defaultCompose(const QString &which) const;
+    // The options as command-line flags, with a leading space.
+    QString composeOptions() const;
 };
 
 struct QuickCommand

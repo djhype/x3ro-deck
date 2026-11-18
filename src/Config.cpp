@@ -1,5 +1,6 @@
 #include "Config.h"
 
+#include "ComposeFiles.h"
 #include "ConfigMigrations.h"
 #include "Paths.h"
 
@@ -338,12 +339,17 @@ bool Config::writeJson(const QJsonObject &root, QString *error)
     return false;
 }
 
-QString CheckoutConfig::defaultCompose(const QString &which)
+QString CheckoutConfig::composeOptions() const
 {
-    if (which == QLatin1String("up")) {
-        return QStringLiteral("{compose} up -d");
-    }
-    return which == QLatin1String("down") ? QStringLiteral("{compose} down") : QStringLiteral("{compose} restart");
+    return ComposeFiles::options(composeFiles, composeProfiles, composeEnvFile, composeProject);
+}
+
+QString CheckoutConfig::defaultCompose(const QString &which) const
+{
+    const QString verb = which == QLatin1String("up") ? QStringLiteral("up -d")
+        : which == QLatin1String("down")              ? QStringLiteral("down")
+                                                      : QStringLiteral("restart");
+    return QStringLiteral("{compose}") + composeOptions() + QLatin1Char(' ') + verb;
 }
 
 QString CheckoutConfig::composeCommand(const QString &which) const
@@ -368,6 +374,20 @@ Config Config::load(QString *error)
         cc.composeUp = compose.value(QStringLiteral("up")).toString().trimmed();
         cc.composeDown = compose.value(QStringLiteral("down")).toString().trimmed();
         cc.composeRestart = compose.value(QStringLiteral("restart")).toString().trimmed();
+        auto list = [](const QJsonValue &v) {
+            QStringList out;
+            const QJsonArray a = v.isArray() ? v.toArray() : QJsonArray{v};
+            for (const QJsonValue &x : a) {
+                if (const QString s = x.toString().trimmed(); !s.isEmpty()) {
+                    out.append(s);
+                }
+            }
+            return out;
+        };
+        cc.composeFiles = list(compose.value(QStringLiteral("files")));
+        cc.composeProfiles = list(compose.value(QStringLiteral("profiles")));
+        cc.composeEnvFile = compose.value(QStringLiteral("envFile")).toString().trimmed();
+        cc.composeProject = compose.value(QStringLiteral("project")).toString().trimmed();
         if (!cc.name.isEmpty()) {
             c.checkouts.append(cc);
         }
