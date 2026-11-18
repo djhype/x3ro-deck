@@ -11,5 +11,5 @@ release workflow runs it with these repository secrets:
 | `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID`, `NOTARY_PASSWORD` | Notarization credentials (app-specific password) |
 
 The Homebrew cask (`packaging/homebrew/x3ro-deck.rb`) goes into the
-`x3ro/homebrew-tap` repository as `Casks/x3ro-deck.rb`, so users run
-`brew install --cask x3ro/tap/x3ro-deck`.
+`djhype/homebrew-tap` repository as `Casks/x3ro-deck.rb`, so users run
+`brew install --cask djhype/tap/x3ro-deck`.

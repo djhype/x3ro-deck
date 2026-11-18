@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Installs x3ro deck through your distribution's package manager, from the
-# signed openSUSE Build Service repository (Debian, Ubuntu, Fedora, openSUSE)
-# or the AUR (Arch). Read it first:
+# signed openSUSE Build Service repository (Debian, Ubuntu, Fedora, openSUSE).
+# Read it first:
 #   curl -fsSLO https://x3ro.life/install.sh && less install.sh && sh install.sh
 #
 # Everything runs from main() on the last line, so a truncated download does
@@ -31,7 +31,7 @@ as_root() {
 from_source() {
     say "x3ro deck has no package for $1 yet. Build it from source:"
     say ""
-    say "  git clone https://github.com/x3ro/x3ro-deck && cd x3ro-deck"
+    say "  git clone https://github.com/djhype/x3ro-deck && cd x3ro-deck"
     say "  cmake --preset linux && cmake --build --preset linux && cmake --install build"
     say ""
     say "It needs Qt 6.4 or newer (base and declarative), libvterm, CMake and Ninja;"
@@ -75,17 +75,7 @@ main() {
         debian) install_deb "Debian_${VERSION_ID%%.*}" ;;
         fedora) install_rpm dnf "Fedora_${VERSION_ID}" ;;
         opensuse-tumbleweed) install_rpm zypper openSUSE_Tumbleweed ;;
-        arch | cachyos | endeavouros | manjaro)
-            for helper in paru yay; do
-                if command -v "$helper" >/dev/null 2>&1; then
-                    "$helper" -S --needed x3ro-deck
-                    return
-                fi
-            done
-            say "Install x3ro-deck (or x3ro-deck-bin) from the AUR with your AUR helper, e.g.:"
-            say "  paru -S x3ro-deck"
-            exit 2
-            ;;
+        arch | cachyos | endeavouros | manjaro) from_source "${PRETTY_NAME:-Arch Linux}" ;;
         *)
             case "$id_like" in
                 # Ubuntu derivatives (Mint, Pop!_OS) name their Ubuntu base.

@@ -10,9 +10,10 @@ OBS builds and signs the apt, dnf and zypper repositories from
 2. Add repositories: `xUbuntu_24.04`, `xUbuntu_24.10`, `Debian_12`,
    `Debian_13`, `Fedora_41`, `Fedora_42`, `openSUSE_Tumbleweed`
    (x86_64 and aarch64).
-3. Copy `_service` from this folder into the package. It downloads the
-   tagged release tarball and the packaging files, so a new release only
-   needs a version bump in `_service`.
+3. Copy `_service` from this folder into the package. It builds the
+   `release` branch, which the release workflow moves to each new tag (not
+   pre-releases) before it asks OBS to run the service, so a release needs no
+   change here.
 4. OBS signs every repository with the project's key. Publish the key's
    fingerprint in the README; `install.sh` fetches the key from
    `https://download.opensuse.org/repositories/<project>/<distro>/Release.key`

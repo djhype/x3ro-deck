@@ -32,10 +32,21 @@ Compose stack, quick commands and pull request in view.
 
 | OS | How |
 |---|---|
-| Arch Linux | `yay -S x3ro-deck` (or `x3ro-deck-bin`) from the AUR |
+| Arch Linux | build from source (below); there is no AUR package yet |
 | Debian, Ubuntu, Fedora, openSUSE | the signed apt/dnf/zypper repository; `install.sh` below sets it up |
-| macOS 12+ | `brew install --cask x3ro-deck`, or the signed DMG from the releases page |
-| Windows 10/11 | `winget install x3ro.deck`, or the installer from the releases page |
+| macOS 12+ | the DMG from the [releases page](https://github.com/djhype/x3ro-deck/releases) (unsigned, see below) |
+| Windows 10/11 | the installer from the [releases page](https://github.com/djhype/x3ro-deck/releases) (unsigned, see below) |
+
+The macOS and Windows builds are not code-signed yet, so the first launch
+needs one extra step:
+
+- **macOS** refuses to open the app the first time. Open System Settings →
+  Privacy & Security and choose **Open Anyway**, or run
+  `xattr -dr com.apple.quarantine /Applications/x3ro-deck.app`.
+- **Windows** SmartScreen warns about an unknown publisher. Choose **More
+  info → Run anyway**.
+
+Compare the download with `SHA256SUMS` on the releases page first.
 
 The install script picks your package manager and adds the signed repository.
 Read it before running it:

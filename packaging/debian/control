@@ -12,7 +12,7 @@ Build-Depends: debhelper-compat (= 13),
                libxcb1-dev,
                libgl-dev
 Standards-Version: 4.6.2
-Homepage: https://github.com/x3ro/x3ro-deck
+Homepage: https://github.com/djhype/x3ro-deck
 Rules-Requires-Root: no
 
 Package: x3ro-deck

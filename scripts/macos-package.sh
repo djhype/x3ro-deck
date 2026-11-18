@@ -34,10 +34,13 @@ for arch in arm64 x86_64; do
 done
 
 identity=${MACOS_SIGN_IDENTITY:--}
+# Ad-hoc signatures (test builds) cannot carry a secure timestamp.
+ts=--timestamp
+[[ $identity == - ]] && ts=--timestamp=none
 # Inside out: helpers and frameworks first, then the bundle.
 find "$app/Contents" -type f \( -name '*.dylib' -o -perm -u+x \) -print0 |
-    xargs -0 codesign --force --timestamp --options runtime --sign "$identity"
-codesign --force --timestamp --options runtime --entitlements "$root/packaging/macos/entitlements.plist" \
+    xargs -0 codesign --force "$ts" --options runtime --sign "$identity"
+codesign --force "$ts" --options runtime --entitlements "$root/packaging/macos/entitlements.plist" \
     --sign "$identity" "$app"
 codesign --verify --deep --strict "$app"
 

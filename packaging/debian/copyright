@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: x3ro-deck
-Source: https://github.com/x3ro/x3ro-deck
+Source: https://github.com/djhype/x3ro-deck
 
 Files: *
 Copyright: 2026 x3ro

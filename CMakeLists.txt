@@ -213,7 +213,7 @@ qt_add_resources(x3ro-deck-base licenses
         data/licenses/LGPL-3.0.txt
         data/licenses/libvterm-MIT.txt
 )
-set(X3RO_DECK_SOURCE_URL "https://github.com/x3ro/x3ro-deck" CACHE STRING "Where the About dialog says the source code is")
+set(X3RO_DECK_SOURCE_URL "https://github.com/djhype/x3ro-deck" CACHE STRING "Where the About dialog says the source code is")
 target_compile_definitions(x3ro-deck-base PRIVATE X3RO_DECK_VERSION="${PROJECT_VERSION}" X3RO_DECK_SOURCE_URL="${X3RO_DECK_SOURCE_URL}")
 
 if(NOT X3RO_DECK_CORE_ONLY)

@@ -14,7 +14,7 @@ gets a rewritten copy; the private one is archived as it is.
    `cd ../x3ro-deck-public && cmake --preset linux && cmake --build --preset linux && ctest --test-dir build`.
 4. Create a **new, empty** GitHub repository (never reuse the private remote's
    refs), then from the rewritten copy:
-   `git remote add origin git@github.com:x3ro/x3ro-deck.git && git push -u origin main --tags`.
+   `git remote add origin git@github.com:djhype/x3ro-deck.git && git push -u origin main --tags`.
 5. Wait for CI to pass, then make the repository public and archive the
    private original (Settings → Archive), keeping it.
 6. Continue with the release checklist: secrets and the `release` environment

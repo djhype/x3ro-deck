@@ -36,9 +36,13 @@ jobs:
           name: linux
           path: x3ro-deck-*.tar.gz
 
+  # Without the signing secrets, macOS and Windows build unsigned packages
+  # (ad-hoc on macOS) and say so in a notice.
   macos:
     runs-on: macos-latest
     environment: release
+    env:
+      SIGNED: ${{ secrets.MACOS_SIGN_IDENTITY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: jurplel/install-qt-action@v4
@@ -47,6 +51,7 @@ jobs:
           cache: true
       - run: brew install --quiet ninja pkg-config
       - name: Import the Developer ID certificate
+        if: env.SIGNED == 'true'
         env:
           P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -65,7 +70,7 @@ jobs:
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: |
-          test -n "$MACOS_SIGN_IDENTITY" || { echo "signing identity missing"; exit 1; }
+          test -n "$MACOS_SIGN_IDENTITY" || echo "::notice::No MACOS_SIGN_IDENTITY: the DMG is ad-hoc signed and not notarized"
           scripts/macos-package.sh "${GITHUB_REF_NAME#v}"
       - uses: actions/upload-artifact@v4
         with:
@@ -75,6 +80,8 @@ jobs:
   windows:
     runs-on: windows-latest
     environment: release
+    env:
+      SIGNED: ${{ secrets.AZURE_SIGNING_ENDPOINT != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
@@ -84,6 +91,7 @@ jobs:
           cache: true
       - run: choco install innosetup --no-progress -y
       - name: Azure login for Trusted Signing
+        if: env.SIGNED == 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -94,8 +102,11 @@ jobs:
           AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
           AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
         run: |
-          if (-not $env:AZURE_SIGNING_ENDPOINT) { throw "signing credentials missing" }
-          cargo install trusted-signing-cli --locked
+          if ($env:AZURE_SIGNING_ENDPOINT) {
+            cargo install trusted-signing-cli --locked
+          } else {
+            Write-Output "::notice::No AZURE_SIGNING_ENDPOINT: the installer is unsigned"
+          }
           scripts/windows-package.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v', '')
       - uses: actions/upload-artifact@v4
         with:
@@ -129,12 +140,31 @@ jobs:
           name: sums
           path: dist/SHA256SUMS
 
+  # Each publishing job skips itself, with a notice, until its secret exists.
+  # Homebrew and winget also wait for signed builds: an unsigned app is
+  # blocked by Gatekeeper, and winget flags unsigned installers.
+  # OBS's _service builds the `release` branch; pre-releases leave it alone.
   obs:
     needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: write
+    env:
+      ENABLED: ${{ secrets.OBS_TOKEN != '' }}
     steps:
+      - if: env.ENABLED != 'true'
+        run: echo "::notice::OBS skipped (no OBS_TOKEN)"
+      - name: Move the release branch to the tag
+        if: env.ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/release" -f sha="$GITHUB_SHA" -F force=true ||
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/heads/release -f sha="$GITHUB_SHA"
       - name: Run the OBS source service for the new tag
+        if: env.ENABLED == 'true'
         env:
           OBS_TOKEN: ${{ secrets.OBS_TOKEN }}
         run: |
@@ -146,13 +176,21 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     environment: release
+    env:
+      ENABLED: ${{ secrets.AUR_SSH_KEY != '' }}
     steps:
-      - run: pacman -Syu --noconfirm --needed git openssh base-devel
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - if: env.ENABLED != 'true'
+        run: echo "::notice::AUR skipped (no AUR_SSH_KEY)"
+      - if: env.ENABLED == 'true'
+        run: pacman -Syu --noconfirm --needed git openssh base-devel
+      - if: env.ENABLED == 'true'
+        uses: actions/checkout@v4
+      - if: env.ENABLED == 'true'
+        uses: actions/download-artifact@v4
         with:
           name: sums
       - name: Update and push the AUR packages
+        if: env.ENABLED == 'true'
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
@@ -178,31 +216,44 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     environment: release
+    env:
+      ENABLED: ${{ secrets.TAP_TOKEN != '' && secrets.MACOS_SIGN_IDENTITY != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - if: env.ENABLED != 'true'
+        run: echo "::notice::Homebrew skipped (needs TAP_TOKEN and a signed DMG)"
+      - if: env.ENABLED == 'true'
+        uses: actions/checkout@v4
+      - if: env.ENABLED == 'true'
+        uses: actions/download-artifact@v4
         with:
           name: sums
-      - name: Bump the cask in x3ro/homebrew-tap
+      - name: Bump the cask in djhype/homebrew-tap
+        if: env.ENABLED == 'true'
         env:
           GH_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: |
           version=${GITHUB_REF_NAME#v}
           sum=$(grep " x3ro-deck-$version.dmg\$" SHA256SUMS | cut -d' ' -f1)
-          gh repo clone x3ro/homebrew-tap tap
+          gh repo clone djhype/homebrew-tap tap
           mkdir -p tap/Casks
           sed -e "s/^  version .*/  version \"$version\"/" -e "s/^  sha256 .*/  sha256 \"$sum\"/" \
             packaging/homebrew/x3ro-deck.rb > tap/Casks/x3ro-deck.rb
-          git -C tap -c user.name="x3ro deck release" -c user.email="release@x3ro.life" commit -am "x3ro-deck $version"
-          git -C tap push
+          git -C tap add Casks/x3ro-deck.rb
+          git -C tap -c user.name="x3ro deck release" -c user.email="release@x3ro.life" commit -m "x3ro-deck $version"
+          git -C tap push origin HEAD:main
 
   winget:
     needs: publish
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: windows-latest
     environment: release
+    env:
+      ENABLED: ${{ secrets.WINGET_TOKEN != '' && secrets.AZURE_SIGNING_ENDPOINT != '' }}
     steps:
+      - if: env.ENABLED != 'true'
+        run: echo "::notice::winget skipped (needs WINGET_TOKEN and a signed installer)"
       - name: Open a winget-pkgs pull request
+        if: env.ENABLED == 'true'
         shell: pwsh
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
@@ -210,5 +261,5 @@ jobs:
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
           Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
           .\wingetcreate.exe update x3ro.deck --version $version `
-            --urls "https://github.com/x3ro/x3ro-deck/releases/download/v$version/x3ro-deck-$version-setup.exe" `
+            --urls "https://github.com/djhype/x3ro-deck/releases/download/v$version/x3ro-deck-$version-setup.exe" `
             --token $env:WINGET_TOKEN --submit

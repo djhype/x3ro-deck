@@ -8,7 +8,7 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
     winget install --id x3ro.deck --exact --source winget --accept-package-agreements --accept-source-agreements
     exit $LASTEXITCODE
 }
-$release = Invoke-RestMethod https://api.github.com/repos/x3ro/x3ro-deck/releases/latest
+$release = Invoke-RestMethod https://api.github.com/repos/djhype/x3ro-deck/releases/latest
 $asset = $release.assets | Where-Object name -like 'x3ro-deck-*-setup.exe' | Select-Object -First 1
 $sums = (Invoke-RestMethod ($release.assets | Where-Object name -eq 'SHA256SUMS').browser_download_url)
 $file = Join-Path $env:TEMP $asset.name

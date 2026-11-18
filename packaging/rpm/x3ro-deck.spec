@@ -6,7 +6,7 @@ Version:        0.1.0
 Release:        1%{?dist}
 Summary:        Desktop cockpit for coding agents and their Docker Compose stacks
 License:        GPL-3.0-or-later
-URL:            https://github.com/x3ro/x3ro-deck
+URL:            https://github.com/djhype/x3ro-deck
 Source0:        %{url}/archive/refs/tags/v%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  cmake >= 3.24
