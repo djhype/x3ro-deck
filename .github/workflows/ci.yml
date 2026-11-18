@@ -21,11 +21,10 @@ jobs:
             runner: macos-latest
             container: ''
             preset: macos
-          # The Windows bring-up ticket enables this:
-          # - name: windows
-          #   runner: windows-latest
-          #   container: ''
-          #   preset: windows
+          - name: windows
+            runner: windows-latest
+            container: ''
+            preset: windows
     steps:
       # Without git, actions/checkout downloads a tarball with no .git, and
       # check-format.sh lists files with git ls-files.
@@ -45,6 +44,19 @@ jobs:
       - name: Install dependencies (macOS)
         if: matrix.name == 'macos'
         run: scripts/ci-macos-deps.sh
+
+      # MSVC's environment, and Qt from the official installer; libvterm is
+      # built from its release tarball (X3RO_DECK_BUNDLED_VTERM falls back to it).
+      - name: MSVC environment
+        if: matrix.name == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt (Windows)
+        if: matrix.name == 'windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
 
       - name: Check formatting
         if: matrix.name == 'linux'
@@ -66,6 +78,17 @@ jobs:
         if: matrix.name == 'macos'
         run: ctest --test-dir build --output-on-failure --no-tests=ignore -E "^(sessiond|sessionflow-daemon|backendswitch)$"
 
+      - name: Smoke test (Windows)
+        if: matrix.name == 'windows'
+        shell: bash
+        run: |
+          # Qt's config location on Windows is %LOCALAPPDATA%.
+          mkdir -p "$LOCALAPPDATA/x3ro-deck"
+          printf '{"autostartAgents": false, "checkouts": [{"name": "deck", "path": "%s"}]}' "$(cygpath -m "$GITHUB_WORKSPACE")" > "$LOCALAPPDATA/x3ro-deck/config.json"
+          QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 ./build/x3ro-deck.exe --tab agents --select 0 --screenshot smoke-windows.png 8000 2>&1 | tee smoke.log
+          test -s smoke-windows.png
+          ! grep -E "qrc:/qml/.*(Error|error|TypeError|ReferenceError)" smoke.log
+
       - name: Smoke test (macOS)
         if: matrix.name == 'macos'
         run: |
@@ -83,7 +106,7 @@ jobs:
         run: scripts/smoke-test.sh build/x3ro-deck smoke-${{ matrix.name }}.png
 
       - name: Upload screenshot
-        if: always() && matrix.name != 'windows'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: screenshot-${{ matrix.name }}

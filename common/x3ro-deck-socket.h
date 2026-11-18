@@ -11,19 +11,29 @@
 //      macOS: $TMPDIR/x3ro-deck.sock; $TMPDIR is per-user but can be long.
 //   3. Otherwise /tmp/x3ro-deck-<uid>/x3ro-deck.sock. The app creates that
 //      directory 0700 and refuses one owned by another user.
+//   Windows: the named pipe \\.\pipe\x3ro-deck-<USERNAME> (and so on).
 
 #include <cstddef>
 #include <cstdlib>
 #include <string>
 
+#if defined(_WIN32)
+#include <cstdlib>
+#else
 #include <sys/un.h>
 #include <unistd.h>
+#endif
 
 namespace x3ro_deck
 {
 
+#if defined(_WIN32)
+// Named pipes take names up to 256 characters.
+constexpr std::size_t kMaxSocketPath = 256;
+#else
 // sun_path is 108 bytes on Linux and 104 on macOS, NUL included.
 constexpr std::size_t kMaxSocketPath = sizeof(sockaddr_un::sun_path) - 1;
+#endif
 
 struct SocketPath
 {
@@ -49,6 +59,16 @@ inline SocketPath socketPathFor(const char *overrideVar, const std::string &file
         r.path = over;
         return r;
     }
+#if defined(_WIN32)
+    // A named pipe per user; QLocalServer and QLocalSocket take the full name.
+    std::string user = envVar("USERNAME");
+    if (user.empty()) {
+        user = "user";
+    }
+    const std::string base = file.substr(0, file.rfind(".sock"));
+    r.path = "\\\\.\\pipe\\" + base + "-" + user;
+    return r;
+#endif
 #if defined(__APPLE__)
     std::string dir = envVar("TMPDIR");
 #else
@@ -61,8 +81,10 @@ inline SocketPath socketPathFor(const char *overrideVar, const std::string &file
         r.path = dir + "/" + file;
         return r;
     }
+#if !defined(_WIN32)
     r.privateDir = "/tmp/x3ro-deck-" + std::to_string(getuid());
     r.path = r.privateDir + "/" + file;
+#endif
     return r;
 }
 

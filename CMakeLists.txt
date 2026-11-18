@@ -27,9 +27,32 @@ option(X3RO_DECK_CORE_ONLY "Skip the GUI app and its Qt Quick dependency: build 
 
 # 6.4 is what Ubuntu 24.04 and Debian 12 ship.
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network)
-# The built-in terminal's emulator.
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(vterm REQUIRED IMPORTED_TARGET vterm>=0.3)
+# The built-in terminal's emulator: the system's libvterm through pkg-config,
+# else (Windows, or -DX3RO_DECK_BUNDLED_VTERM=ON) the release tarball built here.
+option(X3RO_DECK_BUNDLED_VTERM "Build libvterm from its release tarball instead of using the system's" OFF)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND AND NOT X3RO_DECK_BUNDLED_VTERM)
+    pkg_check_modules(vterm IMPORTED_TARGET vterm>=0.3)
+endif()
+if(NOT vterm_FOUND)
+    enable_language(C)
+    include(FetchContent)
+    FetchContent_Declare(libvterm
+        URL https://www.leonerd.org.uk/code/libvterm/libvterm-0.3.3.tar.gz
+        URL_HASH SHA256=09156f43dd2128bd347cbeebe50d9a571d32c64e0cf18d211197946aff7226e0
+        SOURCE_SUBDIR no-cmake-here)
+    FetchContent_MakeAvailable(libvterm)
+    file(GLOB vterm_sources ${libvterm_SOURCE_DIR}/src/*.c)
+    add_library(vterm_bundled STATIC ${vterm_sources})
+    target_include_directories(vterm_bundled PUBLIC ${libvterm_SOURCE_DIR}/include PRIVATE ${libvterm_SOURCE_DIR}/src)
+    set_target_properties(vterm_bundled PROPERTIES C_STANDARD 99 POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(vterm_bundled PRIVATE /w)
+    else()
+        target_compile_options(vterm_bundled PRIVATE -w)
+    endif()
+    add_library(PkgConfig::vterm ALIAS vterm_bundled)
+endif()
 
 # forkpty: libutil on Linux, libSystem on macOS.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -39,10 +62,11 @@ else()
 endif()
 
 # The x3ro-deck-sessiond wire protocol and the attach client: QtCore only.
-add_library(x3ro-deck-sessionproto STATIC
-    src/SessiondProtocol.cpp
-    attach/AttachClient.cpp
-)
+add_library(x3ro-deck-sessionproto STATIC src/SessiondProtocol.cpp)
+if(NOT WIN32)
+    # Raw-mode terminal client; Windows gets one with its ConPTY daemon.
+    target_sources(x3ro-deck-sessionproto PRIVATE attach/AttachClient.cpp)
+endif()
 x3ro_deck_set_warnings(x3ro-deck-sessionproto)
 target_include_directories(x3ro-deck-sessionproto PUBLIC src attach common)
 target_link_libraries(x3ro-deck-sessionproto PUBLIC Qt6::Core)
@@ -65,15 +89,18 @@ x3ro_deck_set_warnings(x3ro-deck-sessionscreen)
 target_include_directories(x3ro-deck-sessionscreen PUBLIC src)
 target_link_libraries(x3ro-deck-sessionscreen PUBLIC Qt6::Core PkgConfig::vterm)
 
-# Owns agent PTYs so agents outlive the GUI (sessionBackend "daemon").
-add_executable(x3ro-deck-sessiond sessiond/main.cpp sessiond/Daemon.cpp)
-x3ro_deck_set_warnings(x3ro-deck-sessiond)
-target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Network ${X3RO_DECK_PTY_LIBS})
+if(NOT WIN32)
+    # Owns agent PTYs so agents outlive the GUI (sessionBackend "daemon").
+    # Windows gets a ConPTY daemon in its own ticket.
+    add_executable(x3ro-deck-sessiond sessiond/main.cpp sessiond/Daemon.cpp)
+    x3ro_deck_set_warnings(x3ro-deck-sessiond)
+    target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Network ${X3RO_DECK_PTY_LIBS})
 
-# `x3ro-deck attach` without the GUI's libraries; the agent terminals run it.
-add_executable(x3ro-deck-attach attach/main.cpp)
-x3ro_deck_set_warnings(x3ro-deck-attach)
-target_link_libraries(x3ro-deck-attach PRIVATE x3ro-deck-sessionproto)
+    # `x3ro-deck attach` without the GUI's libraries; the agent terminals run it.
+    add_executable(x3ro-deck-attach attach/main.cpp)
+    x3ro_deck_set_warnings(x3ro-deck-attach)
+    target_link_libraries(x3ro-deck-attach PRIVATE x3ro-deck-sessionproto)
+endif()
 
 # Desktop integration backends, one set per OS.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -109,7 +136,7 @@ add_library(x3ro-deck-base STATIC
     src/AppController.cpp
     src/SettingsDialog.cpp
     src/TerminalChannel.h
-    src/PtyChannel.cpp
+    $<IF:$<BOOL:${WIN32}>,src/PtyChannelNone.cpp,src/PtyChannel.cpp>
     src/SessiondChannel.cpp
     src/TerminalAppearance.cpp
     src/SessionShell.cpp
@@ -188,6 +215,13 @@ if(NOT X3RO_DECK_CORE_ONLY)
         set_source_files_properties(data/icons/x3ro-deck.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
         set_target_properties(x3ro-deck PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_BINARY_DIR}/Info.plist OUTPUT_NAME x3ro-deck)
     endif()
+    if(WIN32)
+        # The taskbar icon and version info; no console window.
+        configure_file(data/windows/x3ro-deck.rc.in ${CMAKE_CURRENT_BINARY_DIR}/x3ro-deck.rc @ONLY)
+        target_sources(x3ro-deck PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/x3ro-deck.rc)
+        set_target_properties(x3ro-deck PROPERTIES WIN32_EXECUTABLE ON)
+        target_link_libraries(x3ro-deck PRIVATE shell32)
+    endif()
     x3ro_deck_set_warnings(x3ro-deck)
     target_link_libraries(x3ro-deck PRIVATE
         x3ro-deck-base
@@ -197,10 +231,13 @@ endif()
 
 # The hook runs on every agent tool call, so it is plain C++ with no Qt
 # dependency: it starts in about a millisecond and never blocks the agent.
-add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
-x3ro_deck_set_warnings(x3ro-deck-hook)
-target_include_directories(x3ro-deck-hook PRIVATE common)
-target_compile_options(x3ro-deck-hook PRIVATE $<IF:$<BOOL:${MSVC}>,/O2,-O2>)
+# It speaks Unix sockets; Windows gets a named-pipe client in its own ticket.
+if(NOT WIN32)
+    add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
+    x3ro_deck_set_warnings(x3ro-deck-hook)
+    target_include_directories(x3ro-deck-hook PRIVATE common)
+    target_compile_options(x3ro-deck-hook PRIVATE $<IF:$<BOOL:${MSVC}>,/O2,-O2>)
+endif()
 
 if(APPLE AND NOT X3RO_DECK_CORE_ONLY)
     set_target_properties(x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach PROPERTIES
@@ -221,7 +258,9 @@ else()
     if(NOT X3RO_DECK_CORE_ONLY)
         install(TARGETS x3ro-deck RUNTIME DESTINATION bin)
     endif()
-    install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
+    if(NOT WIN32)
+        install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
+    endif()
 endif()
 if(UNIX AND NOT APPLE)
     # Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually

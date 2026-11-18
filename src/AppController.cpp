@@ -446,6 +446,10 @@ QVariantMap AppController::current() const
         {QStringLiteral("agentMissing"),
          [&] {
              const Dependency *d = agentMissing(m_current);
+             if (d && d->id == QLatin1String("sessiond")) {
+                 return QVariantMap{{QStringLiteral("title"), QStringLiteral("The session daemon is required")},
+                                    {QStringLiteral("hint"), d->hint}};
+             }
              return d ? QVariantMap{{QStringLiteral("title"), QStringLiteral("%1 not found").arg(d->name)},
                                     {QStringLiteral("hint"),
                                      QStringLiteral("%1 is not on PATH or the login shell's PATH. %2").arg(d->binary, d->hint)}}
@@ -491,6 +495,10 @@ const Dependency *AppController::agentMissing(int index) const
 {
     if (index < 0 || index >= m_checkouts.size()) {
         return nullptr;
+    }
+    // Without the session daemon nothing can run, whatever the agent.
+    if (const Dependency *d = m_deps->missing(QStringLiteral("sessiond"))) {
+        return d;
     }
     return m_deps->missing(Dependencies::commandBinary(profile(index).command));
 }

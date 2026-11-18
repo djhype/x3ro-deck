@@ -13,7 +13,10 @@
 #include <QLockFile>
 #include <QThread>
 
+#ifdef Q_OS_UNIX
 #include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace
 {
@@ -45,6 +48,7 @@ SingleInstance::Result SingleInstance::claim(const QStringList &args, const QStr
         }
         return Result::Failed;
     };
+#ifdef Q_OS_UNIX
     if (!m_privateDir.isEmpty()) {
         // /tmp is shared: a directory someone else made could take our launches.
         const QByteArray dir = QFile::encodeName(m_privateDir);
@@ -54,6 +58,7 @@ SingleInstance::Result SingleInstance::claim(const QStringList &args, const QStr
             return fail(QStringLiteral("%1 is not a private directory owned by this user").arg(m_privateDir));
         }
     }
+#endif
 
     const QByteArray message = QJsonDocument(QJsonObject{
                                                  {QStringLiteral("op"), QStringLiteral("activate")},

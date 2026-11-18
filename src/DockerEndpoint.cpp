@@ -18,6 +18,10 @@ DockerEndpoint fromHost(const QString &host, const QString &source)
         e.socketPath = host.mid(7);
     } else if (host.startsWith(QLatin1Char('/'))) {
         e.socketPath = host;
+    } else if (host.startsWith(QLatin1String("npipe://"))) {
+        // npipe:////./pipe/docker_engine → \\.\pipe\docker_engine, which
+        // QLocalSocket opens as a named pipe on Windows.
+        e.socketPath = host.mid(8).replace(QLatin1Char('/'), QLatin1Char('\\'));
     } else {
         const QString scheme = host.section(QStringLiteral("://"), 0, 0);
         e.error = QStringLiteral("%1 endpoints are not supported (%2)").arg(scheme.isEmpty() ? host : scheme + QStringLiteral("://"), host);
@@ -54,6 +58,9 @@ QString DockerEndpoint::display() const
 {
     if (!error.isEmpty()) {
         return error;
+    }
+    if (socketPath.startsWith(QLatin1Char('\\'))) {
+        return QStringLiteral("npipe://%1 (%2)").arg(QString(socketPath).replace(QLatin1Char('\\'), QLatin1Char('/')), source);
     }
     return QStringLiteral("unix://%1 (%2)").arg(socketPath, source);
 }
@@ -96,5 +103,9 @@ DockerEndpoint resolveDockerEndpoint(const QString &setting, const DockerEnviron
             return {path, source, {}};
         }
     }
+#if defined(Q_OS_WIN)
+    return {QStringLiteral("\\\\.\\pipe\\docker_engine"), QStringLiteral("Docker Desktop"), {}};
+#else
     return {QStringLiteral("/var/run/docker.sock"), QStringLiteral("default"), {}};
+#endif
 }

@@ -48,6 +48,30 @@ private Q_SLOTS:
         QVERIFY(Dependencies::parseProbe("__X3RO_DECK_PATH__/a").isEmpty());
     }
 
+    // The daemon backend needs x3ro-deck-sessiond: found through its
+    // override, else reported missing (as on Windows for now).
+    void sessionDaemon()
+    {
+        Config config;
+        config.sessionBackend = QStringLiteral("daemon");
+        qunsetenv("X3RO_DECK_SESSIOND_BIN");
+        Dependencies deps;
+        deps.setAppPath(QString());
+        deps.setConfig(config);
+        deps.setLoginPath(QString());
+        QVERIFY(deps.missing(QStringLiteral("sessiond")));
+        QTemporaryDir dir;
+        const QString bin = dir.filePath(QStringLiteral("x3ro-deck-sessiond"));
+        QFile f(bin);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.close();
+        f.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+        qputenv("X3RO_DECK_SESSIOND_BIN", bin.toLocal8Bit());
+        deps.setConfig(config);
+        QVERIFY(!deps.missing(QStringLiteral("sessiond")));
+        qunsetenv("X3RO_DECK_SESSIOND_BIN");
+    }
+
     void listFollowsConfig()
     {
         QTemporaryDir app;
@@ -74,8 +98,8 @@ private Q_SLOTS:
             ids.append(d.id);
         }
         QCOMPARE(ids,
-                 (QStringList{QStringLiteral("git"), QStringLiteral("gh"), QStringLiteral("compose"), QStringLiteral("claude"),
-                              QStringLiteral("codex")}));
+                 (QStringList{QStringLiteral("git"), QStringLiteral("gh"), QStringLiteral("compose"), QStringLiteral("sessiond"),
+                              QStringLiteral("claude"), QStringLiteral("codex")}));
         QCOMPARE(deps.list().at(2).binary, QStringLiteral("podman"));
         // Nothing counts as missing until the login shell's PATH is known.
         QVERIFY(!deps.missing(QStringLiteral("codex")));

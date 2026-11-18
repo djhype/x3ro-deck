@@ -8,7 +8,10 @@
 
 #include <x3ro-deck-socket.h>
 
+#ifdef Q_OS_UNIX
 #include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 AgentBus::AgentBus(QObject *parent)
     : QObject(parent)
@@ -54,6 +57,7 @@ bool AgentBus::listen(QString *error)
         return fail(
             QStringLiteral("socket path is %1 bytes, over the platform limit of %2").arg(sock.path.size()).arg(x3ro_deck::kMaxSocketPath));
     }
+#ifdef Q_OS_UNIX
     if (!sock.privateDir.empty()) {
         // /tmp is shared: a directory someone else made could hand them our hooks.
         const char *dir = sock.privateDir.c_str();
@@ -63,6 +67,7 @@ bool AgentBus::listen(QString *error)
             return fail(QStringLiteral("%1 is not a private directory owned by this user").arg(QString::fromStdString(sock.privateDir)));
         }
     }
+#endif
     // A stale socket from a crashed instance would make listen() fail. The
     // single-instance guard in main() guarantees no live instance owns it.
     const QString path = QString::fromStdString(sock.path);

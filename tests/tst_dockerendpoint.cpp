@@ -77,6 +77,7 @@ private Q_SLOTS:
     void settingWins();
     void dockerHostWinsOverTheRest();
     void unsupportedSchemes();
+    void namedPipe();
     void activeContext();
     void socketCandidatesInOrder();
     void fallsBackToTheSystemSocket();
@@ -108,12 +109,18 @@ void DockerEndpointTest::dockerHostWinsOverTheRest()
 
 void DockerEndpointTest::unsupportedSchemes()
 {
-    for (const QString &host :
-         {QStringLiteral("tcp://10.0.0.1:2375"), QStringLiteral("ssh://me@box"), QStringLiteral("npipe:////./pipe/docker_engine")}) {
+    for (const QString &host : {QStringLiteral("tcp://10.0.0.1:2375"), QStringLiteral("ssh://me@box")}) {
         const auto e = resolveDockerEndpoint(host, fakeEnv({}, QStringLiteral("/h"), {}));
         QVERIFY(e.socketPath.isEmpty());
         QVERIFY2(e.error.contains(QStringLiteral("not supported")), qPrintable(e.error));
     }
+}
+
+void DockerEndpointTest::namedPipe()
+{
+    const auto e = resolveDockerEndpoint(QStringLiteral("npipe:////./pipe/docker_engine"), fakeEnv({}, QStringLiteral("/h"), {}));
+    QCOMPARE(e.socketPath, QStringLiteral("\\\\.\\pipe\\docker_engine"));
+    QVERIFY(e.display().startsWith(QStringLiteral("npipe:////./pipe/docker_engine")));
 }
 
 void DockerEndpointTest::activeContext()

@@ -12,8 +12,9 @@
 //      $DOCKER_CONFIG/config.json) from contexts/meta/*/meta.json
 //   4. the first socket that exists: rootless Docker, Podman, Colima, OrbStack
 //   5. /var/run/docker.sock
-// Only unix:// hosts (or a bare absolute path) are supported; npipe:// is for
-// Windows and tcp:// and ssh:// are out of scope.
+// unix:// hosts (or a bare absolute path) and, for Docker Desktop on Windows,
+// npipe:// are supported (the default there is npipe:////./pipe/docker_engine);
+// tcp:// and ssh:// are out of scope.
 struct DockerEndpoint
 {
     QString socketPath; // empty when the chosen host is unsupported

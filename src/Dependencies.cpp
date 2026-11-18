@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "SessionShell.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QProcess>
@@ -118,6 +119,18 @@ void Dependencies::setConfig(const Config &config)
                      ? QStringLiteral("Install Podman and podman-compose.")
                      : QStringLiteral("Install Docker with the compose plugin, or set the compose command in Settings → Docker."),
                  {}});
+    if (config.sessionBackend == QLatin1String("daemon")) {
+        list.append({QStringLiteral("sessiond"),
+                     QStringLiteral("Session daemon (x3ro-deck-sessiond)"),
+                     QStringLiteral("x3ro-deck-sessiond"),
+                     QStringLiteral("Agent sessions"),
+#if defined(Q_OS_WIN)
+                     QStringLiteral("Agent sessions on Windows run in x3ro-deck-sessiond, which this build does not include yet."),
+#else
+                     QStringLiteral("It ships with X3RO Deck: reinstall it, or set the session backend to tmux."),
+#endif
+                     {}});
+    }
     if (config.sessionBackend != QLatin1String("daemon")) {
         list.append({QStringLiteral("tmux"),
                      QStringLiteral("tmux"),
@@ -184,6 +197,17 @@ void Dependencies::check()
 {
     for (Dependency &d : m_list) {
         d.path = resolve(d.binary, m_appPath, m_loginPath);
+        // The daemon is found the way DaemonBackend starts it: the override,
+        // then next to the app.
+        if (d.id == QLatin1String("sessiond") && d.path.isEmpty()) {
+            for (const QString &candidate : {qEnvironmentVariable("X3RO_DECK_SESSIOND_BIN"),
+                                             QCoreApplication::applicationDirPath() + QStringLiteral("/x3ro-deck-sessiond")}) {
+                if (!candidate.isEmpty() && QFileInfo(candidate).isExecutable()) {
+                    d.path = candidate;
+                    break;
+                }
+            }
+        }
     }
     Q_EMIT changed();
 }
