@@ -106,3 +106,8 @@ add_executable(tst_dependencies tst_dependencies.cpp)
 x3ro_deck_set_warnings(tst_dependencies)
 target_link_libraries(tst_dependencies PRIVATE x3ro-deck-base Qt6::Test)
 add_test(NAME dependencies COMMAND tst_dependencies)
+
+add_executable(tst_worktrees tst_worktrees.cpp)
+x3ro_deck_set_warnings(tst_worktrees)
+target_link_libraries(tst_worktrees PRIVATE x3ro-deck-base Qt6::Test)
+add_test(NAME worktrees COMMAND tst_worktrees)

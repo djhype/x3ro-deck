@@ -234,6 +234,7 @@ AppController::AppController(QObject *parent)
 {
     m_terminalSettings->select(m_config.terminalSettings, m_config.terminalProfile);
     m_deps->setConfig(m_config);
+    m_firstRun = m_config.checkouts.isEmpty();
 
     // A session that survived a restart runs the profile last picked for it;
     // ensureAgentSession() switches a fresh one to the configured agent.
@@ -1205,6 +1206,60 @@ void AppController::openPr(int index)
     if (index < m_checkouts.size() && !m_checkouts[index].pr.url.isEmpty()) {
         QDesktopServices::openUrl(QUrl(m_checkouts[index].pr.url));
     }
+}
+
+void AppController::chooseWelcomeFolder()
+{
+    Q_EMIT welcomeFolderRequested();
+}
+
+void AppController::setWelcomeFolder(const QString &dir)
+{
+    if (dir.isEmpty()) {
+        return;
+    }
+    m_welcome = Worktrees::candidates(Worktrees::discover(dir));
+    Q_EMIT welcomeChanged();
+}
+
+void AppController::toggleWelcomeCandidate(int index)
+{
+    if (index >= 0 && index < m_welcome.size()) {
+        m_welcome[index].checked = !m_welcome[index].checked;
+        Q_EMIT welcomeChanged();
+    }
+}
+
+void AppController::cancelWelcome()
+{
+    m_welcome.clear();
+    Q_EMIT welcomeChanged();
+}
+
+void AppController::finishWelcome()
+{
+    if (std::none_of(m_welcome.cbegin(), m_welcome.cend(), [](const Worktrees::Candidate &c) { return c.checked; })) {
+        return;
+    }
+    QString error;
+    const QJsonObject root = Config::readJson(&error);
+    if (error.isEmpty() && Config::writeJson(Worktrees::withCheckouts(root, m_welcome), &error)) {
+        Q_EMIT welcomeFinished();
+    } else {
+        Q_EMIT welcomeFailed(error);
+    }
+}
+
+QVariantList AppController::welcomeCandidates() const
+{
+    QVariantList out;
+    for (const Worktrees::Candidate &c : m_welcome) {
+        out.append(QVariantMap{{QStringLiteral("name"), c.name},
+                               {QStringLiteral("path"), Paths::tilde(c.path)},
+                               {QStringLiteral("branch"), c.branch},
+                               {QStringLiteral("checked"), c.checked}});
+    }
+    return out;
 }
 
 void AppController::refreshPr()

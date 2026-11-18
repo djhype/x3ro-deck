@@ -17,7 +17,8 @@ tmp=$(mktemp -d /tmp/xds.XXXXXX)
 trap 'tmux -L x3ro-deck kill-server 2>/dev/null || true; rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"
 mkdir -p "$tmp/config/x3ro-deck"
-echo '{"autostartAgents": false}' >"$tmp/config/x3ro-deck/config.json"
+# One checkout (this repository), so the screenshot shows the layout rather than the welcome screen.
+printf '{"autostartAgents": false, "checkouts": [{"name": "deck", "path": "%s"}]}\n' "$PWD" >"$tmp/config/x3ro-deck/config.json"
 
 export XDG_RUNTIME_DIR=$tmp TMUX_TMPDIR=$tmp XDG_CONFIG_HOME=$tmp/config
 export QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1

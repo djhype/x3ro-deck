@@ -15,6 +15,7 @@
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QMenu>
 #include <QMessageBox>
@@ -147,7 +148,21 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     body->setSizes({250, 1000, 350});
     agentsPage->setSizes({1000, 320});
 
-    setCentralWidget(central);
+    // First run: the welcome screen stands in for the layout until checkouts exist.
+    auto *frame = new QStackedWidget(this);
+    if (m_app->firstRun()) {
+        frame->addWidget(quick(QStringLiteral("Welcome.qml"), frame));
+    }
+    frame->addWidget(central);
+    setCentralWidget(frame);
+    connect(m_app, &AppController::welcomeFolderRequested, this, [this] {
+        const QString dir = QFileDialog::getExistingDirectory(this, QStringLiteral("Choose a checkout"), QDir::homePath());
+        m_app->setWelcomeFolder(dir);
+    });
+    connect(m_app, &AppController::welcomeFinished, this, &MainWindow::restart);
+    connect(m_app, &AppController::welcomeFailed, this, [this](const QString &error) {
+        QMessageBox::warning(this, QStringLiteral("X3RO Deck"), QStringLiteral("Could not save the checkouts.\n\n%1").arg(error));
+    });
 
     // Window geometry and every splitter position survive restarts.
     QSettings settings;

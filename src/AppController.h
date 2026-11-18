@@ -9,6 +9,7 @@
 #include "PrWatcher.h"
 #include "SessionBackend.h"
 #include "TerminalSettings.h"
+#include "Worktrees.h"
 
 #include <QDateTime>
 #include <QObject>
@@ -83,6 +84,9 @@ class AppController : public QObject
     Q_PROPERTY(QVariantList dependencies READ dependencies NOTIFY dependenciesChanged)
     // The compose command's program when it is missing: {title, hint}, or empty.
     Q_PROPERTY(QVariantMap composeMissing READ composeMissing NOTIFY dependenciesChanged)
+    // No checkouts configured: the window shows the welcome screen.
+    Q_PROPERTY(bool firstRun READ firstRun CONSTANT)
+    Q_PROPERTY(QVariantList welcomeCandidates READ welcomeCandidates NOTIFY welcomeChanged)
     Q_PROPERTY(VariantListModel *checkouts READ checkoutModel CONSTANT)
     Q_PROPERTY(VariantListModel *services READ serviceModel CONSTANT)
     Q_PROPERTY(VariantListModel *attention READ attentionModel CONSTANT)
@@ -107,6 +111,8 @@ public:
     QVariantList dependencies() const;
     QVariantMap composeMissing() const { return missingNotice(QStringLiteral("compose")); }
     Dependencies *dependencyChecker() const { return m_deps; }
+    bool firstRun() const { return m_firstRun; }
+    QVariantList welcomeCandidates() const;
 
     VariantListModel *checkoutModel() const { return m_checkoutModel; }
     VariantListModel *serviceModel() const { return m_serviceModel; }
@@ -142,6 +148,14 @@ public:
     Q_INVOKABLE void openPr(int index = -1);
     Q_INVOKABLE void refreshPr();
 
+    // Welcome screen: pick a folder, choose which of its worktrees to add, finish.
+    Q_INVOKABLE void chooseWelcomeFolder();
+    void setWelcomeFolder(const QString &dir);
+    Q_INVOKABLE void toggleWelcomeCandidate(int index);
+    Q_INVOKABLE void cancelWelcome();
+    // Writes the picked checkouts to config.json; welcomeFinished() follows.
+    Q_INVOKABLE void finishWelcome();
+
     // Makes sure the checkout's agent session exists. Creating it switches to
     // the checkout's configured agent and, with autostartAgents, starts it.
     bool ensureAgentSession(int index);
@@ -161,6 +175,11 @@ Q_SIGNALS:
     void configChanged();
     void settingsRequested(const QString &page);
     void dependenciesChanged();
+    void welcomeChanged();
+    void welcomeFolderRequested();
+    // The checkouts are written; the window restarts to load them.
+    void welcomeFinished();
+    void welcomeFailed(const QString &error);
 
 private:
     void sampleStats();
@@ -199,6 +218,8 @@ private:
     GitWatcher *m_git;
     PrWatcher *m_prs;
     Dependencies *m_deps;
+    bool m_firstRun = false;
+    QList<Worktrees::Candidate> m_welcome;
     VariantListModel *m_checkoutModel;
     VariantListModel *m_serviceModel;
     VariantListModel *m_attention;
