@@ -284,3 +284,142 @@ QList<DetectedCommand> NoxDetector::detect(const QString &dir) const
     }
     return out;
 }
+
+// ───────────────────────── Composer / artisan ─────────────────────────
+
+QList<DetectedCommand> ComposerDetector::detect(const QString &dir) const
+{
+    const QString source = QStringLiteral("composer.json");
+    if (!exists(dir, source)) {
+        return {};
+    }
+    const QByteArray json = readFile(QDir(dir).filePath(source));
+    const QJsonObject root = QJsonDocument::fromJson(json).object();
+    const QJsonObject scripts = root.value(QStringLiteral("scripts")).toObject();
+    const QJsonObject descriptions = root.value(QStringLiteral("scripts-descriptions")).toObject();
+    QList<DetectedCommand> out;
+    for (const QString &name : keysInFileOrder(json, scripts, "\"scripts\"")) {
+        // Composer's own event hooks run by themselves, not from a button.
+        if (name.startsWith(QLatin1String("pre-")) || name.startsWith(QLatin1String("post-"))) {
+            continue;
+        }
+        out.append(
+            command(name, QStringLiteral("composer run ") + name, QStringLiteral("composer"), source, descriptions.value(name).toString()));
+    }
+    return out;
+}
+
+QList<DetectedCommand> ArtisanDetector::detect(const QString &dir) const
+{
+    if (!exists(dir, QStringLiteral("artisan"))) {
+        return {};
+    }
+    QList<DetectedCommand> out;
+    for (const char *verb : {"serve", "migrate", "test", "queue:work"}) {
+        out.append(command(QLatin1String(verb), QStringLiteral("php artisan ") + QLatin1String(verb), QStringLiteral("artisan"),
+                           QStringLiteral("artisan")));
+    }
+    return out;
+}
+
+// ───────────────────────── Rake ─────────────────────────
+
+QStringList RakeDetector::files() const
+{
+    return {QStringLiteral("Rakefile"), QStringLiteral("rakefile"), QStringLiteral("Rakefile.rb"), QStringLiteral("rakefile.rb")};
+}
+
+QList<DetectedCommand> RakeDetector::detect(const QString &dir) const
+{
+    const QString source = firstExisting(dir, files());
+    if (source.isEmpty()) {
+        return {};
+    }
+    // task :name, task name: [...], task "name" => ...
+    static const QRegularExpression task(QStringLiteral(R"re(^(\s*)task\s*\(?\s*(?::(\w+)|["'](\w[\w:-]*)["']|(\w+):))re"));
+    static const QRegularExpression ns(QStringLiteral(R"re(^(\s*)namespace\s*\(?\s*(?::(\w+)|["'](\w+)["']))re"));
+    static const QRegularExpression desc(QStringLiteral(R"re(^\s*desc\s*\(?\s*["'](.*)["'])re"));
+    static const QRegularExpression end(QStringLiteral(R"re(^(\s*)end\b)re"));
+    struct Scope
+    {
+        int indent;
+        QString name;
+    };
+    QList<Scope> scopes;
+    QString pendingDesc;
+    QList<DetectedCommand> out;
+    for (const QString &line : QString::fromUtf8(readFile(QDir(dir).filePath(source))).split(QLatin1Char('\n'))) {
+        if (const QRegularExpressionMatch e = end.match(line); e.hasMatch()) {
+            if (!scopes.isEmpty() && e.capturedLength(1) == scopes.last().indent) {
+                scopes.removeLast();
+            }
+            continue;
+        }
+        if (const QRegularExpressionMatch n = ns.match(line); n.hasMatch()) {
+            scopes.append({static_cast<int>(n.capturedLength(1)), n.captured(2) + n.captured(3)});
+            continue;
+        }
+        if (const QRegularExpressionMatch d = desc.match(line); d.hasMatch()) {
+            pendingDesc = d.captured(1);
+            continue;
+        }
+        if (const QRegularExpressionMatch t = task.match(line); t.hasMatch()) {
+            QStringList parts;
+            for (const Scope &s : std::as_const(scopes)) {
+                parts.append(s.name);
+            }
+            parts.append(t.captured(2) + t.captured(3) + t.captured(4));
+            const QString name = parts.join(QLatin1Char(':'));
+            out.append(command(name, QStringLiteral("rake ") + name, QStringLiteral("rake"), source, pendingDesc));
+            pendingDesc.clear();
+        }
+    }
+    return out;
+}
+
+// ───────────────────────── Gradle / Maven ─────────────────────────
+
+QStringList GradleDetector::files() const
+{
+    return {QStringLiteral("build.gradle.kts"), QStringLiteral("build.gradle"), QStringLiteral("gradlew")};
+}
+
+QList<DetectedCommand> GradleDetector::detect(const QString &dir) const
+{
+    const QString source = firstExisting(dir, {QStringLiteral("build.gradle.kts"), QStringLiteral("build.gradle")});
+    if (source.isEmpty()) {
+        return {};
+    }
+    const QString gradle = exists(dir, QStringLiteral("gradlew")) ? QStringLiteral("./gradlew") : QStringLiteral("gradle");
+    const QString build = QString::fromUtf8(readFile(QDir(dir).filePath(source)));
+    static const QRegularExpression application(
+        QStringLiteral(R"re((\bid\s*\(?\s*["']application["']|apply\s+plugin\s*:\s*["']application["']|^\s*application\s*$))re"),
+        QRegularExpression::MultilineOption);
+    static const QRegularExpression boot(QStringLiteral(R"re(org\.springframework\.boot)re"));
+    QStringList tasks{QStringLiteral("build"), QStringLiteral("test")};
+    if (application.match(build).hasMatch()) {
+        tasks.append(QStringLiteral("run"));
+    }
+    if (boot.match(build).hasMatch()) {
+        tasks.append(QStringLiteral("bootRun"));
+    }
+    QList<DetectedCommand> out;
+    for (const QString &t : std::as_const(tasks)) {
+        out.append(command(t, gradle + QLatin1Char(' ') + t, QStringLiteral("gradle"), source));
+    }
+    return out;
+}
+
+QList<DetectedCommand> MavenDetector::detect(const QString &dir) const
+{
+    if (!exists(dir, QStringLiteral("pom.xml"))) {
+        return {};
+    }
+    const QString mvn = exists(dir, QStringLiteral("mvnw")) ? QStringLiteral("./mvnw") : QStringLiteral("mvn");
+    QList<DetectedCommand> out;
+    for (const char *phase : {"package", "test", "verify"}) {
+        out.append(command(QLatin1String(phase), mvn + QLatin1Char(' ') + QLatin1String(phase), QStringLiteral("maven"),
+                           QStringLiteral("pom.xml")));
+    }
+    return out;
+}

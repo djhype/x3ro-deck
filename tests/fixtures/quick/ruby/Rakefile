@@ -1,0 +1,21 @@
+require "rake/testtask"
+
+desc "Run the tests"
+task :test do
+  ruby "test/all.rb"
+end
+
+task default: [:test]
+
+namespace :db do
+  desc 'Migrate the database'
+  task :migrate do
+    puts "migrating"
+  end
+
+  namespace :seed do
+    task "users" => :migrate
+  end
+end
+
+task :build

@@ -177,6 +177,29 @@ private Q_SLOTS:
         QCOMPARE(describe(NoxDetector().detect(fixtures + QStringLiteral("py-nox"))),
                  (QStringList{QStringLiteral("tests|nox -s tests|noxfile.py|"), QStringLiteral("type-check|nox -s type-check|noxfile.py|"),
                               QStringLiteral("django|nox -s django|noxfile.py|")}));
+        QCOMPARE(describe(ComposerDetector().detect(fixtures + QStringLiteral("php"))),
+                 (QStringList{QStringLiteral("test|composer run test|composer.json|"),
+                              QStringLiteral("lint|composer run lint|composer.json|Check the coding standard"),
+                              QStringLiteral("analyse|composer run analyse|composer.json|")}));
+        QCOMPARE(
+            describe(ArtisanDetector().detect(fixtures + QStringLiteral("php"))),
+            (QStringList{QStringLiteral("serve|php artisan serve|artisan|"), QStringLiteral("migrate|php artisan migrate|artisan|"),
+                         QStringLiteral("test|php artisan test|artisan|"), QStringLiteral("queue:work|php artisan queue:work|artisan|")}));
+        QCOMPARE(describe(RakeDetector().detect(fixtures + QStringLiteral("ruby"))),
+                 (QStringList{QStringLiteral("test|rake test|Rakefile|Run the tests"), QStringLiteral("default|rake default|Rakefile|"),
+                              QStringLiteral("db:migrate|rake db:migrate|Rakefile|Migrate the database"),
+                              QStringLiteral("db:seed:users|rake db:seed:users|Rakefile|"), QStringLiteral("build|rake build|Rakefile|")}));
+        QCOMPARE(
+            describe(GradleDetector().detect(fixtures + QStringLiteral("gradle"))),
+            (QStringList{QStringLiteral("build|./gradlew build|build.gradle.kts|"), QStringLiteral("test|./gradlew test|build.gradle.kts|"),
+                         QStringLiteral("run|./gradlew run|build.gradle.kts|"),
+                         QStringLiteral("bootRun|./gradlew bootRun|build.gradle.kts|")}));
+        QCOMPARE(describe(GradleDetector().detect(fixtures + QStringLiteral("gradle-plain"))),
+                 (QStringList{QStringLiteral("build|gradle build|build.gradle|"), QStringLiteral("test|gradle test|build.gradle|")}));
+        QCOMPARE(describe(MavenDetector().detect(fixtures + QStringLiteral("maven"))),
+                 (QStringList{QStringLiteral("package|./mvnw package|pom.xml|"), QStringLiteral("test|./mvnw test|pom.xml|"),
+                              QStringLiteral("verify|./mvnw verify|pom.xml|")}));
+        QCOMPARE(MavenDetector().detect(fixtures + QStringLiteral("maven-plain")).first().command, QStringLiteral("mvn package"));
         // Nothing where the project files are missing.
         QVERIFY(CargoDetector().detect(fixtures + QStringLiteral("go")).isEmpty());
         QVERIFY(GoDetector().detect(fixtures + QStringLiteral("cargo")).isEmpty());

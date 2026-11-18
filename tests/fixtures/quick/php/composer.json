@@ -1,0 +1,12 @@
+{
+    "name": "fixture/app",
+    "scripts": {
+        "test": "phpunit",
+        "post-install-cmd": ["@php artisan key:generate"],
+        "lint": "phpcs src",
+        "analyse": ["phpstan analyse"]
+    },
+    "scripts-descriptions": {
+        "lint": "Check the coding standard"
+    }
+}

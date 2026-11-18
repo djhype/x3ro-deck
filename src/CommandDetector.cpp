@@ -21,7 +21,9 @@ const QList<std::shared_ptr<const CommandDetector>> &CommandDetector::all()
         std::make_shared<MakefileDetector>(), std::make_shared<PackageJsonDetector>(), std::make_shared<JustfileDetector>(),
         std::make_shared<TaskfileDetector>(), std::make_shared<MiseDetector>(),        std::make_shared<CargoDetector>(),
         std::make_shared<GoDetector>(),       std::make_shared<DenoDetector>(),        std::make_shared<PyprojectDetector>(),
-        std::make_shared<ToxDetector>(),      std::make_shared<NoxDetector>(),
+        std::make_shared<ToxDetector>(),      std::make_shared<NoxDetector>(),         std::make_shared<ComposerDetector>(),
+        std::make_shared<ArtisanDetector>(),  std::make_shared<RakeDetector>(),        std::make_shared<GradleDetector>(),
+        std::make_shared<MavenDetector>(),
     };
     return detectors;
 }

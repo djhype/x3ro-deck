@@ -65,3 +65,50 @@ public:
     QStringList files() const override { return {QStringLiteral("noxfile.py")}; }
     QList<DetectedCommand> detect(const QString &dir) const override;
 };
+
+// composer.json scripts (with scripts-descriptions).
+class ComposerDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("composer"); }
+    QStringList files() const override { return {QStringLiteral("composer.json")}; }
+    QList<DetectedCommand> detect(const QString &dir) const override;
+};
+
+// Laravel's artisan: serve, migrate, test and queue:work.
+class ArtisanDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("artisan"); }
+    QStringList files() const override { return {QStringLiteral("artisan")}; }
+    QList<DetectedCommand> detect(const QString &dir) const override;
+};
+
+// Rake tasks parsed from the Rakefile (`task :name`, inside `namespace :ns`),
+// with the `desc` above each.
+class RakeDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("rake"); }
+    QStringList files() const override;
+    QList<DetectedCommand> detect(const QString &dir) const override;
+};
+
+// Gradle: build and test, run with the application plugin, bootRun with
+// Spring Boot's; through ./gradlew when the project has it.
+class GradleDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("gradle"); }
+    QStringList files() const override;
+    QList<DetectedCommand> detect(const QString &dir) const override;
+};
+
+// Maven: package, test and verify; through ./mvnw when the project has it.
+class MavenDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("maven"); }
+    QStringList files() const override { return {QStringLiteral("pom.xml"), QStringLiteral("mvnw")}; }
+    QList<DetectedCommand> detect(const QString &dir) const override;
+};
