@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // `x3ro-deck attach [--socket PATH] [--no-replay] <checkout>`: connects the

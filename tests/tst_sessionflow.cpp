@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // End-to-end agent flow through AppController and the session backend, the
 // same calls the QML buttons make. It runs a private tmux server, so it never
 // touches a live instance's sessions. With X3RO_DECK_TEST_BACKEND=daemon it

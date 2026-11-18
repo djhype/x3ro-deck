@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Compiles and instantiates every panel in qml/, so a QML error that would
 // blank a panel fails here too, also on Qt versions the full app can't build
 // against yet. `app` is a bare stub: binding errors from its missing

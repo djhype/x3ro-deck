@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Headless smoke test: starts the app offscreen in an isolated environment,
 # saves a screenshot and fails on a missing image or any QML error.
 #

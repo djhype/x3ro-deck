@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Fails when a C++ source differs from .clang-format. Run with --fix to rewrite.
 set -euo pipefail
 cd "$(dirname "$0")/.."

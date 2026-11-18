@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Paths: the normalization and prefix rules that map hook cwds and tmux
 // session paths onto checkouts.
 

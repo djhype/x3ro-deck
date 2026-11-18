@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "SingleInstance.h"
 
 #include "x3ro-deck-socket.h"

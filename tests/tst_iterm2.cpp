@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // iTerm2 settings from an XML preferences plist and a DynamicProfile, in
 // tests/fixtures/iterm2. The reader is portable, so this runs everywhere.
 #include "MacTerminalSettings.h"

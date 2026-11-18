@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 cmake_minimum_required(VERSION 3.24)
 project(x3ro-deck VERSION 0.1.0 LANGUAGES CXX)
 

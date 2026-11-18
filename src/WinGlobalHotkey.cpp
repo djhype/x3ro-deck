@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // GlobalHotkey on Windows: RegisterHotKey for the GUI thread, whose WM_HOTKEY
 // messages a native event filter picks up.
 

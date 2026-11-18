@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // GNOME Console, GNOME Terminal, MATE Terminal and Ptyxis against `dconf
 // dump` output in tests/fixtures/dconf.
 #include "DconfTerminalSettings.h"

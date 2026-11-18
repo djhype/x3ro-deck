@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Per-checkout compose options: file detection, the commands built from them,
 // and the containers a checkout with a project name tracks.
 #include "AppController.h"

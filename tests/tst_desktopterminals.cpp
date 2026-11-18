@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // xfce4-terminal and COSMIC Terminal against tests/fixtures/desktopterm.
 #include "DesktopTerminalSettings.h"
 #include "TerminalSettings.h"

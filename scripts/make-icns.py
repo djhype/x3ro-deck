@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Builds data/icons/x3ro-deck.icns from the PNGs next to it.
 
 ICNS is a list of (type, length, PNG) entries; macOS reads PNG payloads for

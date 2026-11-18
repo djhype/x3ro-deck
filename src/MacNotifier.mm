@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Notifier on macOS: UNUserNotificationCenter, with a category per set of
 // action buttons. Notification actions need a signed app bundle; where the
 // center refuses (an unsigned or unbundled dev build), isNative() turns false

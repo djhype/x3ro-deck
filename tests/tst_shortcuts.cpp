@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The shortcut registry: defaults, overrides, conflicts and hints.
 #include "Shortcuts.h"
 

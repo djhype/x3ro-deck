@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // x3ro-deck-hook — agent hook that forwards the hook payload to x3ro-deck.
 //
 // Claude Code (~/.claude/settings.json) and Codex (~/.codex/hooks.json) both

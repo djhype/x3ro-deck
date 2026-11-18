@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // SwitchingBackend over a private tmux server (the old backend) and a private
 // x3ro-deck-sessiond (the new one): old sessions keep working until they
 // exit, new ones start in the daemon.

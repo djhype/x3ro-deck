@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // CommandDetector and QuickCommands against fixture projects in
 // tests/fixtures/quick.
 #include "CommandDetector.h"

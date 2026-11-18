@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Build and test dependencies for the macOS CI job (Homebrew).
 set -euo pipefail
 brew update --quiet

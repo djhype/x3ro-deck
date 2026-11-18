@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // x3ro-deck-sessiond: keeps agent sessions alive outside the GUI. See
 // Daemon.h for what it does and SessiondProtocol.h for how to talk to it.
 //

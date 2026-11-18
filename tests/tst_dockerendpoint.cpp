@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Docker endpoint resolution, and the app talking to a fake Engine API on a
 // non-default socket with a non-default compose binary.
 

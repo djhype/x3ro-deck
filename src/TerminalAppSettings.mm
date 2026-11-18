@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Terminal.app's profiles ("Window Settings" in com.apple.Terminal). Colors
 // and fonts are NSKeyedArchiver blobs of NSColor and NSFont, so this one is
 // Objective-C++ and macOS only.

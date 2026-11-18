@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Notifier on Windows: toast notifications through C++/WinRT, with action
 // buttons and body activation. Toasts need an AppUserModelID with a Start
 // menu shortcut; the installer creates one, and a dev build makes its own.

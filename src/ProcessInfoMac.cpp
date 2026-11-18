@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // ProcessInfo's platform layer on macOS: libproc for the process table and
 // sysctl(KERN_PROCARGS2) for argument vectors.
 

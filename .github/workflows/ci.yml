@@ -62,6 +62,10 @@ jobs:
         if: matrix.name == 'linux'
         run: scripts/check-format.sh
 
+      - name: Check SPDX headers
+        if: matrix.name == 'linux'
+        run: scripts/check-spdx.sh
+
       - name: Configure
         run: cmake --preset ${{ matrix.preset }} -DX3RO_DECK_WERROR=ON
 

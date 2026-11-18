@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // x3ro-deck-sessiond end to end: the wire protocol, DaemonBackend on top of
 // it, and the attach client in a real PTY. Every daemon runs on a socket in a
 // private temporary directory.

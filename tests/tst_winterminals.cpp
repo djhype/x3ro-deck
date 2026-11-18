@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Windows Terminal (JSONC fixture) and Console Host (registry values passed
 // in). Both readers are portable, so this runs on every OS.
 #include "WindowsTerminalSettings.h"

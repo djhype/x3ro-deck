@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // The hook socket's path, shared by the app (AgentBus) and x3ro-deck-hook,

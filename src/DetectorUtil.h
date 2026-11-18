@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Small file and format helpers shared by the quick-command detectors.

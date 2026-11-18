@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // ProcessInfo's platform layer on Windows: a Toolhelp32 snapshot of the
 // process table. There are no terminal process groups; the daemon asks for
 // the session's tree and takes its deepest process as the foreground one.

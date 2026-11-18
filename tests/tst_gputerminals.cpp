@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // kitty, Ghostty and Alacritty settings against fixtures in tests/fixtures/gpu.
 #include "GpuTerminalSettings.h"
 #include "TerminalSettings.h"

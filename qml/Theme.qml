@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import QtQuick
 
 // Color and font tokens. Values come from the theme JSON (data/themes);

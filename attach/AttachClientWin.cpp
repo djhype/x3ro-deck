@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // `x3ro-deck attach` on Windows: the console in VT mode, the daemon's named
 // pipe through QLocalSocket, and a thread reading console input. Ctrl+\
 // detaches, as on Unix.

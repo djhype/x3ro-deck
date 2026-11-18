@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 x3ro
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import QtQuick
 
 // First run: no checkouts yet. Pick a folder, then the worktrees to add.
