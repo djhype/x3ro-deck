@@ -7,6 +7,7 @@
 #include <QPointer>
 
 class AppController;
+class Notifier;
 class QQmlEngine;
 class QQuickWidget;
 class QSplitter;
@@ -50,6 +51,7 @@ private:
     void syncTab();
     void syncAccents();
     void notify(const QVariantMap &item);
+    void onNotificationAction(const QString &id, const QString &key);
     void updateStatsVisibility();
     void saveLayout();
     void applySettings(const QJsonObject &config);
@@ -67,6 +69,7 @@ private:
     QHash<int, QTabWidget *> m_shellTabs;
     QHash<int, TerminalHost *> m_agentTerms;
     TrayIcon *m_tray = nullptr;
+    Notifier *m_notifier = nullptr;
     QPointer<SettingsDialog> m_settings;
     bool m_quitting = false;
     bool m_confirmingQuit = false;

@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AppController.h"
+#include "Notifier.h"
 #include "SettingsDialog.h"
 #include "TerminalHost.h"
 #include "TerminalProfile.h"
@@ -8,7 +9,6 @@
 #include "TrayIcon.h"
 
 #include <KGlobalAccel>
-#include <KNotification>
 #include <KWindowSystem>
 
 #include <QAction>
@@ -167,6 +167,8 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
             QTimer::singleShot(0, t, &TerminalHost::focusTerminal);
         }
     });
+    m_notifier = Notifier::create(this);
+    connect(m_notifier, &Notifier::actionInvoked, this, &MainWindow::onNotificationAction);
     connect(m_app, &AppController::attentionRaised, this, &MainWindow::notify);
     connect(m_app, &AppController::railVisibleChanged, this, [this] { m_rail->setVisible(m_app->railVisible()); });
     connect(m_app, &AppController::settingsRequested, this, &MainWindow::openSettings);
@@ -595,24 +597,26 @@ void MainWindow::notify(const QVariantMap &item)
         return;
     }
     const QString id = item.value(QStringLiteral("id")).toString();
-    auto *n = new KNotification(kind == QLatin1String("docker") ? QStringLiteral("containerIssue") : QStringLiteral("needsYou"));
+    Notifier::Notification n;
     const QString who = kind == QLatin1String("docker")
         ? item.value(QStringLiteral("checkoutName")).toString()
         : QStringLiteral("%1 · %2").arg(item.value(QStringLiteral("checkoutName")).toString(),
                                         item.value(QStringLiteral("agentLabel")).toString());
-    n->setTitle(QStringLiteral("%1 · %2").arg(who, item.value(QStringLiteral("title")).toString()));
-    n->setText(item.value(QStringLiteral("detail")).toString().toHtmlEscaped());
-    n->setIconName(QStringLiteral("x3ro-deck"));
+    n.title = QStringLiteral("%1 · %2").arg(who, item.value(QStringLiteral("title")).toString());
+    n.body = item.value(QStringLiteral("detail")).toString();
     if (kind == QLatin1String("permission")) {
-        n->setUrgency(KNotification::HighUrgency);
-        connect(n->addAction(QStringLiteral("Allow")), &KNotificationAction::activated, this,
-                [this, id] { m_app->attentionAction(id, QStringLiteral("allow")); });
-        connect(n->addAction(QStringLiteral("Deny")), &KNotificationAction::activated, this,
-                [this, id] { m_app->attentionAction(id, QStringLiteral("deny")); });
+        n.urgency = Notifier::Urgency::Critical;
+        n.actions = {{QStringLiteral("allow"), QStringLiteral("Allow")}, {QStringLiteral("deny"), QStringLiteral("Deny")}};
     }
-    connect(n->addDefaultAction(QStringLiteral("Open")), &KNotificationAction::activated, this, [this, id] {
+    m_notifier->show(n, id);
+}
+
+void MainWindow::onNotificationAction(const QString &id, const QString &key)
+{
+    if (key == Notifier::defaultAction()) {
         reveal();
         m_app->attentionAction(id, QStringLiteral("open"));
-    });
-    n->sendEvent();
+    } else if (key == QLatin1String("allow") || key == QLatin1String("deny")) {
+        m_app->attentionAction(id, key);
+    }
 }

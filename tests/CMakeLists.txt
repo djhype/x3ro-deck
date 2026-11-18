@@ -77,3 +77,12 @@ x3ro_deck_set_warnings(tst_trayicon)
 target_link_libraries(tst_trayicon PRIVATE x3ro-deck-base Qt6::Test)
 add_test(NAME trayicon COMMAND tst_trayicon)
 set_tests_properties(trayicon PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Talks to a fake notification server on a private session bus.
+    add_executable(tst_notifier tst_notifier.cpp)
+    x3ro_deck_set_warnings(tst_notifier)
+    target_link_libraries(tst_notifier PRIVATE x3ro-deck-base Qt6::Test Qt6::DBus)
+    add_test(NAME notifier COMMAND dbus-run-session -- $<TARGET_FILE:tst_notifier>)
+    set_tests_properties(notifier PROPERTIES TIMEOUT 120)
+endif()

@@ -68,6 +68,16 @@ add_executable(x3ro-deck-attach attach/main.cpp)
 x3ro_deck_set_warnings(x3ro-deck-attach)
 target_link_libraries(x3ro-deck-attach PRIVATE x3ro-deck-sessionproto)
 
+# Desktop integration backends, one set per OS.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(Qt6 6.4 REQUIRED COMPONENTS DBus)
+    set(X3RO_DECK_DESKTOP_PLATFORM src/FreedesktopNotifier.cpp)
+    set(X3RO_DECK_DESKTOP_LIBS Qt6::DBus)
+else()
+    set(X3RO_DECK_DESKTOP_PLATFORM src/NotifierNone.cpp)
+    set(X3RO_DECK_DESKTOP_LIBS)
+endif()
+
 # The app minus its KF6-dependent window and terminal, so tests and older
 # distros can build it.
 add_library(x3ro-deck-base STATIC
@@ -93,6 +103,8 @@ add_library(x3ro-deck-base STATIC
     src/SessionShell.cpp
     src/SingleInstance.cpp
     src/TrayIcon.cpp
+    src/Notifier.h
+    ${X3RO_DECK_DESKTOP_PLATFORM}
     src/TerminalProfile.cpp
     src/TerminalSettingsSource.cpp
     src/TerminalSettings.cpp
@@ -102,11 +114,10 @@ add_library(x3ro-deck-base STATIC
 )
 x3ro_deck_set_warnings(x3ro-deck-base)
 target_include_directories(x3ro-deck-base PUBLIC src common)
-target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util)
+target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util ${X3RO_DECK_DESKTOP_LIBS})
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)
-    find_package(KF6Notifications REQUIRED)
     find_package(KF6GlobalAccel REQUIRED)
     find_package(KF6WindowSystem REQUIRED)
 
@@ -120,7 +131,6 @@ if(NOT X3RO_DECK_CORE_ONLY)
     target_link_libraries(x3ro-deck PRIVATE
         x3ro-deck-base
         Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
-        KF6::Notifications
         KF6::GlobalAccel KF6::WindowSystem
     )
 endif()
@@ -147,7 +157,6 @@ if(UNIX AND NOT APPLE)
     # comes from a shell rc file that only terminals read.
     configure_file(data/x3ro-deck.desktop.in x3ro-deck.desktop @ONLY)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/x3ro-deck.desktop DESTINATION share/applications)
-    install(FILES data/x3ro-deck.notifyrc DESTINATION share/knotifications6)
     install(FILES data/icons/x3ro-deck.svg DESTINATION share/icons/hicolor/scalable/apps)
     foreach(size 16 22 24 32 48 64 128 256 512)
         install(FILES data/icons/x3ro-deck-${size}.png DESTINATION share/icons/hicolor/${size}x${size}/apps RENAME x3ro-deck.png)
