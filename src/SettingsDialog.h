@@ -16,6 +16,7 @@ class QPushButton;
 class QTabWidget;
 class QTableWidget;
 class TerminalSettings;
+struct Dependency;
 
 // config.json as a form. It edits the JSON itself, so keys it has no field
 // for survive a save.
@@ -29,6 +30,8 @@ public:
     QJsonObject config() const;
     // checkouts | agents | docker | general
     void showPage(const QString &page);
+    // Fills General → Dependencies. `ready` is false while the login shell's PATH is still being read.
+    void setDependencies(const QList<Dependency> &list, bool ready);
 
     void accept() override;
     void reject() override;
@@ -126,6 +129,7 @@ private:
     QCheckBox *m_autostart;
     QCheckBox *m_notifyDone;
     TerminalSettings *m_terminals;
+    QGridLayout *m_dependencies = nullptr;
     QComboBox *m_terminalSource;
     QComboBox *m_terminalProfile;
     void fillTerminalProfiles(const QString &selected);

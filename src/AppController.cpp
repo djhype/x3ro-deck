@@ -227,11 +227,13 @@ AppController::AppController(QObject *parent)
     , m_terminalSettings(new TerminalSettings(this))
     , m_git(new GitWatcher(this))
     , m_prs(new PrWatcher(this))
+    , m_deps(new Dependencies(this))
     , m_checkoutModel(new VariantListModel(kCheckoutRoles, this))
     , m_serviceModel(new VariantListModel(kServiceRoles, this))
     , m_attention(new VariantListModel(kAttentionRoles, this))
 {
     m_terminalSettings->select(m_config.terminalSettings, m_config.terminalProfile);
+    m_deps->setConfig(m_config);
 
     // A session that survived a restart runs the profile last picked for it;
     // ensureAgentSession() switches a fresh one to the configured agent.
@@ -253,6 +255,10 @@ AppController::AppController(QObject *parent)
     connect(m_git, &GitWatcher::updated, this, &AppController::onGit);
     connect(m_prs, &PrWatcher::updated, this, &AppController::onPr);
     connect(m_attention, &VariantListModel::countChanged, this, &AppController::totalsChanged);
+    connect(m_deps, &Dependencies::changed, this, [this] {
+        Q_EMIT dependenciesChanged();
+        Q_EMIT currentChanged();
+    });
 
     m_statsTimer.setInterval(5000);
     connect(&m_statsTimer, &QTimer::timeout, this, &AppController::sampleStats);
@@ -286,6 +292,7 @@ void AppController::start()
     m_docker->start();
     m_sessions->startPolling(3000);
     m_statsTimer.start();
+    m_deps->probeLoginPath(m_terminalSettings->current().shell);
     publishCheckouts();
     publishServices();
     publishAttention();
@@ -354,7 +361,46 @@ QVariantMap AppController::current() const
         {QStringLiteral("lastMessage"), a.lastMessage},
         {QStringLiteral("pr"), prMap(c.pr)},
         {QStringLiteral("prUrl"), viewableUrl(c.pr)},
+        {QStringLiteral("ghMissing"), missingNotice(QStringLiteral("gh"))},
+        {QStringLiteral("agentMissing"),
+         [&] {
+             const Dependency *d = agentMissing(m_current);
+             return d ? QVariantMap{{QStringLiteral("title"), QStringLiteral("%1 not found").arg(d->name)},
+                                    {QStringLiteral("hint"),
+                                     QStringLiteral("%1 is not on PATH or the login shell's PATH. %2").arg(d->binary, d->hint)}}
+                      : QVariantMap{};
+         }()},
     };
+}
+
+QVariantMap AppController::missingNotice(const QString &dependency) const
+{
+    const Dependency *d = m_deps->missing(dependency);
+    if (!d) {
+        return {};
+    }
+    return {{QStringLiteral("title"), QStringLiteral("%1 not found").arg(d->name)}, {QStringLiteral("hint"), d->hint}};
+}
+
+const Dependency *AppController::agentMissing(int index) const
+{
+    if (index < 0 || index >= m_checkouts.size()) {
+        return nullptr;
+    }
+    return m_deps->missing(Dependencies::commandBinary(profile(index).command));
+}
+
+QVariantList AppController::dependencies() const
+{
+    QVariantList out;
+    for (const Dependency &d : m_deps->list()) {
+        out.append(QVariantMap{{QStringLiteral("name"), d.name},
+                               {QStringLiteral("purpose"), d.purpose},
+                               {QStringLiteral("path"), d.path},
+                               {QStringLiteral("hint"), d.hint},
+                               {QStringLiteral("checked"), m_deps->ready()}});
+    }
+    return out;
 }
 
 QVariantList AppController::quickCommands() const
@@ -1072,6 +1118,7 @@ bool AppController::reloadConfig()
     }
     const Config prev = std::exchange(m_config, next);
     m_terminalSettings->select(m_config.terminalSettings, m_config.terminalProfile);
+    m_deps->setConfig(m_config);
     m_docker->setSocketPath(resolveDockerEndpoint(m_config.dockerHost).socketPath);
     for (int i = 0; i < m_checkouts.size(); ++i) {
         Checkout &c = m_checkouts[i];
@@ -1115,6 +1162,9 @@ void AppController::agentAction(const QString &action)
             setAgentState(m_current, QStringLiteral("ready"));
         }
     } else if (action == QLatin1String("start") || action == QLatin1String("continue")) {
+        if (agentMissing(m_current)) {
+            return; // the session panel says what's missing
+        }
         const AgentProfile &p = profile(m_current);
         const SessionBackend::Environment env = p.sessionEnv();
         const QStringList shell = m_terminalSettings->current().shell;

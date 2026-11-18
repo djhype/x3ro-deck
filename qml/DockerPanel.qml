@@ -204,6 +204,11 @@ Rectangle {
             width: parent.width
             spacing: 16
 
+            Notice {
+                width: parent.width
+                notice: app.composeMissing
+            }
+
             Rectangle {
                 width: parent.width
                 height: qc.implicitHeight + 28

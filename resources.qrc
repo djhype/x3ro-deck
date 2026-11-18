@@ -10,6 +10,7 @@
         <file>qml/DockerPanel.qml</file>
         <file>qml/SessionPanel.qml</file>
         <file>qml/PrPanel.qml</file>
+        <file>qml/Notice.qml</file>
         <file>qml/NeedsYouRail.qml</file>
         <file>data/style.qss</file>
         <file>data/close.svg</file>

@@ -1,6 +1,7 @@
 #include "SettingsDialog.h"
 
 #include "Config.h"
+#include "Dependencies.h"
 #include "DockerEndpoint.h"
 #include "Paths.h"
 #include "TerminalSettings.h"
@@ -1049,8 +1050,38 @@ QWidget *SettingsDialog::buildGeneralPage()
     layout->addSpacing(14);
     layout->addWidget(section(QStringLiteral("Terminals")));
     layout->addLayout(terminals);
+    layout->addSpacing(14);
+    layout->addWidget(section(QStringLiteral("Dependencies")));
+    m_dependencies = form();
+    layout->addLayout(m_dependencies);
     layout->addStretch();
     return page;
+}
+
+void SettingsDialog::setDependencies(const QList<Dependency> &list, bool ready)
+{
+    while (QLayoutItem *item = m_dependencies->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    for (const Dependency &d : list) {
+        QLabel *status = nullptr;
+        if (!d.path.isEmpty()) {
+            status = hint(QStringLiteral("✓ ") + d.path);
+            status->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        } else if (!ready) {
+            status = hint(QStringLiteral("Checking…"));
+        } else {
+            status = hint(QStringLiteral("Not found. ") + d.hint, "warning");
+            status->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        }
+        status->setToolTip(d.purpose);
+        const int row = nextRow(m_dependencies);
+        auto *name = new QLabel(d.name);
+        name->setToolTip(d.purpose);
+        m_dependencies->addWidget(name, row, 0, Qt::AlignLeft | Qt::AlignTop);
+        m_dependencies->addWidget(status, row, 1);
+    }
 }
 
 void SettingsDialog::fillTerminalProfiles(const QString &selected)

@@ -2,6 +2,7 @@
 
 #include "AgentBus.h"
 #include "Config.h"
+#include "Dependencies.h"
 #include "DockerClient.h"
 #include "GitWatcher.h"
 #include "Models.h"
@@ -79,6 +80,9 @@ class AppController : public QObject
     Q_PROPERTY(bool dockerConnected READ dockerConnected NOTIFY totalsChanged)
     Q_PROPERTY(bool railVisible READ railVisible NOTIFY railVisibleChanged)
     Q_PROPERTY(QString configError READ configError NOTIFY configChanged)
+    Q_PROPERTY(QVariantList dependencies READ dependencies NOTIFY dependenciesChanged)
+    // The compose command's program when it is missing: {title, hint}, or empty.
+    Q_PROPERTY(QVariantMap composeMissing READ composeMissing NOTIFY dependenciesChanged)
     Q_PROPERTY(VariantListModel *checkouts READ checkoutModel CONSTANT)
     Q_PROPERTY(VariantListModel *services READ serviceModel CONSTANT)
     Q_PROPERTY(VariantListModel *attention READ attentionModel CONSTANT)
@@ -100,6 +104,9 @@ public:
     bool dockerConnected() const { return m_docker->connected(); }
     bool railVisible() const { return m_railVisible; }
     QString configError() const { return m_configError; }
+    QVariantList dependencies() const;
+    QVariantMap composeMissing() const { return missingNotice(QStringLiteral("compose")); }
+    Dependencies *dependencyChecker() const { return m_deps; }
 
     VariantListModel *checkoutModel() const { return m_checkoutModel; }
     VariantListModel *serviceModel() const { return m_serviceModel; }
@@ -153,6 +160,7 @@ Q_SIGNALS:
     void agentStateChanged(int checkout);
     void configChanged();
     void settingsRequested(const QString &page);
+    void dependenciesChanged();
 
 private:
     void sampleStats();
@@ -171,6 +179,9 @@ private:
     void publishServices();
     void publishAttention();
     QString expand(int index, const QString &command) const;
+    QVariantMap missingNotice(const QString &dependency) const;
+    // The current profile's command, when it is missing.
+    const Dependency *agentMissing(int index) const;
     int publicPort(int index, const QString &service, int containerPort) const;
 
     // Before m_config, which Config::load() fills it while initializing.
@@ -187,6 +198,7 @@ private:
     TerminalSettings *m_terminalSettings;
     GitWatcher *m_git;
     PrWatcher *m_prs;
+    Dependencies *m_deps;
     VariantListModel *m_checkoutModel;
     VariantListModel *m_serviceModel;
     VariantListModel *m_attention;

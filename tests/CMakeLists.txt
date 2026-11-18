@@ -101,3 +101,8 @@ x3ro_deck_set_warnings(tst_windowactivation)
 target_link_libraries(tst_windowactivation PRIVATE x3ro-deck-base Qt6::Test)
 add_test(NAME windowactivation COMMAND tst_windowactivation)
 set_tests_properties(windowactivation PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(tst_dependencies tst_dependencies.cpp)
+x3ro_deck_set_warnings(tst_dependencies)
+target_link_libraries(tst_dependencies PRIVATE x3ro-deck-base Qt6::Test)
+add_test(NAME dependencies COMMAND tst_dependencies)

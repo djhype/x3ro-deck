@@ -152,6 +152,16 @@ Rectangle {
                 }
             }
 
+            Notice {
+                width: parent.width
+                notice: cur.agentMissing || ({})
+            }
+
+            Notice {
+                width: parent.width
+                notice: cur.ghMissing || ({})
+            }
+
             PrPanel {
                 visible: !!(cur.pr && cur.pr.number)
                 width: parent.width
@@ -212,6 +222,7 @@ Rectangle {
                 NeonButton {
                     width: parent.cellW
                     text: cur.agentRunning ? "Focus terminal" : "Start " + (cur.agentLabel || "agent")
+                    enabledState: cur.agentRunning || !(cur.agentMissing && cur.agentMissing.title)
                     variant: cur.agentRunning ? "ghost" : "outline"
                     accent: t.cyan
                     onClicked: cur.agentRunning ? app.agentAction("focus") : app.agentAction("start")
@@ -219,7 +230,7 @@ Rectangle {
             }
             NeonButton {
                 width: parent.width
-                visible: !cur.agentRunning && !!cur.continueCommand
+                visible: !cur.agentRunning && !!cur.continueCommand && !(cur.agentMissing && cur.agentMissing.title)
                 text: cur.continueCommand || ""
                 mono: true
                 onClicked: app.agentAction("continue")

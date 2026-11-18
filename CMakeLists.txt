@@ -106,6 +106,7 @@ add_library(x3ro-deck-base STATIC
     src/SessiondChannel.cpp
     src/TerminalAppearance.cpp
     src/SessionShell.cpp
+    src/Dependencies.cpp
     src/SingleInstance.cpp
     src/TrayIcon.cpp
     src/Notifier.h

@@ -327,6 +327,11 @@ void MainWindow::openSettings(const QString &page)
     auto *dialog = new SettingsDialog(config, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->showPage(page);
+    const auto fillDependencies = [this, dialog] {
+        dialog->setDependencies(m_app->dependencyChecker()->list(), m_app->dependencyChecker()->ready());
+    };
+    fillDependencies();
+    connect(m_app, &AppController::dependenciesChanged, dialog, fillDependencies);
     connect(dialog, &QDialog::accepted, this, [this, dialog] { applySettings(dialog->config()); });
     m_settings = dialog;
     dialog->open();
