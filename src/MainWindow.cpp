@@ -391,9 +391,42 @@ void MainWindow::selectTheme()
 
 void MainWindow::applySettings(const QJsonObject &config)
 {
+    // Sessions cannot move between backends, so a switch asks what happens to
+    // the ones still running, and then restarts.
+    const QString backend = config.value(QStringLiteral("sessionBackend")).toString();
+    const bool switching = !backend.isEmpty() && backend != m_app->config().sessionBackend;
+    AppController::BackendSwitch how = AppController::BackendSwitch::Plain;
+    if (switching && m_app->hasAnySession()) {
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Question);
+        box.setWindowTitle(QStringLiteral("Switch session backend"));
+        box.setText(QStringLiteral("Agent sessions are still running in %1.")
+                        .arg(m_app->config().sessionBackend == QLatin1String("daemon") ? QStringLiteral("the x3ro deck daemon")
+                                                                                       : QStringLiteral("tmux")));
+        box.setInformativeText(QStringLiteral(
+            "Let them finish: they keep running where they are until they exit, and new sessions start in the new backend.\n\n"
+            "Restart agents now: they end now and each agent continues its conversation in the new backend."));
+        QPushButton *finish = box.addButton(QStringLiteral("Let running sessions finish"), QMessageBox::AcceptRole);
+        QPushButton *restartNow = box.addButton(QStringLiteral("Restart agents now"), QMessageBox::DestructiveRole);
+        box.addButton(QMessageBox::Cancel);
+        box.setDefaultButton(finish);
+        box.exec();
+        if (box.clickedButton() == finish) {
+            how = AppController::BackendSwitch::Finish;
+        } else if (box.clickedButton() == restartNow) {
+            how = AppController::BackendSwitch::Restart;
+        } else {
+            return;
+        }
+    }
     QString error;
     if (!Config::writeJson(config, &error)) {
         QMessageBox::warning(this, QStringLiteral("Settings"), QStringLiteral("Could not save the settings.\n\n%1").arg(error));
+        return;
+    }
+    if (switching) {
+        m_app->switchBackend(backend, how);
+        restart();
         return;
     }
     const bool applied = m_app->reloadConfig();
@@ -405,7 +438,7 @@ void MainWindow::applySettings(const QJsonObject &config)
     QMessageBox box(this);
     box.setIcon(QMessageBox::Question);
     box.setWindowTitle(QStringLiteral("Restart X3RO Deck"));
-    box.setText(QStringLiteral("The checkout list or the session backend changed. It takes effect when X3RO Deck restarts."));
+    box.setText(QStringLiteral("The checkout list changed. It takes effect when X3RO Deck restarts."));
     box.setInformativeText(QStringLiteral("Agents keep running through the restart. Shell tabs close."));
     QPushButton *now = box.addButton(QStringLiteral("Restart now"), QMessageBox::AcceptRole);
     box.addButton(QStringLiteral("Later"), QMessageBox::RejectRole);

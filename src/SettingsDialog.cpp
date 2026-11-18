@@ -27,10 +27,12 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSet>
 #include <QSignalBlocker>
+#include <QStandardPaths>
 #include <QStyle>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -1188,6 +1190,34 @@ QWidget *SettingsDialog::buildGeneralPage()
     layout->addWidget(m_notifyDone);
     layout->addWidget(hint(QStringLiteral("Permission prompts, questions and container problems always notify.")));
     layout->addSpacing(14);
+    layout->addWidget(section(QStringLiteral("Sessions")));
+    layout->addWidget(hint(QStringLiteral("Where agent sessions run, so they outlive X3RO Deck. Running agents cannot move "
+                                          "between the two; switching asks what to do with them and restarts X3RO Deck.")));
+    m_backendTmux = new QRadioButton(QStringLiteral("tmux"));
+    m_backendDaemon = new QRadioButton(QStringLiteral("x3ro deck daemon (x3ro-deck-sessiond)"));
+    const bool haveTmux = !QStandardPaths::findExecutable(QStringLiteral("tmux")).isEmpty();
+    (m_root.value(QStringLiteral("sessionBackend")).toString() == QLatin1String("daemon") ? m_backendDaemon : m_backendTmux)
+        ->setChecked(true);
+    // Notes under a radio button line up with its text.
+    auto note = [](QLabel *label) {
+        label->setContentsMargins(26, 0, 0, 0);
+        return label;
+    };
+    layout->addWidget(m_backendTmux);
+    if (!haveTmux) {
+        m_backendTmux->setEnabled(false);
+        layout->addWidget(
+            note(hint(QStringLiteral("tmux is not installed (not found on PATH). Install it to use it, or keep the daemon."), "warning")));
+    } else {
+        layout->addWidget(note(hint(QStringLiteral("Sessions on the tmux server -L x3ro-deck; attach from any terminal with tmux."))));
+    }
+#if defined(Q_OS_WIN)
+    m_backendTmux->hide();
+#endif
+    layout->addSpacing(4);
+    layout->addWidget(m_backendDaemon);
+    layout->addWidget(note(hint(QStringLiteral("Ships with X3RO Deck; attach from any terminal with x3ro-deck attach <checkout>."))));
+    layout->addSpacing(14);
     layout->addWidget(section(QStringLiteral("Appearance")));
     layout->addLayout(appearance);
     layout->addSpacing(14);
@@ -1325,6 +1355,7 @@ QJsonObject SettingsDialog::config() const
 
     root.insert(QStringLiteral("dockerHost"), m_dockerHost->text().trimmed());
     root.insert(QStringLiteral("composeBinary"), m_composeBinary->currentText().trimmed());
+    root.insert(QStringLiteral("sessionBackend"), m_backendDaemon->isChecked() ? QStringLiteral("daemon") : QStringLiteral("tmux"));
     root.insert(QStringLiteral("theme"), m_theme->currentData().toString());
     root.insert(QStringLiteral("themeLight"), m_themeLight->currentData().toString());
     root.insert(QStringLiteral("themeDark"), m_themeDark->currentData().toString());

@@ -3,6 +3,7 @@
 #include "DaemonBackend.h"
 #include "DockerEndpoint.h"
 #include "Paths.h"
+#include "SwitchingBackend.h"
 #include "TmuxManager.h"
 
 #include <QDesktopServices>
@@ -217,13 +218,66 @@ bool touchesPr(const QString &command)
 }
 } // namespace
 
+SessionBackend *AppController::makeBackend(const QString &kind, QObject *parent)
+{
+    if (kind == QLatin1String("daemon")) {
+        return new DaemonBackend(parent);
+    }
+    return new TmuxManager(parent);
+}
+
+// The configured backend, or while a switch lets the old backend's sessions
+// finish, both (see SwitchingBackend).
+SessionBackend *AppController::createBackend(const QString &kind, QObject *parent)
+{
+    QSettings settings;
+    const QString legacy = settings.value(kLegacyBackendKey).toString();
+    SessionBackend *primary = makeBackend(kind, parent);
+    if (legacy.isEmpty() || legacy == kind) {
+        settings.remove(kLegacyBackendKey);
+        return primary;
+    }
+    auto *both = new SwitchingBackend(primary, makeBackend(legacy, parent), parent);
+    connect(both, &SwitchingBackend::drained, both, [] { QSettings().remove(kLegacyBackendKey); });
+    return both;
+}
+
+void AppController::switchBackend(const QString &to, BackendSwitch how)
+{
+    QSettings settings;
+    if (how == BackendSwitch::Restart) {
+        QStringList resume;
+        for (const Checkout &c : std::as_const(m_checkouts)) {
+            if (c.agent.running) {
+                resume.append(c.cfg.name);
+            }
+        }
+        settings.setValue(kResumeKey, resume);
+        settings.remove(kLegacyBackendKey);
+        m_sessions->killAll();
+    } else if (how == BackendSwitch::Finish) {
+        // A switch during a switch keeps the oldest sessions' backend only
+        // when it is not the one switched to.
+        auto *both = qobject_cast<SwitchingBackend *>(m_sessions);
+        const QString old = both && settings.value(kLegacyBackendKey).toString() != to ? settings.value(kLegacyBackendKey).toString()
+                                                                                       : m_config.sessionBackend;
+        if (old != to) {
+            settings.setValue(kLegacyBackendKey, old);
+        }
+    }
+}
+
+bool AppController::hasAnySession() const
+{
+    return std::any_of(m_checkouts.cbegin(), m_checkouts.cend(), [this](const Checkout &c) { return m_sessions->hasSession(c.session); });
+}
+
 AppController::AppController(QObject *parent)
     : QObject(parent)
     , m_config(Config::load(&m_configError))
     , m_docker(new DockerClient(this))
     , m_bus(new AgentBus(this))
-    , m_sessions(m_config.sessionBackend == QLatin1String("daemon") ? static_cast<SessionBackend *>(new DaemonBackend(this))
-                                                                    : new TmuxManager(this))
+    , m_sessions(createBackend(m_config.sessionBackend, this))
     , m_terminalSettings(new TerminalSettings(this))
     , m_git(new GitWatcher(this))
     , m_prs(new PrWatcher(this))
@@ -1156,8 +1210,25 @@ bool AppController::ensureAgentSession(int index)
     }
     useProfile(index, c.cfg.agent);
     const AgentProfile &p = profile(index);
-    return m_sessions->createSession(c.session, c.cfg.path, m_config.autostartAgents ? p.launchLine(false, c.cfg.args) : QString(),
-                                     p.sessionEnv(), m_terminalSettings->current().shell);
+    // An agent stopped by a backend switch ("Restart agents now") continues
+    // its conversation in the new backend.
+    QSettings settings;
+    QStringList resume = settings.value(kResumeKey).toStringList();
+    const bool resuming = resume.removeAll(c.cfg.name) > 0;
+    if (resuming) {
+        if (resume.isEmpty()) {
+            settings.remove(kResumeKey);
+        } else {
+            settings.setValue(kResumeKey, resume);
+        }
+    }
+    QString start;
+    if (resuming) {
+        start = p.launchLine(!p.continueArgs.isEmpty(), c.cfg.args);
+    } else if (m_config.autostartAgents) {
+        start = p.launchLine(false, c.cfg.args);
+    }
+    return m_sessions->createSession(c.session, c.cfg.path, start, p.sessionEnv(), m_terminalSettings->current().shell);
 }
 
 bool AppController::reloadConfig()

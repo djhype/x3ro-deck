@@ -13,6 +13,7 @@
 #include <QJsonObject>
 #include <QLocalSocket>
 #include <QProcess>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -31,6 +32,7 @@ private Q_SLOTS:
     void envAtSpawnAndProfileSwitch();
     void hookCwdMapsToCheckout();
     void composeCommandsPerCheckout();
+    void backendSwitchResumesAgents();
     void paneDrivesState();
     void importedShell();
 
@@ -51,6 +53,9 @@ private:
     QString m_pollRepo;
     QString m_bin;
     QString m_shellRepo;
+    QString m_resumeRepo;
+    QString m_resumeLog;
+    QString m_resumeScript;
     QString m_nvmLog;
     QString m_shellA;
     QString m_shellB;
@@ -137,6 +142,11 @@ void SessionFlowTest::initTestCase()
     QVERIFY(QStandardPaths::findExecutable(QStringLiteral("fakeclaude")).isEmpty());
     m_shellRepo = m_tmp.path() + QStringLiteral("/shell-repo");
     QVERIFY(QDir().mkpath(m_shellRepo));
+    m_resumeRepo = m_tmp.path() + QStringLiteral("/resume-repo");
+    QVERIFY(QDir().mkpath(m_resumeRepo));
+    m_resumeLog = m_tmp.path() + QStringLiteral("/resume.log");
+    m_resumeScript = m_bin + QStringLiteral("/resumer");
+    writeFile(m_resumeScript, QStringLiteral("#!/bin/sh\necho \"start $*\" >> %1\nexec cat\n").arg(m_resumeLog), true);
 
     // `cat` stands in for an agent: what reaches its terminal ends up in the log.
     const QJsonObject config{
@@ -162,7 +172,12 @@ void SessionFlowTest::initTestCase()
                     QJsonObject{{QStringLiteral("id"), QStringLiteral("nvm")},
                                 {QStringLiteral("kind"), QStringLiteral("custom")},
                                 {QStringLiteral("command"), QStringLiteral("fakeclaude")}},
-                    QJsonObject{{QStringLiteral("id"), QStringLiteral("cx")}, {QStringLiteral("kind"), QStringLiteral("codex")}}}},
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("cx")}, {QStringLiteral("kind"), QStringLiteral("codex")}},
+                    // Logs its arguments, so a resumed start shows its continue args.
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("resumer")},
+                                {QStringLiteral("kind"), QStringLiteral("custom")},
+                                {QStringLiteral("command"), m_resumeScript},
+                                {QStringLiteral("continueArgs"), QStringLiteral("--resumed")}}}},
         {QStringLiteral("checkouts"),
          QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("flow")}, {QStringLiteral("path"), m_repo}},
                     QJsonObject{{QStringLiteral("name"), QStringLiteral("envy")},
@@ -174,7 +189,10 @@ void SessionFlowTest::initTestCase()
                                 {QStringLiteral("agent"), QStringLiteral("poller")}},
                     QJsonObject{{QStringLiteral("name"), QStringLiteral("shell")},
                                 {QStringLiteral("path"), m_shellRepo},
-                                {QStringLiteral("agent"), QStringLiteral("nvm")}}}},
+                                {QStringLiteral("agent"), QStringLiteral("nvm")}},
+                    QJsonObject{{QStringLiteral("name"), QStringLiteral("resume")},
+                                {QStringLiteral("path"), m_resumeRepo},
+                                {QStringLiteral("agent"), QStringLiteral("resumer")}}}},
     };
     QFile f(m_tmp.path() + QStringLiteral("/config/x3ro-deck/config.json"));
     QVERIFY(f.open(QIODevice::WriteOnly));
@@ -333,6 +351,27 @@ void SessionFlowTest::envAtSpawnAndProfileSwitch()
     app.agentAction(QStringLiteral("start"));
     QTRY_COMPARE_WITH_TIMEOUT(readFile(m_envLog), expected + QStringLiteral("unset\nunset\n"), 5000);
     QVERIFY(paneText(session).contains(QStringLiteral("export KEPT=1")));
+}
+
+// After "Restart agents now", a checkout whose agent ran starts its new
+// session with the continue line, once, autostart or not.
+void SessionFlowTest::backendSwitchResumesAgents()
+{
+    AppController app;
+    const int i = 4;
+    QCOMPARE(app.checkout(i).cfg.name, QStringLiteral("resume"));
+    QSettings().setValue(AppController::kResumeKey, QStringList{QStringLiteral("resume"), QStringLiteral("elsewhere")});
+    QVERIFY(app.ensureAgentSession(i));
+    QTRY_COMPARE_WITH_TIMEOUT(readFile(m_resumeLog), QStringLiteral("start --resumed\n"), 5000);
+    QCOMPARE(QSettings().value(AppController::kResumeKey).toStringList(), QStringList{QStringLiteral("elsewhere")});
+    QSettings().remove(AppController::kResumeKey);
+
+    // A fresh session afterwards starts normally.
+    app.sessions()->killSession(app.checkout(i).session);
+    QTRY_VERIFY_WITH_TIMEOUT(!app.sessions()->hasSession(app.checkout(i).session), 5000);
+    QVERIFY(app.ensureAgentSession(i));
+    QTRY_COMPARE_WITH_TIMEOUT(readFile(m_resumeLog), QStringLiteral("start --resumed\nstart \n"), 5000);
+    app.sessions()->killSession(app.checkout(i).session);
 }
 
 void SessionFlowTest::composeCommandsPerCheckout()

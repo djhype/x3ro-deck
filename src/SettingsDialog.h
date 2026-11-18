@@ -14,6 +14,7 @@ class QLineEdit;
 class QListWidget;
 class QPlainTextEdit;
 class QPushButton;
+class QRadioButton;
 class QTabWidget;
 class QTableWidget;
 class TerminalSettings;
@@ -140,6 +141,8 @@ private:
     QLabel *m_dockerEndpoint;
     QComboBox *m_composeBinary;
     QComboBox *m_theme;
+    QRadioButton *m_backendTmux;
+    QRadioButton *m_backendDaemon;
     QComboBox *m_themeLight;
     QComboBox *m_themeDark;
     QList<QWidget *> m_themeSystemRows; // the light and dark rows, shown for System

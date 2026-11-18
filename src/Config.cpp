@@ -53,7 +53,9 @@ QJsonObject defaults()
         {QStringLiteral("composeBinary"), QStringLiteral("docker compose")},
         {QStringLiteral("notifyOnDone"), true},
         {QStringLiteral("autostartAgents"), true},
-        {QStringLiteral("sessionBackend"), QStringLiteral("tmux")},
+        // tmux when it is installed, else the daemon that ships with the app.
+        {QStringLiteral("sessionBackend"),
+         QStandardPaths::findExecutable(QStringLiteral("tmux")).isEmpty() ? QStringLiteral("daemon") : QStringLiteral("tmux")},
         {QStringLiteral("terminalScrollback"), 10000},
         {QStringLiteral("terminalSettings"), QString()},
         {QStringLiteral("terminalProfile"), QString()},

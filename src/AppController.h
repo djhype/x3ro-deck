@@ -124,6 +124,19 @@ public:
     const Checkout &checkout(int i) const { return m_checkouts.at(i); }
     const AgentProfile &profile(int i) const { return m_config.agent(m_checkouts.at(i).agent.profile); }
     SessionBackend *sessions() const { return m_sessions; }
+    // How a change of sessionBackend treats sessions in the old backend; both
+    // take effect at the next start.
+    enum class BackendSwitch {
+        Plain, // no old sessions to care about
+        Finish, // old sessions keep running there until they exit
+        Restart, // old sessions end now; their agents continue in the new backend
+    };
+    void switchBackend(const QString &to, BackendSwitch how);
+    bool hasAnySession() const;
+    static SessionBackend *makeBackend(const QString &kind, QObject *parent);
+    static SessionBackend *createBackend(const QString &kind, QObject *parent);
+    static inline const QString kLegacyBackendKey = QStringLiteral("sessions/legacyBackend");
+    static inline const QString kResumeKey = QStringLiteral("sessions/resume");
     // The imported terminal settings. Their shell runs in new agent sessions
     // as well as in shell tabs.
     TerminalSettings *terminalSettings() const { return m_terminalSettings; }

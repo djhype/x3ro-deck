@@ -245,7 +245,7 @@ DeckDialog QTableCornerButton::section {
     border: none;
 }
 
-DeckDialog QCheckBox {
+DeckDialog QCheckBox, DeckDialog QRadioButton {
     color: ${text};
     font-family: "${font.sans}";
     font-size: 13px;
@@ -262,6 +262,22 @@ DeckDialog QCheckBox::indicator:checked {
     background: ${magenta};
     border-color: ${magenta};
     image: url(${icon:check});
+}
+
+DeckDialog QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid ${line2};
+    border-radius: 8px;
+    background: ${bg0};
+}
+DeckDialog QRadioButton::indicator:checked {
+    width: 8px;
+    height: 8px;
+    border: 4px solid ${magenta};
+}
+DeckDialog QCheckBox:disabled, DeckDialog QRadioButton:disabled {
+    color: ${muted};
 }
 
 DeckDialog QScrollArea, DeckDialog #scrollContent {

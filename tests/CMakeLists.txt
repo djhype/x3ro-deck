@@ -140,3 +140,11 @@ x3ro_deck_set_warnings(tst_quickcommands)
 target_link_libraries(tst_quickcommands PRIVATE x3ro-deck-base Qt6::Test)
 target_compile_definitions(tst_quickcommands PRIVATE X3RO_DECK_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_test(NAME quickcommands COMMAND tst_quickcommands)
+
+# A real private tmux server and x3ro-deck-sessiond, so it needs tmux.
+add_executable(tst_backendswitch tst_backendswitch.cpp)
+add_dependencies(tst_backendswitch x3ro-deck-sessiond)
+x3ro_deck_set_warnings(tst_backendswitch)
+target_link_libraries(tst_backendswitch PRIVATE x3ro-deck-base Qt6::Test)
+add_test(NAME backendswitch COMMAND tst_backendswitch)
+set_tests_properties(backendswitch PROPERTIES TIMEOUT 60 ENVIRONMENT "X3RO_DECK_SESSIOND_BIN=$<TARGET_FILE:x3ro-deck-sessiond>")
