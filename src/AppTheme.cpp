@@ -3,12 +3,16 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QStyleHints>
+
+#include <algorithm>
 
 namespace
 {
@@ -32,32 +36,77 @@ QString AppTheme::userDir()
 AppTheme::AppTheme(QObject *parent)
     : QObject(parent)
 {
+    reset();
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
+            [this](Qt::ColorScheme scheme) { setSystemDark(scheme != Qt::ColorScheme::Light); });
+#endif
+    m_systemDark = desktopIsDark();
+}
+
+void AppTheme::reset()
+{
+    m_name.clear();
+    m_colors.clear();
+    m_checkoutColors.clear();
+    m_fonts.clear();
     if (!apply(readFile(builtinPath(builtinDefault())))) {
         qWarning("x3ro-deck: the built-in theme is missing");
     }
 }
 
+bool AppTheme::desktopIsDark()
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    if (qobject_cast<QGuiApplication *>(QCoreApplication::instance())) {
+        return QGuiApplication::styleHints()->colorScheme() != Qt::ColorScheme::Light;
+    }
+#endif
+    return true; // Qt 6.4 cannot tell; Cyberdecker is dark
+}
+
+QList<AppTheme::Info> AppTheme::available()
+{
+    QList<Info> out;
+    QDir builtin(QStringLiteral(":/data/themes"));
+    for (const QString &file : builtin.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name)) {
+        AppTheme t;
+        t.apply(readFile(builtin.filePath(file)));
+        out.append({file.chopped(5), t.name(), true});
+    }
+    // The default first, its light companion next, the rest by name.
+    std::stable_partition(out.begin(), out.end(), [](const Info &i) { return i.id == builtinLight(); });
+    std::stable_partition(out.begin(), out.end(), [](const Info &i) { return i.id == builtinDefault(); });
+    QDir user(userDir());
+    for (const QString &file : user.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name)) {
+        AppTheme t;
+        QString error;
+        if (!t.apply(readFile(user.filePath(file)), &error)) {
+            qWarning("x3ro-deck: skipping theme %s: %s", qPrintable(user.filePath(file)), qPrintable(error));
+            continue;
+        }
+        const Info info{file.chopped(5), t.name().isEmpty() ? file.chopped(5) : t.name(), false};
+        out.removeIf([&](const Info &i) { return i.id == info.id; });
+        out.append(info);
+    }
+    return out;
+}
+
 bool AppTheme::load(const QString &id, QString *error)
 {
-    if (id.isEmpty() || id == builtinDefault()) {
-        return true;
-    }
-    QString path = userDir() + QLatin1Char('/') + id + QStringLiteral(".json");
+    const QString wanted = id.isEmpty() ? builtinDefault() : id;
+    QString path = userDir() + QLatin1Char('/') + wanted + QStringLiteral(".json");
     if (!QFile::exists(path)) {
-        path = builtinPath(id);
+        path = builtinPath(wanted);
     }
     if (!QFile::exists(path)) {
         if (error) {
-            *error = QStringLiteral("no theme named %1 in %2").arg(id, userDir());
+            *error = QStringLiteral("no theme named %1 in %2").arg(wanted, userDir());
         }
         return false;
     }
-    // Overlay a copy, so a broken file leaves the default untouched.
+    // Overlay a fresh default, so a broken file changes nothing.
     AppTheme next;
-    next.m_name = m_name;
-    next.m_colors = m_colors;
-    next.m_checkoutColors = m_checkoutColors;
-    next.m_fonts = m_fonts;
     QString why;
     if (!next.apply(readFile(path), &why)) {
         if (error) {
@@ -65,11 +114,39 @@ bool AppTheme::load(const QString &id, QString *error)
         }
         return false;
     }
+    const bool same
+        = m_name == next.m_name && m_colors == next.m_colors && m_checkoutColors == next.m_checkoutColors && m_fonts == next.m_fonts;
     m_name = next.m_name;
     m_colors = next.m_colors;
     m_checkoutColors = next.m_checkoutColors;
     m_fonts = next.m_fonts;
+    if (!same) {
+        Q_EMIT changed();
+    }
     return true;
+}
+
+void AppTheme::select(const QString &id, const QString &light, const QString &dark)
+{
+    m_followSystem = id == system();
+    m_light = light.isEmpty() ? builtinLight() : light;
+    m_dark = dark.isEmpty() ? builtinDefault() : dark;
+    const QString wanted = m_followSystem ? (m_systemDark ? m_dark : m_light) : id;
+    if (QString error; !load(wanted, &error)) {
+        qWarning("x3ro-deck: theme %s: %s; using the default", qPrintable(wanted), qPrintable(error));
+        load(m_followSystem && !m_systemDark ? builtinLight() : builtinDefault());
+    }
+}
+
+void AppTheme::setSystemDark(bool dark)
+{
+    if (dark == m_systemDark) {
+        return;
+    }
+    m_systemDark = dark;
+    if (m_followSystem) {
+        select(system(), m_light, m_dark);
+    }
 }
 
 bool AppTheme::apply(const QByteArray &json, QString *error)

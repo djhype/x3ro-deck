@@ -70,10 +70,14 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     TerminalHost::setProfile(m_app->terminalSettings()->current());
 
     m_theme = new AppTheme(this);
-    if (QString error; !m_theme->load(m_app->config().theme, &error)) {
-        qWarning("x3ro-deck: theme %s: %s; using the default", qPrintable(m_app->config().theme), qPrintable(error));
-    }
+    selectTheme();
     setStyleSheet(m_theme->styleSheet());
+    connect(m_theme, &AppTheme::changed, this, [this] {
+        setStyleSheet(m_theme->styleSheet());
+        for (QQuickWidget *w : findChildren<QQuickWidget *>()) {
+            w->setClearColor(m_theme->color(QStringLiteral("bg1")));
+        }
+    });
 
     m_engine->rootContext()->setContextProperty(QStringLiteral("app"), m_app);
     m_engine->rootContext()->setContextProperty(QStringLiteral("appTheme"), m_theme);
@@ -372,8 +376,17 @@ void MainWindow::openSettings(const QString &page)
     connect(m_app, &AppController::dependenciesChanged, dialog, fillDependencies);
     connect(dialog, &QDialog::accepted, this, [this, dialog] { applySettings(dialog->config()); });
     connect(dialog, &SettingsDialog::aboutRequested, this, &MainWindow::openAbout);
+    // The theme picker previews live; Cancel puts the saved theme back.
+    connect(dialog, &SettingsDialog::themePreview, m_theme, &AppTheme::select);
+    connect(dialog, &QDialog::rejected, this, &MainWindow::selectTheme);
     m_settings = dialog;
     dialog->open();
+}
+
+void MainWindow::selectTheme()
+{
+    const Config &c = m_app->config();
+    m_theme->select(c.theme, c.themeLight, c.themeDark);
 }
 
 void MainWindow::applySettings(const QJsonObject &config)
@@ -384,6 +397,7 @@ void MainWindow::applySettings(const QJsonObject &config)
         return;
     }
     const bool applied = m_app->reloadConfig();
+    selectTheme();
     TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
     if (applied) {
         return;

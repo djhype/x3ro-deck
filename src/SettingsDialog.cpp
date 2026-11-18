@@ -1,5 +1,6 @@
 #include "SettingsDialog.h"
 
+#include "AppTheme.h"
 #include "Config.h"
 #include "Dependencies.h"
 #include "DockerEndpoint.h"
@@ -1130,6 +1131,46 @@ QWidget *SettingsDialog::buildGeneralPage()
     fillTerminalProfiles(m_root.value(QStringLiteral("terminalProfile")).toString().trimmed());
     connect(m_terminalSource, &QComboBox::currentIndexChanged, this, [this] { fillTerminalProfiles(QString()); });
 
+    const QList<AppTheme::Info> themes = AppTheme::available();
+    auto themeBox = [&themes](const QString &current) {
+        auto *box = new QComboBox;
+        box->setMinimumWidth(280);
+        for (const AppTheme::Info &t : themes) {
+            box->addItem(t.builtin ? t.name : QStringLiteral("%1 (%2.json)").arg(t.name, t.id), t.id);
+        }
+        const int at = box->findData(current);
+        if (at < 0 && !current.isEmpty()) {
+            box->addItem(QStringLiteral("%1 (missing)").arg(current), current);
+        }
+        box->setCurrentIndex(std::max(0, box->findData(current)));
+        return box;
+    };
+    m_theme = themeBox(m_root.value(QStringLiteral("theme")).toString(AppTheme::builtinDefault()));
+    m_theme->insertItem(0, QStringLiteral("System (follows light and dark mode)"), AppTheme::system());
+    if (m_root.value(QStringLiteral("theme")).toString() == AppTheme::system()) {
+        m_theme->setCurrentIndex(0);
+    }
+    m_themeLight = themeBox(m_root.value(QStringLiteral("themeLight")).toString(AppTheme::builtinLight()));
+    m_themeDark = themeBox(m_root.value(QStringLiteral("themeDark")).toString(AppTheme::builtinDefault()));
+    auto *appearance = form();
+    addField(
+        appearance, QStringLiteral("Theme"), m_theme,
+        hint(
+            QStringLiteral("Changes show right away. Drop your own themes into %1 as JSON files.").arg(Paths::tilde(AppTheme::userDir()))));
+    for (const auto &[text, box] : {std::pair{"Light mode", m_themeLight}, std::pair{"Dark mode", m_themeDark}}) {
+        const int row = nextRow(appearance);
+        auto *label = new QLabel(QLatin1String(text));
+        appearance->addWidget(label, row, 0, Qt::AlignRight | Qt::AlignVCenter);
+        appearance->addWidget(box, row, 1);
+        m_themeSystemRows << label << box;
+    }
+    for (QWidget *w : std::as_const(m_themeSystemRows)) {
+        w->setVisible(m_theme->currentData() == AppTheme::system());
+    }
+    for (QComboBox *box : {m_theme, m_themeLight, m_themeDark}) {
+        connect(box, &QComboBox::currentIndexChanged, this, &SettingsDialog::previewTheme);
+    }
+
     auto *terminals = form();
     addField(terminals, QStringLiteral("Import settings from"), m_terminalSource,
              hint(QStringLiteral("The terminals take the colors, font, cursor, scrollback and shell from this terminal's "
@@ -1147,6 +1188,9 @@ QWidget *SettingsDialog::buildGeneralPage()
     layout->addWidget(m_notifyDone);
     layout->addWidget(hint(QStringLiteral("Permission prompts, questions and container problems always notify.")));
     layout->addSpacing(14);
+    layout->addWidget(section(QStringLiteral("Appearance")));
+    layout->addLayout(appearance);
+    layout->addSpacing(14);
     layout->addWidget(section(QStringLiteral("Terminals")));
     layout->addLayout(terminals);
     layout->addSpacing(14);
@@ -1161,6 +1205,14 @@ QWidget *SettingsDialog::buildGeneralPage()
     aboutRow->addStretch();
     layout->addLayout(aboutRow);
     return page;
+}
+
+void SettingsDialog::previewTheme()
+{
+    for (QWidget *w : std::as_const(m_themeSystemRows)) {
+        w->setVisible(m_theme->currentData() == AppTheme::system());
+    }
+    Q_EMIT themePreview(m_theme->currentData().toString(), m_themeLight->currentData().toString(), m_themeDark->currentData().toString());
 }
 
 void SettingsDialog::setDependencies(const QList<Dependency> &list, bool ready)
@@ -1273,6 +1325,9 @@ QJsonObject SettingsDialog::config() const
 
     root.insert(QStringLiteral("dockerHost"), m_dockerHost->text().trimmed());
     root.insert(QStringLiteral("composeBinary"), m_composeBinary->currentText().trimmed());
+    root.insert(QStringLiteral("theme"), m_theme->currentData().toString());
+    root.insert(QStringLiteral("themeLight"), m_themeLight->currentData().toString());
+    root.insert(QStringLiteral("themeDark"), m_themeDark->currentData().toString());
     QJsonArray quick;
     for (int r = 0; r < m_quick->rowCount(); ++r) {
         const QJsonObject o = quickRow(m_quick, r);

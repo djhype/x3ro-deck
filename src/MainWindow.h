@@ -60,6 +60,7 @@ private:
     void updateStatsVisibility();
     void saveLayout();
     void applySettings(const QJsonObject &config);
+    void selectTheme();
     // Quits after asking whether the agent sessions should stop too.
     void confirmQuit();
     void restart();

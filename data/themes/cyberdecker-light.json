@@ -1,0 +1,30 @@
+{
+    "name": "Cyberdecker Light",
+    "colors": {
+        "bg0": "#f3f1fa",
+        "bg1": "#ebe8f6",
+        "panel": "#ffffff",
+        "raised": "#f7f5fd",
+        "selected": "#e8def8",
+        "line": "#d8d2ea",
+        "line2": "#c2bada",
+        "rowLine": "#ede9f7",
+        "well": "#fbfaff",
+        "shade": "#e6e2f2",
+        "tabActive": "#f2dcf6",
+        "text": "#1c1930",
+        "soft": "#38345a",
+        "dim": "#5d587e",
+        "muted": "#86819f",
+        "faint": "#aea9c4",
+        "magenta": "#b8169a",
+        "pink": "#cf2449",
+        "cyan": "#00808c",
+        "amber": "#a86400",
+        "ink": "#ffffff",
+        "permissionCard": "#fbf3e1",
+        "dockerCard": "#fbe8ed",
+        "doneCard": "#f6eaf8"
+    },
+    "checkoutColors": ["#3a5fd0", "#4a8419", "#7449cc", "#0b7fa8", "#a1650f", "#c13858"]
+}

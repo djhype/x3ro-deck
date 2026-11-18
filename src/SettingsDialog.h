@@ -38,6 +38,8 @@ public:
 
 Q_SIGNALS:
     void aboutRequested();
+    // The theme picker changed; the window shows it until Save or Cancel.
+    void themePreview(const QString &id, const QString &light, const QString &dark);
 
 public:
     void reject() override;
@@ -137,6 +139,11 @@ private:
     QLineEdit *m_dockerHost;
     QLabel *m_dockerEndpoint;
     QComboBox *m_composeBinary;
+    QComboBox *m_theme;
+    QComboBox *m_themeLight;
+    QComboBox *m_themeDark;
+    QList<QWidget *> m_themeSystemRows; // the light and dark rows, shown for System
+    void previewTheme();
     QLineEdit *m_composeUp;
     QLineEdit *m_composeDown;
     QLineEdit *m_composeRestart;

@@ -58,6 +58,8 @@ QJsonObject defaults()
         {QStringLiteral("terminalSettings"), QString()},
         {QStringLiteral("terminalProfile"), QString()},
         {QStringLiteral("theme"), QStringLiteral("cyberdecker")},
+        {QStringLiteral("themeLight"), QStringLiteral("cyberdecker-light")},
+        {QStringLiteral("themeDark"), QStringLiteral("cyberdecker")},
     };
 }
 
@@ -401,5 +403,7 @@ Config Config::load(QString *error)
     c.terminalSettings = root.value(QStringLiteral("terminalSettings")).toString().trimmed();
     c.terminalProfile = root.value(QStringLiteral("terminalProfile")).toString().trimmed();
     c.theme = root.value(QStringLiteral("theme")).toString().trimmed();
+    c.themeLight = root.value(QStringLiteral("themeLight")).toString().trimmed();
+    c.themeDark = root.value(QStringLiteral("themeDark")).toString().trimmed();
     return c;
 }

@@ -137,6 +137,7 @@ qt_add_resources(x3ro-deck-base theme
     FILES
         data/style.qss
         data/themes/cyberdecker.json
+        data/themes/cyberdecker-light.json
         data/ui/check.svg
         data/ui/chevron-down.svg
         data/ui/close.svg

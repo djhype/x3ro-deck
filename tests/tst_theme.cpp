@@ -3,7 +3,10 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -93,6 +96,71 @@ private Q_SLOTS:
         QVERIFY(error.contains(QLatin1String("cyan")));
         QCOMPARE(theme.color(QStringLiteral("magenta")), QColor(QStringLiteral("#ff6ff2")));
         QVERIFY(!theme.load(QStringLiteral("nope"), &error));
+        QCOMPARE(theme.name(), QStringLiteral("Cyberdecker"));
+    }
+
+    void listsBuiltinAndUserThemes()
+    {
+        QTemporaryDir config;
+        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        QDir().mkpath(AppTheme::userDir());
+        auto write = [](const QString &name, const QByteArray &json) {
+            QFile f(AppTheme::userDir() + QLatin1Char('/') + name);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(json);
+        };
+        write(QStringLiteral("mine.json"), "{\"name\": \"Mine\", \"colors\": {\"magenta\": \"#00ff00\"}}");
+        write(QStringLiteral("broken.json"), "{\"colors\": ");
+        write(QStringLiteral("notes.txt"), "x");
+        QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("skipping theme .*broken.json")));
+        const QList<AppTheme::Info> themes = AppTheme::available();
+        QStringList ids;
+        for (const AppTheme::Info &t : themes) {
+            ids << t.id;
+        }
+        QCOMPARE(ids, (QStringList{QStringLiteral("cyberdecker"), QStringLiteral("cyberdecker-light"), QStringLiteral("mine")}));
+        QCOMPARE(themes.last().name, QStringLiteral("Mine"));
+        QVERIFY(!themes.last().builtin);
+    }
+
+    void lightCompanionDefinesEveryColor()
+    {
+        AppTheme dark;
+        QFile f(QStringLiteral(":/data/themes/cyberdecker-light.json"));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QVariantMap light = QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("colors")).toObject().toVariantMap();
+        QCOMPARE(light.keys(), dark.colors().keys());
+    }
+
+    void selectSwitchesLiveAndFollowsTheSystem()
+    {
+        QTemporaryDir config;
+        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        AppTheme theme;
+        QSignalSpy changed(&theme, &AppTheme::changed);
+        theme.select(QStringLiteral("cyberdecker-light"));
+        QCOMPARE(theme.name(), QStringLiteral("Cyberdecker Light"));
+        QCOMPARE(changed.size(), 1);
+        theme.select(QStringLiteral("cyberdecker"));
+        QCOMPARE(theme.name(), QStringLiteral("Cyberdecker"));
+
+        theme.setSystemDark(true);
+        theme.select(AppTheme::system());
+        QVERIFY(theme.followsSystem());
+        QCOMPARE(theme.name(), QStringLiteral("Cyberdecker"));
+        theme.setSystemDark(false);
+        QCOMPARE(theme.name(), QStringLiteral("Cyberdecker Light"));
+        theme.setSystemDark(true);
+        QCOMPARE(theme.name(), QStringLiteral("Cyberdecker"));
+
+        // A fixed theme ignores the desktop.
+        theme.select(QStringLiteral("cyberdecker-light"));
+        theme.setSystemDark(false);
+        theme.setSystemDark(true);
+        QCOMPARE(theme.name(), QStringLiteral("Cyberdecker Light"));
+
+        QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("theme gone: .*using the default")));
+        theme.select(QStringLiteral("gone"));
         QCOMPARE(theme.name(), QStringLiteral("Cyberdecker"));
     }
 

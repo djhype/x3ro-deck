@@ -88,7 +88,9 @@ struct Config
     int terminalScrollback = 10000; // history lines per built-in terminal when the imported profile sets none
     QString terminalSettings; // terminal to import settings from: empty = the desktop's default, "none", or a source id
     QString terminalProfile; // that terminal's profile; empty = its default
-    QString theme = QStringLiteral("cyberdecker"); // a file in ~/.config/x3ro-deck/themes or a built-in theme; takes a restart
+    QString theme = QStringLiteral("cyberdecker"); // a file in ~/.config/x3ro-deck/themes, a built-in theme, or "system"
+    QString themeLight = QStringLiteral("cyberdecker-light"); // what "system" shows in light mode
+    QString themeDark = QStringLiteral("cyberdecker"); // and in dark mode
 
     // The profile with this id, else the default one.
     const AgentProfile &agent(const QString &id) const;
