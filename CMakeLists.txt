@@ -114,6 +114,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     if(xcb_FOUND)
         list(APPEND X3RO_DECK_DESKTOP_LIBS PkgConfig::xcb)
     endif()
+elseif(APPLE)
+    # UNUserNotificationCenter and Carbon hot keys, in Objective-C++
+    # (manual retain/release).
+    enable_language(OBJCXX)
+    set(X3RO_DECK_DESKTOP_PLATFORM src/MacNotifier.mm src/MacGlobalHotkey.mm)
+    set_source_files_properties(src/MacNotifier.mm src/MacGlobalHotkey.mm PROPERTIES COMPILE_OPTIONS -fno-objc-arc)
+    set(X3RO_DECK_DESKTOP_LIBS "-framework Foundation" "-framework UserNotifications" "-framework Carbon")
 else()
     set(X3RO_DECK_DESKTOP_PLATFORM src/NotifierNone.cpp src/GlobalHotkeyNone.cpp)
     set(X3RO_DECK_DESKTOP_LIBS)
