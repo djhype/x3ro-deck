@@ -1,5 +1,9 @@
 #include "ConfigMigrations.h"
 
+#include <QJsonArray>
+
+#include <tuple>
+
 namespace ConfigMigrations
 {
 
@@ -29,6 +33,33 @@ const QList<Migration> &all()
         [](QJsonObject c) {
             c.remove(QStringLiteral("terminal"));
             c.remove(QStringLiteral("konsoleProfile"));
+            return c;
+        },
+        // v3 → v4: compose commands belong to each checkout. The globals the
+        // file changed move into every checkout's `compose`; defaults stay
+        // implicit there too.
+        [](QJsonObject c) {
+            QJsonObject compose;
+            for (const auto &[from, to, def] :
+                 {std::tuple{"composeUp", "up", "{compose} up -d"}, std::tuple{"composeDown", "down", "{compose} down"},
+                  std::tuple{"composeRestart", "restart", "{compose} restart"}}) {
+                const QString cmd = c.value(QLatin1String(from)).toString().trimmed();
+                if (!cmd.isEmpty() && cmd != QLatin1String(def)) {
+                    compose.insert(QLatin1String(to), cmd);
+                }
+                c.remove(QLatin1String(from));
+            }
+            if (!compose.isEmpty()) {
+                QJsonArray checkouts = c.value(QStringLiteral("checkouts")).toArray();
+                for (QJsonValueRef v : checkouts) {
+                    QJsonObject o = v.toObject();
+                    if (!o.contains(QStringLiteral("compose"))) {
+                        o.insert(QStringLiteral("compose"), compose);
+                    }
+                    v = o;
+                }
+                c.insert(QStringLiteral("checkouts"), checkouts);
+            }
             return c;
         },
     };

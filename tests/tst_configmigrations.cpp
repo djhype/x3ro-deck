@@ -22,6 +22,7 @@ private Q_SLOTS:
     void v0FileIsUpgradedWithBackup();
     void newerFileIsLeftAloneWithWarning();
     void v1ComposeCommandsUseThePlaceholder();
+    void v3KeepsACheckoutsOwnCompose();
     void v2DropsTheKonsoleKeys();
     void freshInstallWritesCurrentVersion();
     void savingStampsTheVersion();
@@ -152,10 +153,40 @@ void ConfigMigrationsTest::v1ComposeCommandsUseThePlaceholder()
     const Config c = Config::load(&error);
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QVERIFY(QFile::exists(configFile() + QStringLiteral(".v1.bak")));
-    QCOMPARE(c.composeUp, QStringLiteral("{compose} up -d --build"));
-    QCOMPARE(c.composeDown, QStringLiteral("make down"));
-    QCOMPARE(c.composeRestart, QStringLiteral("{compose} restart"));
+    // v3 → v4 then moves them onto the checkouts.
+    QCOMPARE(c.checkouts.size(), 2);
+    for (const CheckoutConfig &cc : c.checkouts) {
+        QCOMPARE(cc.composeCommand(QStringLiteral("up")), QStringLiteral("{compose} up -d --build"));
+        QCOMPARE(cc.composeCommand(QStringLiteral("down")), QStringLiteral("make down"));
+        QCOMPARE(cc.composeCommand(QStringLiteral("restart")), QStringLiteral("{compose} restart"));
+    }
     QCOMPARE(c.composeBinary, QStringLiteral("docker compose"));
+    const QJsonObject written = QJsonDocument::fromJson(read(configFile())).object();
+    for (const char *key : {"composeUp", "composeDown", "composeRestart"}) {
+        QVERIFY(!written.contains(QLatin1String(key)));
+    }
+    const QJsonObject compose
+        = written.value(QStringLiteral("checkouts")).toArray().at(0).toObject().value(QStringLiteral("compose")).toObject();
+    QCOMPARE(compose,
+             (QJsonObject{{QStringLiteral("up"), QStringLiteral("{compose} up -d --build")},
+                          {QStringLiteral("down"), QStringLiteral("make down")}}));
+}
+
+void ConfigMigrationsTest::v3KeepsACheckoutsOwnCompose()
+{
+    const QJsonObject own{{QStringLiteral("up"), QStringLiteral("make up")}};
+    const QJsonObject v3{{QStringLiteral("configVersion"), 3},
+                         {QStringLiteral("composeUp"), QStringLiteral("{compose} up -d")},
+                         {QStringLiteral("composeDown"), QStringLiteral("just down")},
+                         {QStringLiteral("checkouts"),
+                          QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("a")}},
+                                     QJsonObject{{QStringLiteral("name"), QStringLiteral("b")}, {QStringLiteral("compose"), own}}}}};
+    const ConfigMigrations::Result r = ConfigMigrations::run(v3);
+    const QJsonArray checkouts = r.config.value(QStringLiteral("checkouts")).toArray();
+    QCOMPARE(checkouts.at(0).toObject().value(QStringLiteral("compose")).toObject(),
+             (QJsonObject{{QStringLiteral("down"), QStringLiteral("just down")}}));
+    QCOMPARE(checkouts.at(1).toObject().value(QStringLiteral("compose")).toObject(), own);
+    QVERIFY(!r.config.contains(QStringLiteral("composeDown")));
 }
 
 void ConfigMigrationsTest::v2DropsTheKonsoleKeys()

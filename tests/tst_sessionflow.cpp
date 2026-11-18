@@ -30,6 +30,7 @@ private Q_SLOTS:
     void startPermissionPromptRestartStop();
     void envAtSpawnAndProfileSwitch();
     void hookCwdMapsToCheckout();
+    void composeCommandsPerCheckout();
     void paneDrivesState();
     void importedShell();
 
@@ -166,7 +167,8 @@ void SessionFlowTest::initTestCase()
          QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("flow")}, {QStringLiteral("path"), m_repo}},
                     QJsonObject{{QStringLiteral("name"), QStringLiteral("envy")},
                                 {QStringLiteral("path"), m_envRepo},
-                                {QStringLiteral("agent"), QStringLiteral("envy")}},
+                                {QStringLiteral("agent"), QStringLiteral("envy")},
+                                {QStringLiteral("compose"), QJsonObject{{QStringLiteral("up"), QStringLiteral("make up")}}}},
                     QJsonObject{{QStringLiteral("name"), QStringLiteral("poll")},
                                 {QStringLiteral("path"), m_pollRepo},
                                 {QStringLiteral("agent"), QStringLiteral("poller")}},
@@ -331,6 +333,23 @@ void SessionFlowTest::envAtSpawnAndProfileSwitch()
     app.agentAction(QStringLiteral("start"));
     QTRY_COMPARE_WITH_TIMEOUT(readFile(m_envLog), expected + QStringLiteral("unset\nunset\n"), 5000);
     QVERIFY(paneText(session).contains(QStringLiteral("export KEPT=1")));
+}
+
+void SessionFlowTest::composeCommandsPerCheckout()
+{
+    AppController app;
+    QList<QPair<int, QString>> ran;
+    connect(&app, &AppController::runInTerminal, this,
+            [&](int checkout, const QString &, const QString &command) { ran.append({checkout, command}); });
+    app.select(0);
+    app.runCompose(QStringLiteral("up"));
+    app.select(1);
+    app.runCompose(QStringLiteral("up"));
+    app.runCompose(QStringLiteral("down"));
+    QCOMPARE(ran.size(), 3);
+    QCOMPARE(ran.at(0), qMakePair(0, QStringLiteral("docker compose up -d")));
+    QCOMPARE(ran.at(1), qMakePair(1, QStringLiteral("make up")));
+    QCOMPARE(ran.at(2), qMakePair(1, QStringLiteral("docker compose down")));
 }
 
 void SessionFlowTest::hookCwdMapsToCheckout()

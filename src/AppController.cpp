@@ -1016,9 +1016,7 @@ void AppController::runCompose(const QString &which)
     if (m_current >= m_checkouts.size()) {
         return;
     }
-    const QString cmd = which == QLatin1String("up") ? m_config.composeUp
-        : which == QLatin1String("down")             ? m_config.composeDown
-                                                     : m_config.composeRestart;
+    const QString cmd = m_checkouts.at(m_current).cfg.composeCommand(which);
     Q_EMIT runInTerminal(m_current, QStringLiteral("compose %1").arg(which), expand(m_current, cmd));
 }
 

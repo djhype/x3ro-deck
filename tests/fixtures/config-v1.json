@@ -1,7 +1,16 @@
 {
     "configVersion": 1,
     "autostartAgents": false,
-    "checkouts": [],
+    "checkouts": [
+        {
+            "name": "a",
+            "path": "/tmp"
+        },
+        {
+            "name": "b",
+            "path": "/tmp"
+        }
+    ],
     "composeUp": "docker compose up -d --build",
     "composeDown": "make down",
     "composeRestart": "docker compose restart"

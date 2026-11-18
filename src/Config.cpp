@@ -51,9 +51,6 @@ QJsonObject defaults()
         {QStringLiteral("defaultAgent"), QStringLiteral("claude")},
         {QStringLiteral("dockerHost"), QString()},
         {QStringLiteral("composeBinary"), QStringLiteral("docker compose")},
-        {QStringLiteral("composeUp"), QStringLiteral("{compose} up -d")},
-        {QStringLiteral("composeDown"), QStringLiteral("{compose} down")},
-        {QStringLiteral("composeRestart"), QStringLiteral("{compose} restart")},
         {QStringLiteral("notifyOnDone"), true},
         {QStringLiteral("autostartAgents"), true},
         {QStringLiteral("sessionBackend"), QStringLiteral("tmux")},
@@ -337,6 +334,20 @@ bool Config::writeJson(const QJsonObject &root, QString *error)
     return false;
 }
 
+QString CheckoutConfig::defaultCompose(const QString &which)
+{
+    if (which == QLatin1String("up")) {
+        return QStringLiteral("{compose} up -d");
+    }
+    return which == QLatin1String("down") ? QStringLiteral("{compose} down") : QStringLiteral("{compose} restart");
+}
+
+QString CheckoutConfig::composeCommand(const QString &which) const
+{
+    const QString &own = which == QLatin1String("up") ? composeUp : which == QLatin1String("down") ? composeDown : composeRestart;
+    return own.isEmpty() ? defaultCompose(which) : own;
+}
+
 Config Config::load(QString *error)
 {
     const QJsonObject root = readJson(error);
@@ -349,6 +360,10 @@ Config Config::load(QString *error)
         cc.portOffset = o.value(QStringLiteral("portOffset")).toInt();
         cc.agent = o.value(QStringLiteral("agent")).toString();
         cc.args = o.value(QStringLiteral("args")).toString().trimmed();
+        const QJsonObject compose = o.value(QStringLiteral("compose")).toObject();
+        cc.composeUp = compose.value(QStringLiteral("up")).toString().trimmed();
+        cc.composeDown = compose.value(QStringLiteral("down")).toString().trimmed();
+        cc.composeRestart = compose.value(QStringLiteral("restart")).toString().trimmed();
         if (!cc.name.isEmpty()) {
             c.checkouts.append(cc);
         }
@@ -379,9 +394,6 @@ Config Config::load(QString *error)
     if (c.composeBinary.isEmpty()) {
         c.composeBinary = QStringLiteral("docker compose");
     }
-    c.composeUp = root.value(QStringLiteral("composeUp")).toString(c.composeUp);
-    c.composeDown = root.value(QStringLiteral("composeDown")).toString(c.composeDown);
-    c.composeRestart = root.value(QStringLiteral("composeRestart")).toString(c.composeRestart);
     c.notifyOnDone = root.value(QStringLiteral("notifyOnDone")).toBool(true);
     c.autostartAgents = root.value(QStringLiteral("autostartAgents")).toBool(true);
     c.sessionBackend = root.value(QStringLiteral("sessionBackend")).toString(c.sessionBackend).trimmed();

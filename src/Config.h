@@ -15,6 +15,14 @@ struct CheckoutConfig
     int portOffset = 0;
     QString agent; // profile id; empty = Config::defaultAgent
     QString args; // shell fragment merged into the agent's command line; wins on flag conflicts
+    // Compose commands run in the checkout's folder; empty = defaultCompose().
+    QString composeUp;
+    QString composeDown;
+    QString composeRestart;
+
+    // `which` is up, down or restart.
+    QString composeCommand(const QString &which) const;
+    static QString defaultCompose(const QString &which);
 };
 
 struct QuickCommand
@@ -74,9 +82,6 @@ struct Config
     QString defaultAgent;
     QString dockerHost; // empty = resolve (see DockerEndpoint.h)
     QString composeBinary = QStringLiteral("docker compose"); // what {compose} in commands becomes
-    QString composeUp = QStringLiteral("{compose} up -d");
-    QString composeDown = QStringLiteral("{compose} down");
-    QString composeRestart = QStringLiteral("{compose} restart");
     bool notifyOnDone = true;
     bool autostartAgents = true; // a newly created agent session runs its profile's command
     QString sessionBackend = QStringLiteral("tmux"); // "tmux" or "daemon" (x3ro-deck-sessiond); takes a restart

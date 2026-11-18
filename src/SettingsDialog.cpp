@@ -357,6 +357,14 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     m_checkoutAgent = new QComboBox;
     m_checkoutArgs = lineEdit();
     m_checkoutArgs->setPlaceholderText(QStringLiteral("--name my-checkout"));
+    for (const auto &[which, edit] :
+         {std::pair{"up", &m_composeUp}, std::pair{"down", &m_composeDown}, std::pair{"restart", &m_composeRestart}}) {
+        *edit = lineEdit(true);
+        (*edit)->setPlaceholderText(CheckoutConfig::defaultCompose(QLatin1String(which)));
+        connect(*edit, &QLineEdit::textEdited, this, [this, key = QLatin1String(which)](const QString &text) {
+            editCheckout(QStringLiteral("compose.") + key, text.trimmed());
+        });
+    }
 
     m_checkoutFields = form();
     addField(m_checkoutFields, QStringLiteral("Name"), m_checkoutName, hint(QStringLiteral("Also names the checkout's agent session.")));
@@ -371,6 +379,12 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     addField(m_checkoutFields, QStringLiteral("Custom args"), m_checkoutArgs,
              hint(QStringLiteral("Added to the agent's command line. A flag set here replaces the same flag in the agent's command. "
                                  "Quote values with spaces.")));
+    m_checkoutFields->addWidget(section(QStringLiteral("Docker Compose")), nextRow(m_checkoutFields), 0, 1, 2);
+    addField(m_checkoutFields, QStringLiteral("Up"), m_composeUp);
+    addField(m_checkoutFields, QStringLiteral("Down"), m_composeDown);
+    addField(m_checkoutFields, QStringLiteral("Restart"), m_composeRestart,
+             hint(QStringLiteral("The Docker panel's buttons run these in a shell tab in the checkout's folder. Empty runs the "
+                                 "default shown; {compose} becomes the compose binary from the Docker page.")));
     m_checkoutForm = new QWidget;
     auto *formLayout = new QVBoxLayout(m_checkoutForm);
     formLayout->setContentsMargins(0, 0, 0, 0);
@@ -449,6 +463,10 @@ void SettingsDialog::loadCheckout(int row)
     m_checkoutOffset->setText(QString::number(c.value(QStringLiteral("portOffset")).toInt()));
     m_checkoutAgent->setCurrentIndex(std::max(0, m_checkoutAgent->findData(c.value(QStringLiteral("agent")).toString())));
     m_checkoutArgs->setText(c.value(QStringLiteral("args")).toString());
+    const QJsonObject compose = c.value(QStringLiteral("compose")).toObject();
+    m_composeUp->setText(compose.value(QStringLiteral("up")).toString());
+    m_composeDown->setText(compose.value(QStringLiteral("down")).toString());
+    m_composeRestart->setText(compose.value(QStringLiteral("restart")).toString());
     m_loading = loading;
     checkPath();
 }
@@ -457,6 +475,21 @@ void SettingsDialog::editCheckout(const QString &key, const QJsonValue &value)
 {
     const int row = m_checkoutList->currentRow();
     if (m_loading || row < 0 || row >= m_checkouts.size()) {
+        return;
+    }
+    if (key.startsWith(QLatin1String("compose."))) {
+        QJsonObject compose = m_checkouts[row].value(QStringLiteral("compose")).toObject();
+        const QString which = key.mid(8);
+        if (value.toString().isEmpty()) {
+            compose.remove(which);
+        } else {
+            compose.insert(which, value);
+        }
+        if (compose.isEmpty()) {
+            m_checkouts[row].remove(QStringLiteral("compose"));
+        } else {
+            m_checkouts[row].insert(QStringLiteral("compose"), compose);
+        }
         return;
     }
     // No agent key means the default agent.
@@ -983,19 +1016,7 @@ QWidget *SettingsDialog::buildDockerPage()
     auto *engine = form();
     addField(engine, QStringLiteral("Docker host"), m_dockerHost, m_dockerEndpoint);
     addField(engine, QStringLiteral("Compose binary"), m_composeBinary,
-             hint(QStringLiteral("What {compose} in the commands below and in quick commands becomes.")));
-
-    m_composeUp = lineEdit(true);
-    m_composeDown = lineEdit(true);
-    m_composeRestart = lineEdit(true);
-    m_composeUp->setText(m_root.value(QStringLiteral("composeUp")).toString());
-    m_composeDown->setText(m_root.value(QStringLiteral("composeDown")).toString());
-    m_composeRestart->setText(m_root.value(QStringLiteral("composeRestart")).toString());
-    auto *compose = form();
-    addField(compose, QStringLiteral("Up"), m_composeUp);
-    addField(compose, QStringLiteral("Down"), m_composeDown);
-    addField(compose, QStringLiteral("Restart"), m_composeRestart,
-             hint(QStringLiteral("Each runs in a shell tab in the checkout's folder.")));
+             hint(QStringLiteral("What {compose} becomes in each checkout's compose commands and in quick commands.")));
 
     m_quick = table({QStringLiteral("Label"), QStringLiteral("Command"), QStringLiteral("Group")});
     m_quick->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -1062,9 +1083,6 @@ QWidget *SettingsDialog::buildDockerPage()
     layout->addWidget(hint(QStringLiteral("Empty finds it: DOCKER_HOST, the active docker context, then rootless Docker, Podman, "
                                           "Colima, OrbStack and /var/run/docker.sock. Only unix:// sockets work.")));
     layout->addLayout(engine);
-    layout->addSpacing(6);
-    layout->addWidget(section(QStringLiteral("Docker Compose")));
-    layout->addLayout(compose);
     layout->addSpacing(6);
     layout->addWidget(section(QStringLiteral("Quick commands")));
     layout->addWidget(hint(QStringLiteral("{compose} becomes the compose binary, {project} the compose project and "
@@ -1258,9 +1276,6 @@ QJsonObject SettingsDialog::config() const
 
     root.insert(QStringLiteral("dockerHost"), m_dockerHost->text().trimmed());
     root.insert(QStringLiteral("composeBinary"), m_composeBinary->currentText().trimmed());
-    root.insert(QStringLiteral("composeUp"), m_composeUp->text().trimmed());
-    root.insert(QStringLiteral("composeDown"), m_composeDown->text().trimmed());
-    root.insert(QStringLiteral("composeRestart"), m_composeRestart->text().trimmed());
     QJsonArray quick;
     for (int r = 0; r < m_quick->rowCount(); ++r) {
         const QJsonObject o = quickRow(m_quick, r);
