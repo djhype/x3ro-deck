@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: x3ro.deck
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: x3ro
+PublisherUrl: https://github.com/x3ro
+PackageName: x3ro deck
+PackageUrl: https://github.com/x3ro/x3ro-deck
+License: GPL-3.0-or-later
+LicenseUrl: https://github.com/x3ro/x3ro-deck/blob/main/LICENSE
+ShortDescription: Desktop cockpit for coding agents and their Docker Compose stacks
+Description: Runs Claude Code, Codex or any CLI agent in each checkout, collects permission prompts and questions in one place, and shows each checkout's Docker Compose stack, quick commands and pull request.
+Tags:
+  - ai
+  - agents
+  - claude
+  - codex
+  - docker
+  - developer-tools
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
