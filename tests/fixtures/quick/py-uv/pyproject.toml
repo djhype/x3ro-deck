@@ -1,0 +1,18 @@
+[project]
+name = "fixture"
+dependencies = ["requests>=2"]
+
+[project.scripts]
+serve = "fixture.cli:serve"
+"fixture-admin" = "fixture.admin:main"
+
+[tool.poe.tasks]
+lint = "ruff check ."
+fmt = { cmd = "ruff format .", help = "Format the code" }
+
+[tool.poe.tasks.test]
+help = "Run the tests"
+cmd = "pytest"
+
+[tool.poe.tasks.test.env]
+CI = "1"

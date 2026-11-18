@@ -90,3 +90,197 @@ QList<DetectedCommand> DenoDetector::detect(const QString &dir) const
     }
     return out;
 }
+
+// ───────────────────────── pyproject ─────────────────────────
+
+QStringList PyprojectDetector::files() const
+{
+    return {QStringLiteral("pyproject.toml"), QStringLiteral("uv.lock"), QStringLiteral("poetry.lock")};
+}
+
+QString PyprojectDetector::runner(const QString &dir)
+{
+    if (exists(dir, QStringLiteral("uv.lock"))) {
+        return QStringLiteral("uv run ");
+    }
+    if (exists(dir, QStringLiteral("poetry.lock"))) {
+        return QStringLiteral("poetry run ");
+    }
+    return {};
+}
+
+QList<DetectedCommand> PyprojectDetector::detect(const QString &dir) const
+{
+    const QString source = QStringLiteral("pyproject.toml");
+    if (!exists(dir, source)) {
+        return {};
+    }
+    const QString run = runner(dir);
+    const QString group = run.isEmpty() ? QStringLiteral("python") : run.section(QLatin1Char(' '), 0, 0);
+    QList<DetectedCommand> out;
+    QStringList seen;
+    auto add = [&](const QString &label, const QString &cmd, const QString &description = QString()) {
+        if (!seen.contains(label)) {
+            seen.append(label);
+            out.append(command(label, run + cmd, group, source, description));
+        }
+    };
+    static const QRegularExpression inlineHelp(QStringLiteral(R"re(\bhelp\s*=\s*("[^"]*"|'[^']*'))re"));
+    QStringList tables;
+    const QList<TomlEntry> entries = tomlEntries(readFile(QDir(dir).filePath(source)), &tables);
+    for (const TomlEntry &e : entries) {
+        if (e.table == QLatin1String("project.scripts") || e.table == QLatin1String("tool.poetry.scripts")) {
+            add(e.key, e.key);
+        } else if (e.table == QLatin1String("tool.poe.tasks")) {
+            // name = "cmd" or name = { cmd = "…", help = "…" }
+            const QRegularExpressionMatch h = inlineHelp.match(e.value);
+            add(e.key, QStringLiteral("poe ") + e.key, h.hasMatch() ? unquote(h.captured(1)) : QString());
+        }
+    }
+    // [tool.poe.tasks.name] tables, with their help line.
+    for (const QString &t : std::as_const(tables)) {
+        if (t.startsWith(QLatin1String("tool.poe.tasks.")) && t.count(QLatin1Char('.')) == 3) {
+            const QString name = t.section(QLatin1Char('.'), 3);
+            QString help;
+            for (const TomlEntry &e : entries) {
+                if (e.table == t && e.key == QLatin1String("help")) {
+                    help = unquote(e.value);
+                }
+            }
+            add(name, QStringLiteral("poe ") + name, help);
+        }
+    }
+    return out;
+}
+
+// ───────────────────────── tox ─────────────────────────
+
+QStringList ToxDetector::expandEnv(const QString &env)
+{
+    static const QRegularExpression brace(QStringLiteral(R"re(\{([^{}]*)\})re"));
+    const QRegularExpressionMatch m = brace.match(env);
+    if (!m.hasMatch()) {
+        return {env.trimmed()};
+    }
+    QStringList out;
+    for (const QString &alt : m.captured(1).split(QLatin1Char(','))) {
+        QString next = env;
+        next.replace(m.capturedStart(), m.capturedLength(), alt.trimmed());
+        out += expandEnv(next);
+    }
+    return out;
+}
+
+QList<DetectedCommand> ToxDetector::detect(const QString &dir) const
+{
+    QStringList envs;
+    QString source;
+    auto addEnv = [&](const QString &list) {
+        // Commas or newlines; braces may hold commas of their own.
+        QString item;
+        int depth = 0;
+        for (const QChar c : list + QLatin1Char(',')) {
+            if (c == QLatin1Char('{')) {
+                ++depth;
+            } else if (c == QLatin1Char('}')) {
+                --depth;
+            }
+            if ((c == QLatin1Char(',') || c == QLatin1Char('\n')) && depth == 0) {
+                for (const QString &e : expandEnv(item)) {
+                    if (!e.isEmpty() && !envs.contains(e)) {
+                        envs.append(e);
+                    }
+                }
+                item.clear();
+            } else {
+                item += c;
+            }
+        }
+    };
+    if (exists(dir, QStringLiteral("tox.ini"))) {
+        source = QStringLiteral("tox.ini");
+        static const QRegularExpression section(QStringLiteral(R"re(^\[([^\]]+)\])re"));
+        QString current;
+        QString list;
+        bool inList = false;
+        for (const QString &line : QString::fromUtf8(readFile(QDir(dir).filePath(source))).split(QLatin1Char('\n'))) {
+            if (const QRegularExpressionMatch s = section.match(line); s.hasMatch()) {
+                current = s.captured(1).trimmed();
+                inList = false;
+                if (current.startsWith(QLatin1String("testenv:"))) {
+                    addEnv(current.mid(8));
+                }
+                continue;
+            }
+            if (current != QLatin1String("tox")) {
+                continue;
+            }
+            const QString t = line.trimmed();
+            if (inList && !line.isEmpty() && line.front().isSpace()) {
+                list += QLatin1Char('\n') + t;
+                continue;
+            }
+            inList = false;
+            if (t.startsWith(QLatin1String("envlist")) || t.startsWith(QLatin1String("env_list"))) {
+                list = t.section(QLatin1Char('='), 1).trimmed();
+                inList = true;
+            }
+        }
+        // The envlist first, in its order, then [testenv:*] ones it left out.
+        const QStringList sections = envs;
+        envs.clear();
+        addEnv(list);
+        for (const QString &e : sections) {
+            if (!envs.contains(e)) {
+                envs.append(e);
+            }
+        }
+    } else if (exists(dir, QStringLiteral("pyproject.toml"))) {
+        QStringList tables;
+        const QList<TomlEntry> entries = tomlEntries(readFile(QDir(dir).filePath(QStringLiteral("pyproject.toml"))), &tables);
+        for (const TomlEntry &e : entries) {
+            if (e.table == QLatin1String("tool.tox") && (e.key == QLatin1String("env_list") || e.key == QLatin1String("envlist"))) {
+                for (const QJsonValue &v : QJsonDocument::fromJson(e.value.toUtf8()).array()) {
+                    addEnv(v.toString());
+                }
+            }
+        }
+        for (const QString &t : std::as_const(tables)) {
+            if (t.startsWith(QLatin1String("tool.tox.env.")) && t.count(QLatin1Char('.')) == 3) {
+                addEnv(t.section(QLatin1Char('.'), 3));
+            }
+        }
+        if (!envs.isEmpty()) {
+            source = QStringLiteral("pyproject.toml");
+        }
+    }
+    QList<DetectedCommand> out;
+    for (const QString &e : std::as_const(envs)) {
+        out.append(command(e, QStringLiteral("tox -e ") + e, QStringLiteral("tox"),
+                           source == QLatin1String("tox.ini") ? source : QStringLiteral("pyproject.toml · tox")));
+    }
+    return out;
+}
+
+// ───────────────────────── nox ─────────────────────────
+
+QList<DetectedCommand> NoxDetector::detect(const QString &dir) const
+{
+    const QString source = QStringLiteral("noxfile.py");
+    if (!exists(dir, source)) {
+        return {};
+    }
+    // @nox.session, @nox.session(python=…, name="x"), then def name(…).
+    static const QRegularExpression session(
+        QStringLiteral(R"re(@nox\.session(?:\s*\(([^)]*)\))?\s*\n(?:\s*@[^\n]*\n)*\s*def\s+([A-Za-z_][A-Za-z0-9_]*))re"));
+    static const QRegularExpression named(QStringLiteral(R"re(\bname\s*=\s*["']([^"']+)["'])re"));
+    QList<DetectedCommand> out;
+    const QString text = QString::fromUtf8(readFile(QDir(dir).filePath(source)));
+    for (auto it = session.globalMatch(text); it.hasNext();) {
+        const QRegularExpressionMatch m = it.next();
+        const QRegularExpressionMatch n = named.match(m.captured(1));
+        const QString name = n.hasMatch() ? n.captured(1) : m.captured(2);
+        out.append(command(name, QStringLiteral("nox -s ") + name, QStringLiteral("nox"), source));
+    }
+    return out;
+}

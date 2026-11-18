@@ -1,0 +1,5 @@
+[tool.poetry]
+name = "fixture"
+
+[tool.poetry.scripts]
+migrate = "fixture.db:migrate"

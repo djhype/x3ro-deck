@@ -157,6 +157,26 @@ private Q_SLOTS:
                  (QStringList{QStringLiteral("dev|deno task dev|deno.jsonc|"),
                               QStringLiteral("check|deno task check|deno.jsonc|Type-check // not a comment"),
                               QStringLiteral("test|deno task test|deno.jsonc|")}));
+        QCOMPARE(describe(PyprojectDetector().detect(fixtures + QStringLiteral("py-uv"))),
+                 (QStringList{QStringLiteral("serve|uv run serve|pyproject.toml|"),
+                              QStringLiteral("fixture-admin|uv run fixture-admin|pyproject.toml|"),
+                              QStringLiteral("lint|uv run poe lint|pyproject.toml|"),
+                              QStringLiteral("fmt|uv run poe fmt|pyproject.toml|Format the code"),
+                              QStringLiteral("test|uv run poe test|pyproject.toml|Run the tests")}));
+        QCOMPARE(describe(PyprojectDetector().detect(fixtures + QStringLiteral("py-poetry"))),
+                 QStringList{QStringLiteral("migrate|poetry run migrate|pyproject.toml|")});
+        QCOMPARE(describe(ToxDetector().detect(fixtures + QStringLiteral("py-tox"))),
+                 (QStringList{QStringLiteral("py311|tox -e py311|tox.ini|"), QStringLiteral("py312|tox -e py312|tox.ini|"),
+                              QStringLiteral("lint|tox -e lint|tox.ini|"), QStringLiteral("docs|tox -e docs|tox.ini|"),
+                              QStringLiteral("typing|tox -e typing|tox.ini|")}));
+        QCOMPARE(
+            describe(ToxDetector().detect(fixtures + QStringLiteral("py-toxtoml"))),
+            (QStringList{QStringLiteral("3.12|tox -e 3.12|pyproject.toml · tox|"), QStringLiteral("type|tox -e type|pyproject.toml · tox|"),
+                         QStringLiteral("docs|tox -e docs|pyproject.toml · tox|")}));
+        QVERIFY(ToxDetector().detect(fixtures + QStringLiteral("py-uv")).isEmpty());
+        QCOMPARE(describe(NoxDetector().detect(fixtures + QStringLiteral("py-nox"))),
+                 (QStringList{QStringLiteral("tests|nox -s tests|noxfile.py|"), QStringLiteral("type-check|nox -s type-check|noxfile.py|"),
+                              QStringLiteral("django|nox -s django|noxfile.py|")}));
         // Nothing where the project files are missing.
         QVERIFY(CargoDetector().detect(fixtures + QStringLiteral("go")).isEmpty());
         QVERIFY(GoDetector().detect(fixtures + QStringLiteral("cargo")).isEmpty());

@@ -1,0 +1,11 @@
+[project]
+name = "fixture"
+
+[tool.tox]
+env_list = ["3.12", "type"]
+
+[tool.tox.env.type]
+commands = [["mypy", "."]]
+
+[tool.tox.env.docs]
+commands = [["sphinx-build", "docs", "out"]]
