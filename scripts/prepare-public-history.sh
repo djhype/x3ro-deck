@@ -30,7 +30,9 @@ command -v git-filter-repo >/dev/null || { echo "needs git-filter-repo (pip inst
 [[ ! -e $out ]] || { echo "$out exists; pick a new folder" >&2; exit 1; }
 if [[ -z $pattern ]]; then
     # Every replaced word, as one alternation.
-    pattern=$(sed -n 's/==>.*//p' "$replacements" | sed 's/[][\.*^$+?(){}|/]/\\&/g' | paste -sd'|')
+    # Every replaced word as one alternation: literals escaped, `regex:` lines as given.
+    pattern=$( { grep -v '^regex:' "$replacements" | sed -n 's/==>.*//p' | sed 's/[][\.*^$+?(){}|/]/\\&/g'
+                 sed -n 's/^regex:\(.*\)==>.*/\1/p' "$replacements"; } | paste -sd'|')
     # The personal identity, which only the author rewrite removes.
     [[ $keep_authors == --keep-authors ]] || pattern+="|$(git -C "$root" log -1 --format=%ae | sed 's/[.]/\\./g')"
 fi
