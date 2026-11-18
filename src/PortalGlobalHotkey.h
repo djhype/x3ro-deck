@@ -36,7 +36,8 @@ public:
 
 private Q_SLOTS:
     void onResponse(const QDBusMessage &message);
-    void onActivated(const QDBusObjectPath &session, const QString &id, qulonglong timestamp, const QVariantMap &options);
+    // Takes the raw message: Qt 6.4 cannot connect a slot typed (o, s, t, a{sv}).
+    void onActivated(const QDBusMessage &message);
 
 private:
     using Handler = std::function<void(uint response, const QVariantMap &results)>;

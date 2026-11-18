@@ -119,8 +119,9 @@ void PortalGlobalHotkey::start()
             createSession();
         });
     });
-    m_bus.connect(kService, kPath, kInterface, QStringLiteral("Activated"), this,
-                  SLOT(onActivated(QDBusObjectPath, QString, qulonglong, QVariantMap)));
+    if (!m_bus.connect(kService, kPath, kInterface, QStringLiteral("Activated"), this, SLOT(onActivated(QDBusMessage)))) {
+        fail(QStringLiteral("cannot listen for Activated"));
+    }
 }
 
 void PortalGlobalHotkey::request(const QString &method, QVariantList args, const Handler &handler)
@@ -216,10 +217,13 @@ void PortalGlobalHotkey::bindShortcuts(const QList<PortalShortcut> &missing)
             });
 }
 
-void PortalGlobalHotkey::onActivated(const QDBusObjectPath &session, const QString &id, qulonglong, const QVariantMap &options)
+void PortalGlobalHotkey::onActivated(const QDBusMessage &message)
 {
-    if (session.path() != m_session) {
+    const QVariantList args = message.arguments();
+    if (args.size() < 4 || args.at(0).value<QDBusObjectPath>().path() != m_session) {
         return;
     }
-    Q_EMIT activated(id, options.value(QStringLiteral("activation_token")).toString());
+    QVariantMap options;
+    args.at(3).value<QDBusArgument>() >> options;
+    Q_EMIT activated(args.at(1).toString(), options.value(QStringLiteral("activation_token")).toString());
 }
