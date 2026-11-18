@@ -1,0 +1,13 @@
+{
+    ColorSchemeId(0): (
+        name: "Matrix",
+        foreground: "#00FF41",
+        background: "#0D0208",
+        cursor: "#008F11",
+        bright_foreground: "#00FF41",
+        dim_foreground: "#003B00",
+        normal: (black: "#0D0208", red: "#FF0000", green: "#00FF41", yellow: "#FFFF00", blue: "#0000FF", magenta: "#FF00FF", cyan: "#00FFFF", white: "#C0C0C0"),
+        bright: (black: "#808080", red: "#FF5555", green: "#55FF55", yellow: "#FFFF55", blue: "#5555FF", magenta: "#FF55FF", cyan: "#55FFFF", white: "#FFFFFF"),
+        dim: (black: "#000000", red: "#800000", green: "#008000", yellow: "#808000", blue: "#000080", magenta: "#800080", cyan: "#008080", white: "#808080"),
+    ),
+}

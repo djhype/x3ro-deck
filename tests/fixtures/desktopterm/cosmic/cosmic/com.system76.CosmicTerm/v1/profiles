@@ -1,0 +1,20 @@
+{
+    ProfileId(0): (
+        name: "Plain",
+        command: "",
+        syntax_theme_dark: "COSMIC Dark",
+        syntax_theme_light: "COSMIC Light",
+        tab_title: "",
+        working_directory: "",
+        hold: false,
+    ),
+    ProfileId(1): (
+        name: "Hacker",
+        command: "/usr/bin/fish -l",
+        syntax_theme_dark: "Matrix",
+        syntax_theme_light: "COSMIC Light",
+        tab_title: "",
+        working_directory: "",
+        hold: false,
+    ),
+}

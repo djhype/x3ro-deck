@@ -1,0 +1,7 @@
+[Configuration]
+FontName=Terminus 14
+ColorForeground=#ffffffffffff
+ColorBackground=#000000003333
+MiscCursorShape=TERMINAL_CURSOR_SHAPE_IBEAM
+MiscCursorBlinks=TRUE
+ScrollingLines=3000

@@ -131,6 +131,7 @@ add_library(x3ro-deck-base STATIC
     src/KonsoleSettings.cpp
     src/GpuTerminalSettings.cpp
     src/DconfTerminalSettings.cpp
+    src/DesktopTerminalSettings.cpp
     src/TerminalScreen.cpp
     src/TerminalView.cpp
 )
