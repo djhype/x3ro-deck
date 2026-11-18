@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "Dependencies.h"
 #include "DockerEndpoint.h"
+#include "HookInstaller.h"
 #include "Paths.h"
 #include "TerminalSettings.h"
 
@@ -29,6 +30,7 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QUrl>
@@ -520,12 +522,94 @@ void SettingsDialog::checkPath()
 
 // ───────────────────────── agents ─────────────────────────
 
+QWidget *SettingsDialog::hookRow(int cli)
+{
+    HookRow &row = m_hooks[cli];
+    row.status = hint(QString());
+    row.status->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    row.install = new QPushButton(QStringLiteral("Install"));
+    row.uninstall = new QPushButton(QStringLiteral("Uninstall"));
+    for (QPushButton *b : {row.install, row.uninstall}) {
+        b->setObjectName(QStringLiteral("small"));
+        b->setAutoDefault(false);
+    }
+    connect(row.install, &QPushButton::clicked, this, [this, cli] { changeHook(cli, true); });
+    connect(row.uninstall, &QPushButton::clicked, this, [this, cli] { changeHook(cli, false); });
+    auto *box = new QWidget;
+    auto *layout = new QHBoxLayout(box);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(8);
+    layout->addWidget(row.status, 1);
+    layout->addWidget(row.install);
+    layout->addWidget(row.uninstall);
+    return box;
+}
+
+void SettingsDialog::refreshHooks()
+{
+    const QString hook = HookInstaller::hookPath();
+    const QString command = HookInstaller::command(hook);
+    for (int cli = 0; cli < 2; ++cli) {
+        const HookRow &row = m_hooks[cli];
+        const QString file = HookInstaller::settingsFile(HookInstaller::Cli(cli));
+        const QString shown = Paths::tilde(file);
+        const HookInstaller::Status st = HookInstaller::status(HookInstaller::Cli(cli), file, command);
+        QString text;
+        const char *name = "hint";
+        switch (st.state) {
+        case HookInstaller::State::Installed:
+            text = QStringLiteral("✓ Installed in %1").arg(shown);
+            break;
+        case HookInstaller::State::Outdated:
+            text = QStringLiteral("Installed in %1 with another path or missing events (%2). Reinstall to update it.")
+                       .arg(shown, st.command);
+            name = "warning";
+            break;
+        case HookInstaller::State::NotInstalled:
+            text = QStringLiteral("Not installed in %1").arg(shown);
+            break;
+        case HookInstaller::State::Error:
+            text = st.error;
+            name = "warning";
+            break;
+        }
+        if (hook.isEmpty()) {
+            text += QStringLiteral(" x3ro-deck-hook was not found next to X3RO Deck or on PATH.");
+            name = "warning";
+        }
+        row.status->setObjectName(QLatin1String(name));
+        row.status->setText(text);
+        row.status->style()->unpolish(row.status);
+        row.status->style()->polish(row.status);
+        row.install->setText(st.state == HookInstaller::State::NotInstalled ? QStringLiteral("Install") : QStringLiteral("Reinstall"));
+        row.install->setEnabled(!hook.isEmpty() && st.state != HookInstaller::State::Error);
+        row.uninstall->setEnabled(st.state == HookInstaller::State::Installed || st.state == HookInstaller::State::Outdated);
+    }
+}
+
+void SettingsDialog::changeHook(int cli, bool install)
+{
+    const QString file = HookInstaller::settingsFile(HookInstaller::Cli(cli));
+    QString error;
+    const bool ok = install
+        ? HookInstaller::install(HookInstaller::Cli(cli), file, HookInstaller::command(HookInstaller::hookPath()), &error)
+        : HookInstaller::uninstall(file, &error);
+    if (!ok) {
+        QMessageBox::warning(this, QStringLiteral("Hooks"), error);
+    }
+    refreshHooks();
+}
+
 QWidget *SettingsDialog::buildAgentsPage()
 {
     m_defaultAgentBox = new QComboBox;
     m_defaultAgentBox->setMinimumWidth(240);
     auto *top = form();
     addField(top, QStringLiteral("Default agent"), m_defaultAgentBox, hint(QStringLiteral("Runs in checkouts whose agent is Default.")));
+    addField(top, QStringLiteral("Claude Code hook"), hookRow(int(HookInstaller::Cli::Claude)));
+    addField(top, QStringLiteral("Codex hook"), hookRow(int(HookInstaller::Cli::Codex)),
+             hint(QStringLiteral("Codex runs a new hook only after you trust it: type /hooks in Codex once after installing.")));
+    refreshHooks();
 
     m_agentList = new QListWidget;
     for (int i = 0; i < m_agents.size(); ++i) {

@@ -108,6 +108,7 @@ add_library(x3ro-deck-base STATIC
     src/SessionShell.cpp
     src/Dependencies.cpp
     src/Worktrees.cpp
+    src/HookInstaller.cpp
     src/AppTheme.cpp
     src/DeckDialog.h
     src/AboutDialog.cpp

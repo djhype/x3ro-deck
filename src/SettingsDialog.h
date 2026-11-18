@@ -43,6 +43,14 @@ public:
     void reject() override;
 
 private:
+    struct HookRow
+    {
+        QLabel *status = nullptr;
+        QPushButton *install = nullptr;
+        QPushButton *uninstall = nullptr;
+    };
+    HookRow m_hooks[2];
+
     struct Agent
     {
         QString id; // ":new<n>" until config() names it after its label
@@ -77,6 +85,9 @@ private:
     void moveAgent(int delta);
     void refreshAgentChoices();
     QString agentLabel(int row) const;
+    QWidget *hookRow(int cli);
+    void refreshHooks();
+    void changeHook(int cli, bool install);
 
     bool validate();
     bool dirty() const { return config() != m_initial; }

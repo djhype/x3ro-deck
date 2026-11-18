@@ -1,0 +1,19 @@
+{
+  "model": "opus",
+  "permissions": {"allow": ["Bash(ls:*)"], "deny": []},
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {"type": "command", "command": "notify-me \"needs \u00e9 you\""}
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "rtk hook claude"}]}
+    ]
+  },
+  "alwaysThinkingEnabled": true,
+  "cleanupPeriodDays": 1.5e2
+}
