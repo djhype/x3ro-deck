@@ -110,6 +110,7 @@ add_library(x3ro-deck-base STATIC
     src/Worktrees.cpp
     src/HookInstaller.cpp
     src/CommandDetector.cpp
+    src/ToolchainDetectors.cpp
     src/QuickCommands.cpp
     src/SwitchingBackend.cpp
     src/ComposeFiles.cpp

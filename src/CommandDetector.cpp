@@ -1,5 +1,8 @@
 #include "CommandDetector.h"
 
+#include "DetectorUtil.h"
+#include "ToolchainDetectors.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -10,25 +13,14 @@
 
 #include <algorithm>
 
-namespace
-{
-QByteArray readFile(const QString &path)
-{
-    QFile f(path);
-    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
-}
-
-bool exists(const QString &dir, const QString &name)
-{
-    return QFileInfo::exists(QDir(dir).filePath(name));
-}
-} // namespace
+using namespace DetectorUtil;
 
 const QList<std::shared_ptr<const CommandDetector>> &CommandDetector::all()
 {
     static const QList<std::shared_ptr<const CommandDetector>> detectors{
         std::make_shared<MakefileDetector>(), std::make_shared<PackageJsonDetector>(), std::make_shared<JustfileDetector>(),
-        std::make_shared<TaskfileDetector>(), std::make_shared<MiseDetector>(),
+        std::make_shared<TaskfileDetector>(), std::make_shared<MiseDetector>(),        std::make_shared<CargoDetector>(),
+        std::make_shared<GoDetector>(),       std::make_shared<DenoDetector>(),
     };
     return detectors;
 }
@@ -107,35 +99,6 @@ QList<DetectedCommand> MakefileDetector::detect(const QString &dir) const
     }
     return {};
 }
-
-namespace
-{
-// The first of `names` that exists in `dir`.
-QString firstExisting(const QString &dir, const QStringList &names)
-{
-    for (const QString &n : names) {
-        if (QFileInfo::exists(QDir(dir).filePath(n))) {
-            return n;
-        }
-    }
-    return {};
-}
-
-// A YAML or TOML scalar without its quotes.
-QString unquote(QString v)
-{
-    v = v.trimmed();
-    if (!v.isEmpty() && (v.front() == QLatin1Char('"') || v.front() == QLatin1Char('\''))) {
-        const qsizetype end = v.indexOf(v.front(), 1);
-        return end < 0 ? v.mid(1) : v.mid(1, end - 1);
-    }
-    // An unquoted value ends at a comment.
-    if (const qsizetype hash = v.indexOf(QStringLiteral(" #")); hash >= 0) {
-        v.truncate(hash);
-    }
-    return v.trimmed();
-}
-} // namespace
 
 // ───────────────────────── justfile ─────────────────────────
 
@@ -353,16 +316,7 @@ QString PackageJsonDetector::packageManager(const QString &dir, const QByteArray
 QStringList PackageJsonDetector::scripts(const QByteArray &packageJson)
 {
     const QJsonObject scripts = QJsonDocument::fromJson(packageJson).object().value(QStringLiteral("scripts")).toObject();
-    QStringList names = scripts.keys();
-    // QJsonObject sorts its keys; put them back in file order.
-    const qsizetype start = std::max<qsizetype>(0, packageJson.indexOf("\"scripts\""));
-    auto position = [&](const QString &name) {
-        const QByteArray quoted = QJsonDocument(QJsonObject{{name, 0}}).toJson(QJsonDocument::Compact).mid(1).chopped(3);
-        const qsizetype at = packageJson.indexOf(quoted, start);
-        return at < 0 ? packageJson.size() : at;
-    };
-    std::stable_sort(names.begin(), names.end(), [&](const QString &a, const QString &b) { return position(a) < position(b); });
-    return names;
+    return keysInFileOrder(packageJson, scripts, "\"scripts\"");
 }
 
 QList<DetectedCommand> PackageJsonDetector::detect(const QString &dir) const

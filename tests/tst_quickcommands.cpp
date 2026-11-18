@@ -3,6 +3,7 @@
 #include "CommandDetector.h"
 #include "Config.h"
 #include "QuickCommands.h"
+#include "ToolchainDetectors.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -131,6 +132,35 @@ private Q_SLOTS:
             sources.insert(d.source);
         }
         QCOMPARE(sources, (QSet<QString>{QStringLiteral("justfile"), QStringLiteral("Taskfile.yml"), QStringLiteral("mise.toml")}));
+    }
+
+    void toolchains()
+    {
+        auto describe = [](const QList<DetectedCommand> &list) {
+            QStringList out;
+            for (const DetectedCommand &d : list) {
+                out << d.label + QLatin1Char('|') + d.command + QLatin1Char('|') + d.source + QLatin1Char('|') + d.description;
+            }
+            return out;
+        };
+        const QString fixtures = QStringLiteral(X3RO_DECK_FIXTURES "/quick/");
+        QCOMPARE(describe(CargoDetector().detect(fixtures + QStringLiteral("cargo"))),
+                 (QStringList{QStringLiteral("build|cargo build|Cargo.toml|"), QStringLiteral("test|cargo test|Cargo.toml|"),
+                              QStringLiteral("run|cargo run|Cargo.toml|"), QStringLiteral("clippy|cargo clippy|Cargo.toml|"),
+                              QStringLiteral("b|cargo b|.cargo/config.toml|cargo build"),
+                              QStringLiteral("rr|cargo rr|.cargo/config.toml|cargo run --release"),
+                              QStringLiteral("xtask|cargo xtask|.cargo/config.toml|cargo run --package xtask --")}));
+        QCOMPARE(describe(GoDetector().detect(fixtures + QStringLiteral("go"))),
+                 (QStringList{QStringLiteral("build|go build ./...|go.mod|"), QStringLiteral("test|go test ./...|go.mod|"),
+                              QStringLiteral("vet|go vet ./...|go.mod|")}));
+        QCOMPARE(describe(DenoDetector().detect(fixtures + QStringLiteral("deno"))),
+                 (QStringList{QStringLiteral("dev|deno task dev|deno.jsonc|"),
+                              QStringLiteral("check|deno task check|deno.jsonc|Type-check // not a comment"),
+                              QStringLiteral("test|deno task test|deno.jsonc|")}));
+        // Nothing where the project files are missing.
+        QVERIFY(CargoDetector().detect(fixtures + QStringLiteral("go")).isEmpty());
+        QVERIFY(GoDetector().detect(fixtures + QStringLiteral("cargo")).isEmpty());
+        QVERIFY(DenoDetector().detect(fixtures + QStringLiteral("go")).isEmpty());
     }
 
     void renamedRecipeUpdatesLive()

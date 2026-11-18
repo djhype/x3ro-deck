@@ -1,0 +1,11 @@
+[build]
+jobs = 4
+
+[alias]
+b = "build"
+rr = ["run", "--release"]
+# a comment
+xtask = "run --package xtask --"
+
+[env]
+X = "1"

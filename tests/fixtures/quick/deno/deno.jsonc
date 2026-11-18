@@ -1,0 +1,13 @@
+{
+  // Tasks for the fixture
+  "tasks": {
+    "dev": "deno run --watch main.ts",
+    /* block comment */
+    "check": {
+      "command": "deno check main.ts",
+      "description": "Type-check // not a comment"
+    },
+    "test": "deno test",
+  },
+  "imports": {}
+}
