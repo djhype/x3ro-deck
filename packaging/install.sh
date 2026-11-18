@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Installs x3ro deck through your distribution's package manager, from the
-# signed openSUSE Build Service repository (Debian, Ubuntu, Fedora, openSUSE).
+# signed openSUSE Build Service repository (Arch, Debian, Ubuntu, Fedora,
+# openSUSE).
 # Read it first:
 #   curl -fsSLO https://x3ro.life/install.sh && less install.sh && sh install.sh
 #
@@ -64,6 +65,28 @@ install_rpm() {
     fi
 }
 
+install_pacman() {
+    [ "$(uname -m)" = x86_64 ] || from_source "${PRETTY_NAME:-Arch Linux} on $(uname -m)"
+    # OBS names the pacman repository after the project and its repository.
+    name=home_x3ro_deck_Arch
+    repo="$OBS/Arch"
+    key=$(mktemp)
+    curl -fsSL "$repo/x86_64/$name.key" -o "$key"
+    fpr=$(gpg --with-colons --show-keys "$key" | awk -F: '/^fpr/ { print $10; exit }')
+    [ -n "$fpr" ] || fail "could not read the repository key"
+    as_root pacman-key --add "$key"
+    as_root pacman-key --lsign-key "$fpr"
+    rm -f "$key"
+    if ! grep -q "^\[$name\]" /etc/pacman.conf; then
+        # $arch is pacman's, not ours.
+        # shellcheck disable=SC2016
+        printf '\n[%s]\nServer = %s/$arch\n' "$name" "$repo" | as_root tee -a /etc/pacman.conf >/dev/null
+    fi
+    # -Sy alone would be a partial upgrade, which Arch does not support.
+    say "Updating the system and installing x3ro-deck (pacman -Syu)."
+    as_root pacman -Syu --needed x3ro-deck
+}
+
 main() {
     command -v curl >/dev/null 2>&1 || fail "curl is needed"
     [ -r /etc/os-release ] || from_source "this system"
@@ -75,7 +98,7 @@ main() {
         debian) install_deb "Debian_${VERSION_ID%%.*}" ;;
         fedora) install_rpm dnf "Fedora_${VERSION_ID}" ;;
         opensuse-tumbleweed) install_rpm zypper openSUSE_Tumbleweed ;;
-        arch | cachyos | endeavouros | manjaro) from_source "${PRETTY_NAME:-Arch Linux}" ;;
+        arch | cachyos | endeavouros | manjaro) install_pacman ;;
         *)
             case "$id_like" in
                 # Ubuntu derivatives (Mint, Pop!_OS) name their Ubuntu base.

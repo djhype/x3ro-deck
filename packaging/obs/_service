@@ -1,7 +1,7 @@
 <services>
   <!-- The release workflow moves the `release` branch to each new tag; the
        version comes from that tag (v1.2.3 -> 1.2.3) and set_version writes it
-       into the spec. -->
+       into the spec and the PKGBUILD (OBS builds Arch from the PKGBUILD). -->
   <service name="obs_scm">
     <param name="scm">git</param>
     <param name="url">https://github.com/djhype/x3ro-deck.git</param>
@@ -18,6 +18,6 @@
   </service>
   <service name="extract_file">
     <param name="archive">*.tar</param>
-    <param name="files">*/packaging/rpm/x3ro-deck.spec</param>
+    <param name="files">*/packaging/rpm/x3ro-deck.spec */packaging/arch/x3ro-deck/PKGBUILD</param>
   </service>
 </services>

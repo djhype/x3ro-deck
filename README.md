@@ -32,8 +32,7 @@ Compose stack, quick commands and pull request in view.
 
 | OS | How |
 |---|---|
-| Arch Linux | build from source (below); there is no AUR package yet |
-| Debian, Ubuntu, Fedora, openSUSE | the signed apt/dnf/zypper repository; `install.sh` below sets it up |
+| Arch Linux, Debian, Ubuntu, Fedora, openSUSE | the signed pacman/apt/dnf/zypper repository; `install.sh` below sets it up |
 | macOS 12+ | the DMG from the [releases page](https://github.com/djhype/x3ro-deck/releases) (unsigned, see below) |
 | Windows 10/11 | the installer from the [releases page](https://github.com/djhype/x3ro-deck/releases) (unsigned, see below) |
 
