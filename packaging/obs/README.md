@@ -1,0 +1,26 @@
+# openSUSE Build Service
+
+OBS builds and signs the apt, dnf and zypper repositories from
+`packaging/debian/` and `packaging/rpm/x3ro-deck.spec`.
+
+## Project setup (once)
+
+1. Create the project `home:x3ro:deck` (or an `x3ro` project) on
+   build.opensuse.org and the package `x3ro-deck` in it.
+2. Add repositories: `xUbuntu_24.04`, `xUbuntu_24.10`, `Debian_12`,
+   `Debian_13`, `Fedora_41`, `Fedora_42`, `openSUSE_Tumbleweed`
+   (x86_64 and aarch64).
+3. Copy `_service` from this folder into the package. It downloads the
+   tagged release tarball and the packaging files, so a new release only
+   needs a version bump in `_service`.
+4. OBS signs every repository with the project's key. Publish the key's
+   fingerprint in the README; `install.sh` fetches the key from
+   `https://download.opensuse.org/repositories/<project>/<distro>/Release.key`
+   (Debian/Ubuntu) or `repodata/repomd.xml.key` (RPM).
+
+## Checking a build locally
+
+`osc build xUbuntu_24.04 x86_64` or `osc build Fedora_42 x86_64` from a
+checkout of the OBS package builds it in a clean chroot.
+`scripts/test-deb-package.sh` builds the .deb from the working tree in an
+Ubuntu 24.04 container.

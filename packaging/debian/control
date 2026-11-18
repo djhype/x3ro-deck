@@ -1,0 +1,30 @@
+Source: x3ro-deck
+Section: devel
+Priority: optional
+Maintainer: x3ro <noreply@x3ro.life>
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.24),
+               ninja-build,
+               pkgconf,
+               qt6-base-dev (>= 6.4),
+               qt6-declarative-dev (>= 6.4),
+               libvterm-dev,
+               libxcb1-dev,
+               libgl-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/x3ro/x3ro-deck
+Rules-Requires-Root: no
+
+Package: x3ro-deck
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         qml6-module-qtquick,
+         qml6-module-qtquick-window,
+         qml6-module-qtqml-workerscript
+Recommends: tmux, git
+Suggests: docker.io | docker-ce, docker-compose-plugin | docker-compose, gh
+Description: desktop cockpit for coding agents and their Docker Compose stacks
+ x3ro deck runs Claude Code, Codex or any CLI agent in each of your
+ checkouts, collects permission prompts and questions in one place,
+ and shows each checkout's Docker Compose stack, quick commands and
+ pull request.
