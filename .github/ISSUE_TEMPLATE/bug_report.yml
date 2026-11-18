@@ -1,0 +1,45 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: x3ro deck version
+      description: Shown in Settings → General → About x3ro deck.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, macOS, Windows]
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Desktop, session backend and agent
+      placeholder: KDE Plasma 6 on Wayland, tmux, Claude Code 2.x
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Run with QT_FORCE_STDERR_LOGGING=1 for logs. `x3ro-deck --demo` takes screenshots without your own repos in them.
+      render: text
