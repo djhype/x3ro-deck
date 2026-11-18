@@ -93,7 +93,7 @@ void QuickCommands::rescan(int checkout)
     watch(checkout);
     QList<DetectedCommand> next = CommandDetector::detectAll(m_dirs.at(checkout));
     const auto same = [](const DetectedCommand &a, const DetectedCommand &b) {
-        return a.label == b.label && a.command == b.command && a.group == b.group && a.source == b.source;
+        return a.label == b.label && a.command == b.command && a.group == b.group && a.source == b.source && a.description == b.description;
     };
     if (std::equal(next.begin(), next.end(), m_detected.at(checkout).begin(), m_detected.at(checkout).end(), same)) {
         return;
@@ -154,13 +154,15 @@ QList<QuickEntry> QuickCommands::entries(int checkout, const QList<QuickCommand>
     const QStringList pinned = flags(checkout, QStringLiteral("pinned"));
     const QStringList hidden = flags(checkout, QStringLiteral("hidden"));
     QList<QuickEntry> out;
-    auto add = [&](const QString &label, const QString &command, const QString &group, const QString &source) {
+    auto add = [&](const QString &label, const QString &command, const QString &group, const QString &source,
+                   const QString &description = QString()) {
         QuickEntry e;
         e.key = source + QLatin1Char(':') + label;
         e.label = label;
         e.command = command;
         e.group = group;
         e.source = source;
+        e.description = description;
         e.pinned = pinned.contains(e.key);
         e.hidden = hidden.contains(e.key);
         out.append(e);
@@ -169,7 +171,7 @@ QList<QuickEntry> QuickCommands::entries(int checkout, const QList<QuickCommand>
         add(q.label, q.command, q.group, manualSource());
     }
     for (const DetectedCommand &d : detected(checkout)) {
-        add(d.label, d.command, d.group, d.source);
+        add(d.label, d.command, d.group, d.source, d.description);
     }
     std::stable_partition(out.begin(), out.end(), [](const QuickEntry &e) { return e.pinned; });
     return out;

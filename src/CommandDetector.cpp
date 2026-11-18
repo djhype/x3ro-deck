@@ -27,8 +27,8 @@ bool exists(const QString &dir, const QString &name)
 const QList<std::shared_ptr<const CommandDetector>> &CommandDetector::all()
 {
     static const QList<std::shared_ptr<const CommandDetector>> detectors{
-        std::make_shared<MakefileDetector>(),
-        std::make_shared<PackageJsonDetector>(),
+        std::make_shared<MakefileDetector>(), std::make_shared<PackageJsonDetector>(), std::make_shared<JustfileDetector>(),
+        std::make_shared<TaskfileDetector>(), std::make_shared<MiseDetector>(),
     };
     return detectors;
 }
@@ -101,11 +101,222 @@ QList<DetectedCommand> MakefileDetector::detect(const QString &dir) const
         }
         QList<DetectedCommand> out;
         for (const QString &t : targets(readFile(QDir(dir).filePath(name)))) {
-            out.append({t, QStringLiteral("make ") + t, QStringLiteral("make"), name});
+            out.append({t, QStringLiteral("make ") + t, QStringLiteral("make"), name, QString()});
         }
         return out;
     }
     return {};
+}
+
+namespace
+{
+// The first of `names` that exists in `dir`.
+QString firstExisting(const QString &dir, const QStringList &names)
+{
+    for (const QString &n : names) {
+        if (QFileInfo::exists(QDir(dir).filePath(n))) {
+            return n;
+        }
+    }
+    return {};
+}
+
+// A YAML or TOML scalar without its quotes.
+QString unquote(QString v)
+{
+    v = v.trimmed();
+    if (!v.isEmpty() && (v.front() == QLatin1Char('"') || v.front() == QLatin1Char('\''))) {
+        const qsizetype end = v.indexOf(v.front(), 1);
+        return end < 0 ? v.mid(1) : v.mid(1, end - 1);
+    }
+    // An unquoted value ends at a comment.
+    if (const qsizetype hash = v.indexOf(QStringLiteral(" #")); hash >= 0) {
+        v.truncate(hash);
+    }
+    return v.trimmed();
+}
+} // namespace
+
+// ───────────────────────── justfile ─────────────────────────
+
+QStringList JustfileDetector::files() const
+{
+    return {QStringLiteral("justfile"), QStringLiteral("Justfile"), QStringLiteral(".justfile")};
+}
+
+QList<DetectedCommand> JustfileDetector::recipes(const QByteArray &justfile, const QString &source)
+{
+    // name, then parameters, then ':' that is not ':=' (an assignment).
+    static const QRegularExpression header(
+        QStringLiteral(R"(^@?([A-Za-z_][A-Za-z0-9_-]*)((?:\s+[^:=\s]+(?:=(?:"[^"]*"|'[^']*'|[^\s:]+))?)*)\s*:(?!=))"));
+    static const QRegularExpression keyword(QStringLiteral(R"(^(set|alias|export|import|mod)\b)"));
+    QList<DetectedCommand> out;
+    QString comment;
+    bool isPrivate = false;
+    for (const QString &line : QString::fromUtf8(justfile).split(QLatin1Char('\n'))) {
+        if (line.isEmpty() || line.front().isSpace()) {
+            if (line.trimmed().isEmpty()) {
+                comment.clear();
+                isPrivate = false;
+            }
+            continue;
+        }
+        if (line.startsWith(QLatin1Char('#'))) {
+            comment = line.mid(1).trimmed();
+            continue;
+        }
+        if (line.startsWith(QLatin1Char('['))) {
+            isPrivate = isPrivate || line.contains(QLatin1String("private"));
+            continue;
+        }
+        const QRegularExpressionMatch m = header.match(line);
+        if (m.hasMatch() && !keyword.match(line).hasMatch()) {
+            const QString name = m.captured(1);
+            // A parameter without a default (other than *variadic) needs an argument.
+            bool needsArgs = false;
+            for (const QString &p : m.captured(2).split(QRegularExpression(QStringLiteral(R"(\s+)")), Qt::SkipEmptyParts)) {
+                needsArgs = needsArgs || (!p.contains(QLatin1Char('=')) && !p.startsWith(QLatin1Char('*')));
+            }
+            if (!name.startsWith(QLatin1Char('_')) && !isPrivate && !needsArgs) {
+                out.append({name, QStringLiteral("just ") + name, QStringLiteral("just"), source, comment});
+            }
+        }
+        comment.clear();
+        isPrivate = false;
+    }
+    return out;
+}
+
+QList<DetectedCommand> JustfileDetector::detect(const QString &dir) const
+{
+    const QString name = firstExisting(dir, files());
+    return name.isEmpty() ? QList<DetectedCommand>{} : recipes(readFile(QDir(dir).filePath(name)), name);
+}
+
+// ───────────────────────── Taskfile ─────────────────────────
+
+QStringList TaskfileDetector::files() const
+{
+    return {QStringLiteral("Taskfile.yml"),  QStringLiteral("taskfile.yml"),      QStringLiteral("Taskfile.yaml"),
+            QStringLiteral("taskfile.yaml"), QStringLiteral("Taskfile.dist.yml"), QStringLiteral("Taskfile.dist.yaml")};
+}
+
+QList<DetectedCommand> TaskfileDetector::tasks(const QByteArray &taskfile, const QString &source)
+{
+    static const QRegularExpression key(QStringLiteral(R"(^(\s*)("[^"]+"|'[^']+'|[^\s#:][^:#]*?)\s*:(\s|$))"));
+    QList<DetectedCommand> out;
+    bool inTasks = false;
+    int taskIndent = -1;
+    bool internal = false;
+    auto flush = [&] {
+        if (internal && !out.isEmpty()) {
+            out.removeLast();
+        }
+        internal = false;
+    };
+    for (const QString &line : QString::fromUtf8(taskfile).split(QLatin1Char('\n'))) {
+        if (line.trimmed().isEmpty() || line.trimmed().startsWith(QLatin1Char('#'))) {
+            continue;
+        }
+        const QRegularExpressionMatch m = key.match(line);
+        const int lead = static_cast<int>(line.indexOf(line.trimmed().front()));
+        if (lead == 0) {
+            flush();
+            inTasks = m.hasMatch() && m.captured(2) == QLatin1String("tasks");
+            taskIndent = -1;
+            continue;
+        }
+        if (!inTasks || !m.hasMatch()) {
+            continue;
+        }
+        if (taskIndent < 0) {
+            taskIndent = lead;
+        }
+        const QString name = unquote(m.captured(2));
+        if (lead == taskIndent) {
+            flush();
+            out.append({name, QStringLiteral("task ") + name, QStringLiteral("task"), source, QString()});
+        } else if (lead > taskIndent && !out.isEmpty()) {
+            const QString value = unquote(line.mid(m.capturedEnd(0)));
+            if (name == QLatin1String("desc") && out.last().description.isEmpty()) {
+                out.last().description = value;
+            } else if (name == QLatin1String("internal") && value == QLatin1String("true")) {
+                internal = true;
+            }
+        }
+    }
+    flush();
+    return out;
+}
+
+QList<DetectedCommand> TaskfileDetector::detect(const QString &dir) const
+{
+    const QString name = firstExisting(dir, files());
+    return name.isEmpty() ? QList<DetectedCommand>{} : tasks(readFile(QDir(dir).filePath(name)), name);
+}
+
+// ───────────────────────── mise ─────────────────────────
+
+QStringList MiseDetector::files() const
+{
+    return {QStringLiteral("mise.toml"), QStringLiteral(".mise.toml")};
+}
+
+QList<DetectedCommand> MiseDetector::tasks(const QByteArray &toml, const QString &source)
+{
+    static const QRegularExpression table(QStringLiteral(R"(^\[\s*([^\]]+?)\s*\]\s*(#.*)?$)"));
+    static const QRegularExpression entry(QStringLiteral(R"(^("[^"]+"|'[^']+'|[A-Za-z0-9_.:-]+)\s*=\s*(.*)$)"));
+    QList<DetectedCommand> out;
+    enum { Other, TasksTable, OneTask } where = Other;
+    auto add = [&](const QString &name) {
+        out.append({name, QStringLiteral("mise run ") + name, QStringLiteral("mise"), source, QString()});
+    };
+    for (const QString &raw : QString::fromUtf8(toml).split(QLatin1Char('\n'))) {
+        const QString line = raw.trimmed();
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) {
+            continue;
+        }
+        if (const QRegularExpressionMatch t = table.match(line); t.hasMatch() && !line.startsWith(QLatin1String("[["))) {
+            const QString path = t.captured(1);
+            if (path == QLatin1String("tasks")) {
+                where = TasksTable;
+            } else if (path.startsWith(QLatin1String("tasks."))) {
+                const QString name = unquote(path.mid(6));
+                // [tasks.name.something] is a sub-table of a task already listed.
+                if (!path.mid(6).startsWith(QLatin1Char('"')) && name.contains(QLatin1Char('.'))) {
+                    where = Other;
+                    continue;
+                }
+                add(name);
+                where = OneTask;
+            } else {
+                where = Other;
+            }
+            continue;
+        }
+        const QRegularExpressionMatch e = entry.match(line);
+        if (!e.hasMatch()) {
+            continue;
+        }
+        if (where == TasksTable) {
+            const QString name = unquote(e.captured(1));
+            add(name);
+            // name = { run = "…", description = "…" }
+            static const QRegularExpression inlineDesc(QStringLiteral(R"(description\s*=\s*("[^"]*"|'[^']*'))"));
+            if (const QRegularExpressionMatch d = inlineDesc.match(e.captured(2)); d.hasMatch()) {
+                out.last().description = unquote(d.captured(1));
+            }
+        } else if (where == OneTask && unquote(e.captured(1)) == QLatin1String("description")) {
+            out.last().description = unquote(e.captured(2));
+        }
+    }
+    return out;
+}
+
+QList<DetectedCommand> MiseDetector::detect(const QString &dir) const
+{
+    const QString name = firstExisting(dir, files());
+    return name.isEmpty() ? QList<DetectedCommand>{} : tasks(readFile(QDir(dir).filePath(name)), name);
 }
 
 // ───────────────────────── package.json ─────────────────────────
@@ -164,7 +375,7 @@ QList<DetectedCommand> PackageJsonDetector::detect(const QString &dir) const
     const QString pm = packageManager(dir, json);
     QList<DetectedCommand> out;
     for (const QString &s : scripts(json)) {
-        out.append({s, QStringLiteral("%1 run %2").arg(pm, s), pm, QStringLiteral("package.json")});
+        out.append({s, QStringLiteral("%1 run %2").arg(pm, s), pm, QStringLiteral("package.json"), QString()});
     }
     return out;
 }

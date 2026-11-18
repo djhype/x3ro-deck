@@ -509,6 +509,7 @@ QVariantList AppController::quickCommands() const
                                {QStringLiteral("command"), e.command},
                                {QStringLiteral("group"), e.group},
                                {QStringLiteral("source"), e.source},
+                               {QStringLiteral("description"), e.description},
                                {QStringLiteral("pinned"), e.pinned},
                                {QStringLiteral("hidden"), e.hidden}});
     }

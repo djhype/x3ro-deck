@@ -13,6 +13,7 @@ struct DetectedCommand
     QString command;
     QString group; // free-form; picks the button's accent colour
     QString source; // the file it came from, shown as the section header
+    QString description; // the task's own doc line, when it has one
 };
 
 // Finds quick commands in one kind of project file. Register new detectors in
@@ -41,6 +42,40 @@ public:
     QList<DetectedCommand> detect(const QString &dir) const override;
     // Rule targets in file order, without pattern, dot or variable targets.
     static QStringList targets(const QByteArray &makefile);
+};
+
+// Recipes in a justfile, parsed from the file (running `just` would block the
+// scan). Private recipes (`_name`, [private]) and ones that need arguments
+// are left out; a comment line above a recipe is its description.
+class JustfileDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("just"); }
+    QStringList files() const override;
+    QList<DetectedCommand> detect(const QString &dir) const override;
+    static QList<DetectedCommand> recipes(const QByteArray &justfile, const QString &source);
+};
+
+// go-task's Taskfile: the keys under `tasks:` with their `desc`, without
+// `internal: true` tasks.
+class TaskfileDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("task"); }
+    QStringList files() const override;
+    QList<DetectedCommand> detect(const QString &dir) const override;
+    static QList<DetectedCommand> tasks(const QByteArray &taskfile, const QString &source);
+};
+
+// mise tasks: [tasks.name] tables and `name = "…"` entries under [tasks],
+// with their `description`.
+class MiseDetector : public CommandDetector
+{
+public:
+    QString id() const override { return QStringLiteral("mise"); }
+    QStringList files() const override;
+    QList<DetectedCommand> detect(const QString &dir) const override;
+    static QList<DetectedCommand> tasks(const QByteArray &toml, const QString &source);
 };
 
 class PackageJsonDetector : public CommandDetector

@@ -1,0 +1,19 @@
+[tools]
+node = "22"
+
+[tasks]
+fmt = "prettier -w ."
+check = { run = "tsc --noEmit", description = "Type-check" }
+
+[tasks.build]
+description = "Build with esbuild"
+run = "esbuild src/index.ts"
+
+[tasks."db:migrate"]
+run = "prisma migrate deploy"
+
+[tasks.build.env]
+NODE_ENV = "production"
+
+[env]
+FOO = "bar"

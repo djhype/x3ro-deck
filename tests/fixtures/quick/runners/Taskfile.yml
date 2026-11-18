@@ -1,0 +1,23 @@
+version: '3'
+
+vars:
+  NAME: app
+
+tasks:
+  build:
+    desc: Build the app
+    cmds:
+      - go build
+  "lint:go":
+    desc: "Lint Go code"  # inline comment
+    cmds: [golangci-lint run]
+  internal-step:
+    internal: true
+    cmds:
+      - echo internal
+  test:
+    cmds:
+      - go test ./...
+
+includes:
+  docs: ./docs

@@ -1,0 +1,28 @@
+set dotenv-load
+alias b := build
+version := "1.0"
+export RUST_LOG := "info"
+
+# Build everything
+build:
+    cargo build
+
+# Run the tests
+test *args: build
+    cargo test {{args}}
+
+serve port="8080":
+    python -m http.server {{port}}
+
+deploy env:
+    ./deploy {{env}}
+
+_helper:
+    echo hidden
+
+[private]
+secret:
+    echo hidden
+
+@quiet:
+    echo shh

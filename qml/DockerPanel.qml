@@ -286,7 +286,7 @@ Rectangle {
                                             id: btn
                                             width: parent.width
                                             text: cell.modelData.label
-                                            subtext: cell.modelData.command
+                                            subtext: cell.modelData.description || cell.modelData.command
                                             reserve: 34
                                             variant: "ghost"
                                             onClicked: app.runQuick(cell.modelData.key)

@@ -19,6 +19,7 @@ struct QuickEntry
     QString command;
     QString group;
     QString source; // "Manual" for config.json's quickCommands
+    QString description;
     bool pinned = false;
     bool hidden = false;
 };

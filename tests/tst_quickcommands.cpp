@@ -104,6 +104,46 @@ private Q_SLOTS:
         QCOMPARE(PackageJsonDetector::packageManager(dir.path(), json), pm);
     }
 
+    void taskRunners()
+    {
+        const QString dir = QStringLiteral(X3RO_DECK_FIXTURES "/quick/runners");
+        auto describe = [](const QList<DetectedCommand> &list) {
+            QStringList out;
+            for (const DetectedCommand &d : list) {
+                out << d.label + QLatin1Char('|') + d.command + QLatin1Char('|') + d.description;
+            }
+            return out;
+        };
+        QCOMPARE(describe(JustfileDetector().detect(dir)),
+                 (QStringList{QStringLiteral("build|just build|Build everything"), QStringLiteral("test|just test|Run the tests"),
+                              QStringLiteral("serve|just serve|"), QStringLiteral("quiet|just quiet|")}));
+        QCOMPARE(describe(TaskfileDetector().detect(dir)),
+                 (QStringList{QStringLiteral("build|task build|Build the app"), QStringLiteral("lint:go|task lint:go|Lint Go code"),
+                              QStringLiteral("test|task test|")}));
+        QCOMPARE(
+            describe(MiseDetector().detect(dir)),
+            (QStringList{QStringLiteral("fmt|mise run fmt|"), QStringLiteral("check|mise run check|Type-check"),
+                         QStringLiteral("build|mise run build|Build with esbuild"), QStringLiteral("db:migrate|mise run db:migrate|")}));
+
+        // All three show up, each under its own file.
+        QSet<QString> sources;
+        for (const DetectedCommand &d : CommandDetector::detectAll(dir)) {
+            sources.insert(d.source);
+        }
+        QCOMPARE(sources, (QSet<QString>{QStringLiteral("justfile"), QStringLiteral("Taskfile.yml"), QStringLiteral("mise.toml")}));
+    }
+
+    void renamedRecipeUpdatesLive()
+    {
+        QTemporaryDir dir;
+        write(dir.filePath(QStringLiteral("justfile")), "build:\n    echo\n");
+        QuickCommands quick;
+        quick.setCheckouts({QStringLiteral("just")}, {dir.path()});
+        QCOMPARE(labels(quick.detected(0), QStringLiteral("justfile")), QStringList{QStringLiteral("build")});
+        write(dir.filePath(QStringLiteral("justfile")), "compile:\n    echo\n");
+        QTRY_COMPARE_WITH_TIMEOUT(labels(quick.detected(0), QStringLiteral("justfile")), QStringList{QStringLiteral("compile")}, 1000);
+    }
+
     void entriesMergePinAndHide()
     {
         QuickCommands quick;
