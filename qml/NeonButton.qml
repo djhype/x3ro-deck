@@ -8,6 +8,7 @@ Rectangle {
     property color accent: t.magenta
     property string variant: "ghost"
     property bool mono: false
+    property int reserve: 0 // room kept free on the right, for controls laid over the button
     property bool enabledState: true
     signal clicked()
     readonly property Theme t: Theme {}
@@ -34,6 +35,8 @@ Rectangle {
             font.family: btn.mono ? btn.t.mono : btn.t.sans
             font.pixelSize: 13
             font.weight: btn.variant === "ghost" ? Font.Normal : Font.DemiBold
+            elide: Text.ElideRight
+            width: btn.subtext ? Math.min(implicitWidth, btn.width - 24 - btn.reserve) : implicitWidth
         }
         Text {
             visible: !!btn.subtext
@@ -42,7 +45,7 @@ Rectangle {
             font.family: btn.t.mono
             font.pixelSize: 11
             elide: Text.ElideRight
-            width: Math.min(implicitWidth, btn.width - 24)
+            width: Math.min(implicitWidth, btn.width - 24 - btn.reserve)
         }
     }
 

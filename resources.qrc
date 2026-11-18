@@ -11,6 +11,7 @@
         <file>qml/SessionPanel.qml</file>
         <file>qml/PrPanel.qml</file>
         <file>qml/Notice.qml</file>
+        <file>qml/QuickGlyph.qml</file>
         <file>qml/Welcome.qml</file>
         <file>qml/NeedsYouRail.qml</file>
         <file>data/icons/x3ro-deck.svg</file>

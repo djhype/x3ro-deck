@@ -46,9 +46,6 @@ const QStringList kPages{QStringLiteral("checkouts"), QStringLiteral("agents"), 
 const QList<QPair<QString, QString>> kKinds{{QStringLiteral("claude"), QStringLiteral("Claude Code")},
                                             {QStringLiteral("codex"), QStringLiteral("Codex")},
                                             {QStringLiteral("custom"), QStringLiteral("Custom command")}};
-const QList<QPair<QString, QString>> kGroups{{QStringLiteral("check"), QStringLiteral("Check")},
-                                             {QStringLiteral("env"), QStringLiteral("Env")},
-                                             {QStringLiteral("data"), QStringLiteral("Data")}};
 
 QString kindHint(const QString &kind)
 {
@@ -170,7 +167,7 @@ QJsonObject quickRow(const QTableWidget *t, int row)
     QJsonObject o = t->item(row, 0)->data(Qt::UserRole).toJsonObject();
     o.insert(QStringLiteral("label"), cellText(t, row, 0));
     o.insert(QStringLiteral("command"), cellText(t, row, 1));
-    o.insert(QStringLiteral("group"), static_cast<QComboBox *>(t->cellWidget(row, 2))->currentData().toString());
+    o.insert(QStringLiteral("group"), static_cast<QComboBox *>(t->cellWidget(row, 2))->currentText().trimmed());
     return o;
 }
 
@@ -180,11 +177,11 @@ void setQuickRow(QTableWidget *t, int row, const QJsonObject &o)
     label->setData(Qt::UserRole, o);
     t->setItem(row, 0, label);
     t->setItem(row, 1, new QTableWidgetItem(o.value(QStringLiteral("command")).toString()));
+    // Free-form; these three have their own colours.
     auto *group = new QComboBox;
-    for (const auto &[key, text] : kGroups) {
-        group->addItem(text, key);
-    }
-    group->setCurrentIndex(std::max(0, group->findData(o.value(QStringLiteral("group")).toString())));
+    group->setEditable(true);
+    group->addItems({QStringLiteral("check"), QStringLiteral("env"), QStringLiteral("data")});
+    group->setCurrentText(o.value(QStringLiteral("group")).toString(QStringLiteral("check")));
     t->setCellWidget(row, 2, group);
 }
 

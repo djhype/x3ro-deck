@@ -228,6 +228,7 @@ AppController::AppController(QObject *parent)
     , m_git(new GitWatcher(this))
     , m_prs(new PrWatcher(this))
     , m_deps(new Dependencies(this))
+    , m_quick(new QuickCommands(this))
     , m_checkoutModel(new VariantListModel(kCheckoutRoles, this))
     , m_serviceModel(new VariantListModel(kServiceRoles, this))
     , m_attention(new VariantListModel(kAttentionRoles, this))
@@ -256,6 +257,13 @@ AppController::AppController(QObject *parent)
     connect(m_git, &GitWatcher::updated, this, &AppController::onGit);
     connect(m_prs, &PrWatcher::updated, this, &AppController::onPr);
     connect(m_attention, &VariantListModel::countChanged, this, &AppController::totalsChanged);
+    connect(this, &AppController::configChanged, this, &AppController::quickCommandsChanged);
+    connect(this, &AppController::currentChanged, this, &AppController::quickCommandsChanged);
+    connect(m_quick, &QuickCommands::changed, this, [this](int checkout) {
+        if (checkout == m_current) {
+            Q_EMIT quickCommandsChanged();
+        }
+    });
     connect(m_deps, &Dependencies::changed, this, [this] {
         Q_EMIT dependenciesChanged();
         Q_EMIT currentChanged();
@@ -285,10 +293,15 @@ void AppController::start()
     if (!m_bus->listen(&err)) {
         qWarning("x3ro-deck: cannot listen on %s: %s", qPrintable(AgentBus::socketPath()), qPrintable(err));
     }
+    QStringList names;
+    QStringList dirs;
     for (int i = 0; i < m_checkouts.size(); ++i) {
         m_prs->watch(m_checkouts[i].cfg.name, m_checkouts[i].cfg.path);
         m_git->watch(m_checkouts[i].cfg.name, m_checkouts[i].cfg.path);
+        names.append(m_checkouts[i].cfg.name);
+        dirs.append(m_checkouts[i].cfg.path);
     }
+    m_quick->setCheckouts(names, dirs);
     m_docker->setSocketPath(resolveDockerEndpoint(m_config.dockerHost).socketPath);
     m_docker->start();
     m_sessions->startPolling(3000);
@@ -431,9 +444,14 @@ QVariantList AppController::dependencies() const
 QVariantList AppController::quickCommands() const
 {
     QVariantList out;
-    for (const QuickCommand &q : m_config.quickCommands) {
-        out.append(
-            QVariantMap{{QStringLiteral("label"), q.label}, {QStringLiteral("command"), q.command}, {QStringLiteral("group"), q.group}});
+    for (const QuickEntry &e : m_quick->entries(m_current, m_config.quickCommands)) {
+        out.append(QVariantMap{{QStringLiteral("key"), e.key},
+                               {QStringLiteral("label"), e.label},
+                               {QStringLiteral("command"), e.command},
+                               {QStringLiteral("group"), e.group},
+                               {QStringLiteral("source"), e.source},
+                               {QStringLiteral("pinned"), e.pinned},
+                               {QStringLiteral("hidden"), e.hidden}});
     }
     return out;
 }
@@ -1002,13 +1020,27 @@ void AppController::toggleRail()
     Q_EMIT railVisibleChanged();
 }
 
-void AppController::runQuick(int index)
+void AppController::runQuick(const QString &key)
 {
-    if (index < 0 || index >= m_config.quickCommands.size() || m_current >= m_checkouts.size()) {
+    if (m_current >= m_checkouts.size()) {
         return;
     }
-    const QuickCommand &q = m_config.quickCommands.at(index);
-    Q_EMIT runInTerminal(m_current, q.label, expand(m_current, q.command));
+    for (const QuickEntry &e : m_quick->entries(m_current, m_config.quickCommands)) {
+        if (e.key == key) {
+            Q_EMIT runInTerminal(m_current, e.label, expand(m_current, e.command));
+            return;
+        }
+    }
+}
+
+void AppController::pinQuick(const QString &key, bool on)
+{
+    m_quick->setPinned(m_current, key, on);
+}
+
+void AppController::hideQuick(const QString &key, bool on)
+{
+    m_quick->setHidden(m_current, key, on);
 }
 
 void AppController::runCompose(const QString &which)

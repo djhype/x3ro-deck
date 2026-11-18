@@ -7,6 +7,7 @@
 #include "GitWatcher.h"
 #include "Models.h"
 #include "PrWatcher.h"
+#include "QuickCommands.h"
 #include "SessionBackend.h"
 #include "TerminalSettings.h"
 #include "Worktrees.h"
@@ -72,7 +73,7 @@ class AppController : public QObject
     Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentChanged)
     Q_PROPERTY(QString tab READ tab NOTIFY tabChanged)
     Q_PROPERTY(QVariantMap current READ current NOTIFY currentChanged)
-    Q_PROPERTY(QVariantList quickCommands READ quickCommands NOTIFY configChanged)
+    Q_PROPERTY(QVariantList quickCommands READ quickCommands NOTIFY quickCommandsChanged)
     Q_PROPERTY(QVariantList agents READ agentProfiles NOTIFY configChanged)
     Q_PROPERTY(QVariantList links READ links NOTIFY currentChanged)
     Q_PROPERTY(int containersUp READ containersUp NOTIFY totalsChanged)
@@ -133,7 +134,10 @@ public:
     Q_INVOKABLE void select(int index);
     Q_INVOKABLE void setTab(const QString &tab);
     Q_INVOKABLE void toggleRail();
-    Q_INVOKABLE void runQuick(int index);
+    Q_INVOKABLE void runQuick(const QString &key);
+    Q_INVOKABLE void pinQuick(const QString &key, bool on);
+    Q_INVOKABLE void hideQuick(const QString &key, bool on);
+    QuickCommands *quick() const { return m_quick; }
     Q_INVOKABLE void runCompose(const QString &which);
     Q_INVOKABLE void openLink(int index);
     Q_INVOKABLE void serviceAction(int row, const QString &action);
@@ -173,6 +177,7 @@ Q_SIGNALS:
     void attentionRaised(const QVariantMap &item);
     void agentStateChanged(int checkout);
     void configChanged();
+    void quickCommandsChanged();
     void settingsRequested(const QString &page);
     void dependenciesChanged();
     void welcomeChanged();
@@ -219,6 +224,7 @@ private:
     GitWatcher *m_git;
     PrWatcher *m_prs;
     Dependencies *m_deps;
+    QuickCommands *m_quick;
     bool m_firstRun = false;
     QList<Worktrees::Candidate> m_welcome;
     VariantListModel *m_checkoutModel;

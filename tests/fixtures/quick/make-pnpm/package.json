@@ -1,0 +1,11 @@
+{
+  "name": "fixture",
+  "packageManager": "yarn@4.1.0",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest run",
+    "build": "vite build",
+    "a:b": "echo colon"
+  },
+  "devDependencies": {"test": "1"}
+}

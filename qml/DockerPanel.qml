@@ -210,6 +210,26 @@ Rectangle {
             }
 
             Rectangle {
+                id: quickCard
+                property bool showHidden: false
+                readonly property int hiddenCount: app.quickCommands.filter(q => q.hidden).length
+                // Pinned entries first (the controller sorts them so), then one
+                // section per source in the order they arrive.
+                readonly property var sections: {
+                    var out = []
+                    var bySource = {}
+                    for (var i = 0; i < app.quickCommands.length; ++i) {
+                        var q = app.quickCommands[i]
+                        if (q.hidden && !showHidden) continue
+                        var title = q.pinned ? "Pinned" : q.source
+                        if (bySource[title] === undefined) {
+                            bySource[title] = out.length
+                            out.push({ title: title, items: [] })
+                        }
+                        out[bySource[title]].items.push(q)
+                    }
+                    return out
+                }
                 width: parent.width
                 height: qc.implicitHeight + 28
                 radius: 14
@@ -225,27 +245,89 @@ Rectangle {
                         color: t.text
                         font.family: t.sans; font.pixelSize: 14; font.weight: Font.DemiBold
                     }
-                    Grid {
-                        columns: 2
-                        spacing: 8
+                    Text {
+                        visible: quickCard.sections.length === 0
                         width: parent.width
-                        Repeater {
-                            model: app.quickCommands
-                            NeonButton {
-                                required property var modelData
-                                required property int index
-                                width: (qc.width - 8) / 2
-                                text: modelData.label
-                                subtext: modelData.command
-                                variant: "ghost"
-                                onClicked: app.runQuick(index)
-                                Rectangle {
-                                    width: 3; height: 14; radius: 1.5
-                                    anchors.right: parent.right; anchors.rightMargin: 10
-                                    anchors.top: parent.top; anchors.topMargin: 10
-                                    color: modelData.group === "env" ? t.magenta : modelData.group === "data" ? t.amber : t.cyan
+                        wrapMode: Text.WordWrap
+                        text: quickCard.hiddenCount > 0 ? "Every quick command is hidden."
+                              : "None yet. Makefile targets and package.json scripts show up here, and Settings → Docker adds your own."
+                        color: t.dim
+                        font.family: t.sans; font.pixelSize: 12
+                    }
+                    Repeater {
+                        model: quickCard.sections
+                        Column {
+                            id: section
+                            required property var modelData
+                            width: qc.width
+                            spacing: 6
+                            Text {
+                                visible: quickCard.sections.length > 1 || section.modelData.title !== "Manual"
+                                text: section.modelData.title.toUpperCase()
+                                color: t.dim
+                                font.family: t.sans; font.pixelSize: 10; font.weight: Font.DemiBold
+                                font.letterSpacing: 0.8
+                            }
+                            Grid {
+                                columns: 2
+                                spacing: 8
+                                width: parent.width
+                                Repeater {
+                                    model: section.modelData.items
+                                    Item {
+                                        id: cell
+                                        required property var modelData
+                                        width: (qc.width - 8) / 2
+                                        height: btn.height
+                                        opacity: modelData.hidden ? 0.45 : 1
+                                        HoverHandler { id: hover }
+                                        NeonButton {
+                                            id: btn
+                                            width: parent.width
+                                            text: cell.modelData.label
+                                            subtext: cell.modelData.command
+                                            reserve: 34
+                                            variant: "ghost"
+                                            onClicked: app.runQuick(cell.modelData.key)
+                                        }
+                                        Rectangle {
+                                            width: 3; height: 14; radius: 1.5
+                                            anchors.right: parent.right; anchors.rightMargin: 10
+                                            anchors.top: parent.top; anchors.topMargin: 10
+                                            color: t.groupColor(cell.modelData.group)
+                                        }
+                                        Row {
+                                            anchors.right: parent.right; anchors.rightMargin: 6
+                                            anchors.bottom: parent.bottom; anchors.bottomMargin: 4
+                                            spacing: 2
+                                            QuickGlyph {
+                                                visible: hover.hovered || cell.modelData.pinned
+                                                glyph: cell.modelData.pinned ? "★" : "☆"
+                                                active: cell.modelData.pinned
+                                                onClicked: app.pinQuick(cell.modelData.key, !cell.modelData.pinned)
+                                            }
+                                            QuickGlyph {
+                                                visible: hover.hovered
+                                                glyph: cell.modelData.hidden ? "↺" : "×"
+                                                onClicked: app.hideQuick(cell.modelData.key, !cell.modelData.hidden)
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                        }
+                    }
+                    Text {
+                        visible: quickCard.hiddenCount > 0
+                        text: quickCard.showHidden ? "Hide the hidden ones" : quickCard.hiddenCount + " hidden · show"
+                        color: hiddenMouse.containsMouse ? t.magenta : t.dim
+                        font.family: t.sans; font.pixelSize: 11
+                        MouseArea {
+                            id: hiddenMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: quickCard.showHidden = !quickCard.showHidden
                         }
                     }
                 }

@@ -53,6 +53,18 @@ QtObject {
         default: return dim
         }
     }
+    // A quick command's accent. check, env and data keep their colours; any
+    // other group gets a stable one from the checkout palette.
+    function groupColor(group) {
+        switch (group) {
+        case "check": case "": case undefined: return cyan
+        case "env": return magenta
+        case "data": return amber
+        }
+        var h = 0
+        for (var i = 0; i < group.length; ++i) h = (h * 31 + group.charCodeAt(i)) % 9973
+        return checkoutColors[h % checkoutColors.length]
+    }
     function agentLabel(state) {
         switch (state) {
         case "working": return "Working"

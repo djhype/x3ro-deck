@@ -29,7 +29,7 @@ struct QuickCommand
 {
     QString label;
     QString command; // may contain {port:<service>:<containerPort>} and {project}
-    QString group; // "check" | "env" | "data" — picks the accent colour
+    QString group; // free-form; picks the accent colour (check, env and data have their own)
 };
 
 struct LinkConfig
