@@ -1,0 +1,214 @@
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# One tag, every package. Build and signing jobs run first; nothing is
+# published unless all of them succeed. Signing and publishing secrets live in
+# the "release" environment, which requires a reviewer's approval.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: scripts/ci-linux-deps.sh
+      - name: Source tarball and Linux build
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          git archive --prefix="x3ro-deck-$version/" -o "x3ro-deck-$version.tar.gz" HEAD
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF
+          cmake --build build
+          DESTDIR="$PWD/stage" cmake --install build
+          install -Dm644 LICENSE stage/usr/share/doc/x3ro-deck/LICENSE
+          tar -C stage -czf "x3ro-deck-$version-linux-x86_64.tar.gz" usr
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: x3ro-deck-*.tar.gz
+
+  macos:
+    runs-on: macos-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
+      - run: brew install --quiet ninja pkg-config
+      - name: Import the Developer ID certificate
+        env:
+          P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$P12" | base64 --decode > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+          rm cert.p12
+      - name: Build, sign, notarize
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          test -n "$MACOS_SIGN_IDENTITY" || { echo "signing identity missing"; exit 1; }
+          scripts/macos-package.sh "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: x3ro-deck-*.dmg
+
+  windows:
+    runs-on: windows-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
+      - run: choco install innosetup --no-progress -y
+      - name: Azure login for Trusted Signing
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Build, sign, package
+        shell: pwsh
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          if (-not $env:AZURE_SIGNING_ENDPOINT) { throw "signing credentials missing" }
+          cargo install trusted-signing-cli --locked
+          scripts/windows-package.ps1 -Version ($env:GITHUB_REF_NAME -replace '^v', '')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: packaging/windows/Output/x3ro-deck-*-setup.exe
+
+  # Runs only when every build and signing job succeeded.
+  publish:
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum -- * > SHA256SUMS)
+          scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
+          flags=()
+          [[ $GITHUB_REF_NAME == *-* ]] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" dist/* --title "x3ro deck ${GITHUB_REF_NAME#v}" --notes-file notes.md "${flags[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sums
+          path: dist/SHA256SUMS
+
+  obs:
+    needs: publish
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Run the OBS source service for the new tag
+        env:
+          OBS_TOKEN: ${{ secrets.OBS_TOKEN }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Token $OBS_TOKEN" \
+            "https://api.opensuse.org/trigger/runservice?project=home:x3ro:deck&package=x3ro-deck"
+
+  aur:
+    needs: publish
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    environment: release
+    steps:
+      - run: pacman -Syu --noconfirm --needed git openssh base-devel
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: sums
+      - name: Update and push the AUR packages
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          aurver=${version//-/_}
+          mkdir -p ~/.ssh && echo "$AUR_SSH_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' > ~/.ssh/config
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          useradd -m builder
+          for pkg in x3ro-deck x3ro-deck-bin; do
+            git clone "ssh://aur@aur.archlinux.org/$pkg.git" "aur-$pkg"
+            cp "packaging/arch/$pkg/PKGBUILD" "aur-$pkg/"
+            asset=$([[ $pkg == *-bin ]] && echo "x3ro-deck-$version-linux-x86_64.tar.gz" || echo "x3ro-deck-$version.tar.gz")
+            sum=$(grep " $asset\$" SHA256SUMS | cut -d' ' -f1)
+            sed -i "s/^pkgver=.*/pkgver=$aurver/; s/^sha256sums=.*/sha256sums=('$sum')/" "aur-$pkg/PKGBUILD"
+            chown -R builder "aur-$pkg"
+            su builder -c "cd aur-$pkg && makepkg --printsrcinfo > .SRCINFO"
+            git -C "aur-$pkg" -c user.name="x3ro deck release" -c user.email="release@x3ro.life" commit -am "Update to $version"
+            git -C "aur-$pkg" push
+          done
+
+  homebrew:
+    needs: publish
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: sums
+      - name: Bump the cask in x3ro/homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          sum=$(grep " x3ro-deck-$version.dmg\$" SHA256SUMS | cut -d' ' -f1)
+          gh repo clone x3ro/homebrew-tap tap
+          mkdir -p tap/Casks
+          sed -e "s/^  version .*/  version \"$version\"/" -e "s/^  sha256 .*/  sha256 \"$sum\"/" \
+            packaging/homebrew/x3ro-deck.rb > tap/Casks/x3ro-deck.rb
+          git -C tap -c user.name="x3ro deck release" -c user.email="release@x3ro.life" commit -am "x3ro-deck $version"
+          git -C tap push
+
+  winget:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: windows-latest
+    environment: release
+    steps:
+      - name: Open a winget-pkgs pull request
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          .\wingetcreate.exe update x3ro.deck --version $version `
+            --urls "https://github.com/x3ro/x3ro-deck/releases/download/v$version/x3ro-deck-$version-setup.exe" `
+            --token $env:WINGET_TOKEN --submit
