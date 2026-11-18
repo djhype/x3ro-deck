@@ -1,11 +1,15 @@
 #include "AppController.h"
 #include "AttachClient.h"
+#include "DemoMode.h"
 #include "MainWindow.h"
 #include "SingleInstance.h"
+#include "TerminalHost.h"
 
 #include <QApplication>
 #include <QFileInfo>
 #include <QProcess>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QTimer>
 
 #include <cstdio>
@@ -55,11 +59,23 @@ int main(int argc, char *argv[])
     // the binary under a running instance, and a restart should run the new one.
     const QString executable = QApplication::applicationFilePath();
 
+    // --demo: made-up data for screenshots. It skips the single-instance
+    // guard and keeps QSettings in a temporary folder, so it neither talks to
+    // a running X3RO Deck nor touches ~/.config/x3ro-deck.
+    const bool demo = QApplication::arguments().contains(QStringLiteral("--demo"));
+    QTemporaryDir demoSettings;
+    if (demo) {
+        QSettings::setPath(QSettings::NativeFormat, QSettings::UserScope, demoSettings.path());
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, demoSettings.path());
+        AppController::enableDemo();
+        TerminalHost::setChannelOverride([](QObject *parent) { return new DemoChannel(DemoMode::shellTranscript(), parent); });
+    }
+
     // A second launch raises the running window instead of starting another.
     // The activation token lets the compositor hand focus to that window.
     SingleInstance instance;
     QString instanceError;
-    switch (instance.claim(QApplication::arguments().mid(1), token, &instanceError)) {
+    switch (demo ? SingleInstance::Result::Primary : instance.claim(QApplication::arguments().mid(1), token, &instanceError)) {
     case SingleInstance::Result::Forwarded:
         return 0;
     case SingleInstance::Result::Failed:

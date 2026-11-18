@@ -405,8 +405,12 @@ void TerminalScreen::flush()
 
 void TerminalScreen::resize(int rows, int cols)
 {
-    rows = std::max(1, rows);
-    cols = std::max(1, cols);
+    // A view collapsed to a sliver (a hidden stack page, a splitter at its
+    // minimum) keeps its grid: libvterm's reflow aborts on some content at a
+    // width of one or two cells, and nothing is readable there anyway.
+    if (rows < 2 || cols < 4) {
+        return;
+    }
     if (rows == m_rows && cols == m_cols) {
         return;
     }

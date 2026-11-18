@@ -136,6 +136,20 @@ void TerminalHost::showError(const QString &text)
     }
 }
 
+namespace
+{
+std::function<TerminalChannel *(QObject *)> &channelOverride()
+{
+    static std::function<TerminalChannel *(QObject *)> make;
+    return make;
+}
+} // namespace
+
+void TerminalHost::setChannelOverride(std::function<TerminalChannel *(QObject *)> make)
+{
+    channelOverride() = std::move(make);
+}
+
 void TerminalHost::spawn()
 {
     if (!m_view) {
@@ -148,6 +162,9 @@ void TerminalHost::spawn()
     // A reattach redraws everything; start from a clean screen and modes.
     m_view->reset();
     m_channel = m_direct ? m_direct(m_view->rows(), m_view->cols(), this) : nullptr;
+    if (!m_channel && channelOverride()) {
+        m_channel = channelOverride()(this);
+    }
     if (!m_channel) {
         QStringList argv = m_args;
         if (m_program.isEmpty()) {

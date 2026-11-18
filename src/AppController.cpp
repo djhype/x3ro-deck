@@ -2,6 +2,7 @@
 
 #include "ComposeFiles.h"
 #include "DaemonBackend.h"
+#include "DemoMode.h"
 #include "DockerEndpoint.h"
 #include "ListeningPorts.h"
 #include "Paths.h"
@@ -277,10 +278,10 @@ bool AppController::hasAnySession() const
 
 AppController::AppController(QObject *parent)
     : QObject(parent)
-    , m_config(Config::load(&m_configError))
+    , m_config(s_demo ? DemoMode::config() : Config::load(&m_configError))
     , m_docker(new DockerClient(this))
     , m_bus(new AgentBus(this))
-    , m_sessions(createBackend(m_config.sessionBackend, this))
+    , m_sessions(s_demo ? static_cast<SessionBackend *>(new DemoBackend(this)) : createBackend(m_config.sessionBackend, this))
     , m_terminalSettings(new TerminalSettings(this))
     , m_git(new GitWatcher(this))
     , m_prs(new PrWatcher(this))
@@ -353,6 +354,10 @@ void AppController::sampleStats()
 
 void AppController::start()
 {
+    if (s_demo) {
+        seedDemo();
+        return;
+    }
     QString err;
     if (!m_bus->listen(&err)) {
         qWarning("x3ro-deck: cannot listen on %s: %s", qPrintable(AgentBus::socketPath()), qPrintable(err));
@@ -628,8 +633,102 @@ void AppController::scanListeningPorts()
     }
 }
 
+void AppController::seedDemo()
+{
+    static const char *const branches[][2] = {{"feat/line-item-taxes", "4f2a91c Show taxes per line item"},
+                                              {"refactor/invoice-export", "b81d3e0 Split the invoice exporter"},
+                                              {"chore/state-bucket", "0c7e5aa Add the state bucket module"},
+                                              {"fix/dynamic-type", "e93b210 Respect the system font size"}};
+    for (int i = 0; i < m_checkouts.size() && i < 4; ++i) {
+        onGit(m_checkouts[i].cfg.name, GitInfo{QLatin1String(branches[i][0]), QLatin1String(branches[i][1])});
+    }
+    PrInfo pr;
+    pr.number = 482;
+    pr.url = QStringLiteral("https://example.com/pull/482");
+    pr.title = QStringLiteral("Show taxes per line item");
+    pr.state = QStringLiteral("OPEN");
+    pr.base = QStringLiteral("main");
+    pr.reviewDecision = QStringLiteral("REVIEW_REQUIRED");
+    pr.mergeable = QStringLiteral("MERGEABLE");
+    pr.mergeState = QStringLiteral("BLOCKED");
+    pr.additions = 61;
+    pr.deletions = 18;
+    pr.checksPassed = 7;
+    pr.checksPending = 1;
+    onPr(m_checkouts.value(0).cfg.name, pr);
+
+    auto container = [](const QString &dir, const char *service, const char *health, int privatePort, int publicPort) {
+        ContainerInfo c;
+        c.id = QLatin1String(service) + dir.section(QLatin1Char('/'), -1);
+        c.name = dir.section(QLatin1Char('/'), -1) + QLatin1Char('-') + QLatin1String(service) + QStringLiteral("-1");
+        c.project = dir.section(QLatin1Char('/'), -1);
+        c.service = QLatin1String(service);
+        c.workingDir = dir;
+        c.state = QStringLiteral("running");
+        c.health = QLatin1String(health);
+        c.status = QStringLiteral("Up 2 hours");
+        c.upSeconds = 7200;
+        if (privatePort) {
+            c.ports = {PortMapping{privatePort, publicPort}};
+        }
+        return c;
+    };
+    if (m_checkouts.size() >= 2) {
+        const QString a = m_checkouts[0].cfg.path;
+        const QString b = m_checkouts[1].cfg.path;
+        onContainers({container(a, "web", "healthy", 80, 8080), container(a, "api", "running", 3000, 3000),
+                      container(a, "db", "healthy", 5432, 5432), container(b, "api", "unhealthy", 8000, 8001),
+                      container(b, "worker", "running", 0, 0)});
+    }
+
+    // Agents: running in every session, then one hook story each.
+    QHash<QString, QStringList> panes;
+    for (int i = 0; i < m_checkouts.size(); ++i) {
+        panes.insert(m_checkouts[i].session, {profile(i).process});
+    }
+    onPaneCommands(panes);
+    auto hook = [this](int i, QJsonObject p) {
+        if (i < m_checkouts.size()) {
+            p.insert(QStringLiteral("cwd"), m_checkouts[i].cfg.path);
+            p.insert(QStringLiteral("session_id"), QStringLiteral("demo-%1").arg(i));
+            onHookEvent(p);
+        }
+    };
+    hook(0,
+         {{QStringLiteral("hook_event_name"), QStringLiteral("UserPromptSubmit")},
+          {QStringLiteral("prompt"), QStringLiteral("Show taxes per line item")}});
+    hook(1,
+         {{QStringLiteral("hook_event_name"), QStringLiteral("UserPromptSubmit")},
+          {QStringLiteral("prompt"), QStringLiteral("Split the invoice exporter")}});
+    hook(1,
+         {{QStringLiteral("hook_event_name"), QStringLiteral("PermissionRequest")},
+          {QStringLiteral("tool_name"), QStringLiteral("Bash")},
+          {QStringLiteral("tool_input"),
+           QJsonObject{{QStringLiteral("command"), QStringLiteral("pnpm prisma migrate dev --name invoice_totals")}}}});
+    hook(2,
+         {{QStringLiteral("hook_event_name"), QStringLiteral("UserPromptSubmit")},
+          {QStringLiteral("prompt"), QStringLiteral("Add a state bucket")}});
+    hook(2,
+         {{QStringLiteral("hook_event_name"), QStringLiteral("PreToolUse")},
+          {QStringLiteral("tool_name"), QStringLiteral("AskUserQuestion")},
+          {QStringLiteral("tool_input"),
+           QJsonObject{{QStringLiteral("questions"),
+                        QJsonArray{QJsonObject{
+                            {QStringLiteral("question"), QStringLiteral("Which Terraform workspace should the new bucket go to?")}}}}}}});
+    hook(3,
+         {{QStringLiteral("hook_event_name"), QStringLiteral("UserPromptSubmit")},
+          {QStringLiteral("prompt"), QStringLiteral("Respect the system font size")}});
+    hook(3, {{QStringLiteral("hook_event_name"), QStringLiteral("Stop")}});
+    publishCheckouts();
+    publishServices();
+    publishAttention();
+}
+
 void AppController::probePorts()
 {
+    if (s_demo) {
+        return; // no network in the demo
+    }
     QSet<int> ports = m_dockerPorts;
     for (const Checkout &c : std::as_const(m_checkouts)) {
         for (const auto &l : c.listening) {

@@ -163,6 +163,7 @@ add_library(x3ro-deck-base STATIC
     src/PortProbe.cpp
     src/ListeningPorts.cpp
     src/Shortcuts.cpp
+    src/DemoMode.cpp
     src/AppTheme.cpp
     src/DeckDialog.h
     src/AboutDialog.cpp

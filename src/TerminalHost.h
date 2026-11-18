@@ -35,6 +35,8 @@ public:
     // Imported terminal settings: open terminals take the appearance and
     // scrollback at once, and new shells run the profile's shell.
     static void setProfile(const TerminalProfile &profile);
+    // Replaces every local shell with this channel (the --demo transcript).
+    static void setChannelOverride(std::function<TerminalChannel *(QObject *parent)> make);
     static const TerminalProfile &profile();
     ~TerminalHost() override;
 

@@ -98,6 +98,23 @@ jobs:
         if: matrix.name == 'linux'
         run: scripts/smoke-test.sh build/x3ro-deck smoke-${{ matrix.name }}.png
 
+      # README images: invented checkouts and states only (--demo).
+      - name: Demo screenshot
+        if: matrix.name == 'linux'
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software
+          chmod 700 "$XDG_RUNTIME_DIR"
+          dbus-run-session -- build/x3ro-deck --demo --tab agents --select 1 --screenshot demo-agents.png 6000
+          dbus-run-session -- build/x3ro-deck --demo --tab docker --select 0 --screenshot demo-docker.png 6000
+          test -s demo-agents.png && test -s demo-docker.png
+
+      - name: Upload demo screenshots
+        if: matrix.name == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-screenshots
+          path: demo-*.png
+
       - name: Upload screenshot
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,6 +152,23 @@ jobs:
 
       - name: Smoke test
         run: scripts/smoke-test.sh build/x3ro-deck smoke-qt64.png
+
+      # README images: invented checkouts and states only (--demo).
+      - name: Demo screenshot
+        if: matrix.name == 'linux'
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d) QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software
+          chmod 700 "$XDG_RUNTIME_DIR"
+          dbus-run-session -- build/x3ro-deck --demo --tab agents --select 1 --screenshot demo-agents.png 6000
+          dbus-run-session -- build/x3ro-deck --demo --tab docker --select 0 --screenshot demo-docker.png 6000
+          test -s demo-agents.png && test -s demo-docker.png
+
+      - name: Upload demo screenshots
+        if: matrix.name == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-screenshots
+          path: demo-*.png
 
       - name: Upload screenshot
         if: always()

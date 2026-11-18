@@ -143,6 +143,9 @@ public:
     void switchBackend(const QString &to, BackendSwitch how);
     bool hasAnySession() const;
     static SessionBackend *makeBackend(const QString &kind, QObject *parent);
+    // --demo: invented checkouts and states (DemoMode.h); call before construction.
+    static void enableDemo() { s_demo = true; }
+    static bool demo() { return s_demo; }
     static SessionBackend *createBackend(const QString &kind, QObject *parent);
     static inline const QString kLegacyBackendKey = QStringLiteral("sessions/legacyBackend");
     static inline const QString kResumeKey = QStringLiteral("sessions/resume");
@@ -272,6 +275,8 @@ private:
     QTimer m_portScan;
     QSet<int> m_dockerPorts;
     void probePorts();
+    void seedDemo();
+    static inline bool s_demo = false;
     bool m_statsVisible = false;
     bool m_panesPolled = false;
 };

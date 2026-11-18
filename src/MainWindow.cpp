@@ -295,7 +295,9 @@ void MainWindow::buildShortcuts()
             toggleVisible(token);
         }
     });
-    m_hotkeys->start();
+    if (!AppController::demo()) {
+        m_hotkeys->start();
+    }
 }
 
 #if defined(Q_OS_MACOS)
@@ -435,6 +437,9 @@ void MainWindow::openAbout()
 
 void MainWindow::openSettings(const QString &page)
 {
+    if (AppController::demo()) {
+        return; // the demo never reads or writes the real config
+    }
     if (m_settings) {
         m_settings->showPage(page);
         m_settings->raise();
@@ -785,6 +790,9 @@ void MainWindow::syncAccents()
 
 void MainWindow::notify(const QVariantMap &item)
 {
+    if (AppController::demo()) {
+        return; // the demo's items are made up
+    }
     const QString kind = item.value(QStringLiteral("kind")).toString();
     if (kind == QLatin1String("done") && !m_app->config().notifyOnDone) {
         return;
