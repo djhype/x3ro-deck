@@ -39,7 +39,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
   - It also owns the terminals, shortcuts, the tray icon and `KNotification`s.
   - Ctrl+Q and the tray's Quit go through `confirmQuit`, which offers to stop the agents by killing the tmux server.
   - Layout state persists in `~/.config/x3ro-deck/x3ro-deck.conf`.
-- `src/TerminalHost.cpp`: hosts one terminal. By default it embeds Konsole via `konsolepart` (`KParts::PartLoader`), so terminals use the user's Konsole profile. With `terminal: "builtin"` (takes a restart) it shows a `TerminalView` instead. An agent terminal reads the backend's `attachChannel()` when it has one (the daemon); otherwise it runs the backend's attach command (or the imported shell for shell tabs) in a `PtyChannel`. `setProfile` applies imported settings to every open built-in terminal at once.
+- `src/TerminalHost.cpp`: hosts one built-in terminal (`TerminalView`). An agent terminal reads the backend's `attachChannel()` when it has one (the daemon); otherwise it runs the backend's attach command (or the imported shell for shell tabs) in a `PtyChannel`. `setProfile` applies imported settings to every open terminal at once.
 - The built-in terminal lives in `x3ro-deck-base`, so it needs no KF6 and `tst_terminal` covers it:
   - `TerminalScreen` wraps libvterm. It holds the cell grid and turns keys and pastes into bytes, honoring the program's modes. Ctrl combos use legacy control bytes, because libvterm would send CSI u.
     - Lines scrolling off the primary screen go to its scrollback, capped by the imported profile's history or else config `terminalScrollback` (default 10 000; unlimited means 100 000). "Line" numbers run through the history and then the screen. `droppedLines()` turns them into positions that survive lines dropping off the top.
@@ -63,7 +63,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
 - `src/DaemonBackend.cpp`: the `daemon` backend, a blocking request/reply client of `x3ro-deck-sessiond`.
   - Only `createSession` starts the daemon (`x3ro-deck-sessiond --detach`, found next to the app or on PATH; `$X3RO_DECK_SESSIOND_BIN` overrides). Everything else treats a missing daemon as no sessions.
   - `sendKeys` maps tmux key names to bytes (`keyBytes`). The session env is stored by the daemon and returned by `list`, the analogue of `@x3ro-deck-env`.
-  - `attachCommand` runs `x3ro-deck-attach <session>` (used by konsolepart); the hint is `x3ro-deck attach <checkout>`. `attachChannel` gives the built-in terminal a `SessiondChannel`.
+  - `attachCommand` runs `x3ro-deck-attach <session>`; the hint is `x3ro-deck attach <checkout>`. `attachChannel` gives the built-in terminal a `SessiondChannel`.
 - `sessiond/`: `x3ro-deck-sessiond`, QtCore and QtNetwork only. It owns one `forkpty` per session running the shell the app resolved (or `$SHELL` as a login shell) in the checkout, and outlives the GUI (`--detach` forks, `setsid`s and returns once listening).
   - One daemon per socket, guarded by `flock` on `<socket>.lock`. It exits 60 s after its last session and client are gone, or when its socket file disappears.
   - It feeds each session's output into a `SessionScreen`. `attach` resizes the PTY and the screen to the client first, then sends `redraw()` as the first `Output` frame. Resizes from any client apply to both, and the last one wins. `screen` returns the screen as text.

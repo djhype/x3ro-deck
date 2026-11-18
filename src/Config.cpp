@@ -49,7 +49,6 @@ QJsonObject defaults()
         {QStringLiteral("links"), QJsonArray{}},
         {QStringLiteral("agents"), defaultAgents()},
         {QStringLiteral("defaultAgent"), QStringLiteral("claude")},
-        {QStringLiteral("konsoleProfile"), QString()},
         {QStringLiteral("dockerHost"), QString()},
         {QStringLiteral("composeBinary"), QStringLiteral("docker compose")},
         {QStringLiteral("composeUp"), QStringLiteral("{compose} up -d")},
@@ -58,7 +57,6 @@ QJsonObject defaults()
         {QStringLiteral("notifyOnDone"), true},
         {QStringLiteral("autostartAgents"), true},
         {QStringLiteral("sessionBackend"), QStringLiteral("tmux")},
-        {QStringLiteral("terminal"), QStringLiteral("konsole")},
         {QStringLiteral("terminalScrollback"), 10000},
         {QStringLiteral("terminalSettings"), QString()},
         {QStringLiteral("terminalProfile"), QString()},
@@ -375,7 +373,6 @@ Config Config::load(QString *error)
         }
     }
     c.defaultAgent = root.value(QStringLiteral("defaultAgent")).toString(c.agents.first().id);
-    c.konsoleProfile = root.value(QStringLiteral("konsoleProfile")).toString();
     c.dockerHost = root.value(QStringLiteral("dockerHost")).toString().trimmed();
     c.composeBinary = root.value(QStringLiteral("composeBinary")).toString(c.composeBinary).trimmed();
     if (c.composeBinary.isEmpty()) {
@@ -387,7 +384,6 @@ Config Config::load(QString *error)
     c.notifyOnDone = root.value(QStringLiteral("notifyOnDone")).toBool(true);
     c.autostartAgents = root.value(QStringLiteral("autostartAgents")).toBool(true);
     c.sessionBackend = root.value(QStringLiteral("sessionBackend")).toString(c.sessionBackend).trimmed();
-    c.terminal = root.value(QStringLiteral("terminal")).toString(c.terminal).trimmed();
     c.terminalScrollback = std::clamp(root.value(QStringLiteral("terminalScrollback")).toInt(c.terminalScrollback), 0, 1000000);
     c.terminalSettings = root.value(QStringLiteral("terminalSettings")).toString().trimmed();
     c.terminalProfile = root.value(QStringLiteral("terminalProfile")).toString().trimmed();

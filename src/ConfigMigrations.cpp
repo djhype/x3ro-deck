@@ -24,6 +24,13 @@ const QList<Migration> &all()
             }
             return c;
         },
+        // v2 → v3: the built-in terminal is the only one; konsolepart's switch
+        // and profile are gone.
+        [](QJsonObject c) {
+            c.remove(QStringLiteral("terminal"));
+            c.remove(QStringLiteral("konsoleProfile"));
+            return c;
+        },
     };
     return migrations;
 }

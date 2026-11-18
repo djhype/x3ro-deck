@@ -62,7 +62,6 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     setWindowTitle(QStringLiteral("X3RO Deck"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("x3ro-deck"), QIcon(QStringLiteral(":/data/icons/x3ro-deck.svg"))));
     resize(1600, 980);
-    TerminalHost::setBuiltin(m_app->config().terminal == QLatin1String("builtin"));
     TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
     connect(m_app->terminalSettings(), &TerminalSettings::changed, this, [](const TerminalProfile &p) { TerminalHost::setProfile(p); });
     TerminalHost::setProfile(m_app->terminalSettings()->current());
@@ -346,7 +345,7 @@ void MainWindow::applySettings(const QJsonObject &config)
     QMessageBox box(this);
     box.setIcon(QMessageBox::Question);
     box.setWindowTitle(QStringLiteral("Restart X3RO Deck"));
-    box.setText(QStringLiteral("The checkout list, the session backend or the terminal changed. It takes effect when X3RO Deck restarts."));
+    box.setText(QStringLiteral("The checkout list or the session backend changed. It takes effect when X3RO Deck restarts."));
     box.setInformativeText(QStringLiteral("Agents keep running through the restart. Shell tabs close."));
     QPushButton *now = box.addButton(QStringLiteral("Restart now"), QMessageBox::AcceptRole);
     box.addButton(QStringLiteral("Later"), QMessageBox::RejectRole);
@@ -448,7 +447,7 @@ TerminalHost *MainWindow::addShellTab(int checkout, const QString &title)
 {
     QTabWidget *tabs = shellTabs(checkout);
     const Checkout &c = m_app->checkout(checkout);
-    auto *term = TerminalHost::shell(c.cfg.path, m_app->config().konsoleProfile, tabs);
+    auto *term = TerminalHost::shell(c.cfg.path, tabs);
     const int idx = tabs->addTab(term, title);
     tabs->setCurrentIndex(idx);
     connect(term, &TerminalHost::exited, this, [this, tabs, term, checkout] {
@@ -505,7 +504,7 @@ TerminalHost *MainWindow::agentTerminal(int checkout)
     auto direct = [this, checkout](int rows, int cols, QObject *parent) {
         return m_app->sessions()->attachChannel(m_app->checkout(checkout).session, rows, cols, parent);
     };
-    auto *term = TerminalHost::program(argv.first(), argv, m_app->config().konsoleProfile, m_agentStack, direct);
+    auto *term = TerminalHost::program(argv.first(), argv, m_agentStack, direct);
     m_agentStack->addWidget(term);
     m_agentTerms.insert(checkout, term);
     // The attached client exits when the session is killed or detached: recreate

@@ -1066,8 +1066,7 @@ bool AppController::reloadConfig()
     m_configError = error;
     // Agents run in the backend picked at startup, and their terminals live as
     // long as the app, so switching either takes a restart.
-    bool sameCheckouts = next.checkouts.size() == m_checkouts.size() && next.sessionBackend == m_config.sessionBackend
-        && next.terminal == m_config.terminal;
+    bool sameCheckouts = next.checkouts.size() == m_checkouts.size() && next.sessionBackend == m_config.sessionBackend;
     for (int i = 0; sameCheckouts && i < m_checkouts.size(); ++i) {
         sameCheckouts = next.checkouts.at(i).name == m_checkouts.at(i).cfg.name && next.checkouts.at(i).path == m_checkouts.at(i).cfg.path;
     }

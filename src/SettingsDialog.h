@@ -125,7 +125,6 @@ private:
 
     QCheckBox *m_autostart;
     QCheckBox *m_notifyDone;
-    QComboBox *m_konsoleProfile;
     TerminalSettings *m_terminals;
     QComboBox *m_terminalSource;
     QComboBox *m_terminalProfile;

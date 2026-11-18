@@ -1,0 +1,8 @@
+{
+    "configVersion": 2,
+    "autostartAgents": false,
+    "checkouts": [],
+    "terminal": "builtin",
+    "konsoleProfile": "Breeze Dark",
+    "terminalScrollback": 5000
+}

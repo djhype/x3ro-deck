@@ -27,9 +27,7 @@
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSet>
-#include <QSettings>
 #include <QSignalBlocker>
-#include <QStandardPaths>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QUrl>
@@ -220,27 +218,6 @@ QString slug(const QString &label, const QSet<QString> &taken)
         id = QStringLiteral("%1-%2").arg(base).arg(n);
     }
     return id;
-}
-
-QStringList konsoleProfiles()
-{
-    QStringList names;
-    const QStringList dirs
-        = QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, QStringLiteral("konsole"), QStandardPaths::LocateDirectory);
-    for (const QString &dir : dirs) {
-        const QFileInfoList files = QDir(dir).entryInfoList({QStringLiteral("*.profile")}, QDir::Files);
-        for (const QFileInfo &file : files) {
-            QString name = QSettings(file.filePath(), QSettings::IniFormat).value(QStringLiteral("General/Name")).toString();
-            if (name.isEmpty()) {
-                name = file.completeBaseName();
-            }
-            if (!names.contains(name)) {
-                names.append(name);
-            }
-        }
-    }
-    names.sort(Qt::CaseInsensitive);
-    return names;
 }
 } // namespace
 
@@ -1024,13 +1001,6 @@ QWidget *SettingsDialog::buildGeneralPage()
     m_autostart->setChecked(m_root.value(QStringLiteral("autostartAgents")).toBool(true));
     m_notifyDone = new QCheckBox(QStringLiteral("Notify when an agent finishes and waits for you"));
     m_notifyDone->setChecked(m_root.value(QStringLiteral("notifyOnDone")).toBool(true));
-    m_konsoleProfile = new QComboBox;
-    m_konsoleProfile->setEditable(true);
-    m_konsoleProfile->addItem(QString());
-    m_konsoleProfile->addItems(konsoleProfiles());
-    m_konsoleProfile->lineEdit()->setPlaceholderText(QStringLiteral("Konsole's default profile"));
-    m_konsoleProfile->setCurrentText(m_root.value(QStringLiteral("konsoleProfile")).toString());
-    m_konsoleProfile->setMinimumWidth(280);
 
     // Probing the sources reads a few small files; the dialog keeps its own
     // registry and never watches them.
@@ -1062,11 +1032,9 @@ QWidget *SettingsDialog::buildGeneralPage()
 
     auto *terminals = form();
     addField(terminals, QStringLiteral("Import settings from"), m_terminalSource,
-             hint(QStringLiteral("The built-in terminal takes the colors, font, cursor, scrollback and shell from this terminal's "
-                                 "profile, and follows changes to it.")));
+             hint(QStringLiteral("The terminals take the colors, font, cursor, scrollback and shell from this terminal's "
+                                 "profile, and follow changes to it.")));
     addField(terminals, QStringLiteral("Profile"), m_terminalProfile);
-    addField(terminals, QStringLiteral("Konsole profile"), m_konsoleProfile,
-             hint(QStringLiteral("Used by embedded Konsole terminals opened from now on.")));
 
     auto *page = new QWidget;
     auto *layout = new QVBoxLayout(page);
@@ -1192,7 +1160,6 @@ QJsonObject SettingsDialog::config() const
 
     root.insert(QStringLiteral("autostartAgents"), m_autostart->isChecked());
     root.insert(QStringLiteral("notifyOnDone"), m_notifyDone->isChecked());
-    root.insert(QStringLiteral("konsoleProfile"), m_konsoleProfile->currentText().trimmed());
     root.insert(QStringLiteral("terminalSettings"), m_terminalSource->currentData().toString());
     root.insert(QStringLiteral("terminalProfile"), m_terminalProfile->currentData().toString());
     return root;

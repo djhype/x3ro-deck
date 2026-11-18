@@ -22,6 +22,7 @@ private Q_SLOTS:
     void v0FileIsUpgradedWithBackup();
     void newerFileIsLeftAloneWithWarning();
     void v1ComposeCommandsUseThePlaceholder();
+    void v2DropsTheKonsoleKeys();
     void freshInstallWritesCurrentVersion();
     void savingStampsTheVersion();
 
@@ -155,6 +156,19 @@ void ConfigMigrationsTest::v1ComposeCommandsUseThePlaceholder()
     QCOMPARE(c.composeDown, QStringLiteral("make down"));
     QCOMPARE(c.composeRestart, QStringLiteral("{compose} restart"));
     QCOMPARE(c.composeBinary, QStringLiteral("docker compose"));
+}
+
+void ConfigMigrationsTest::v2DropsTheKonsoleKeys()
+{
+    installFixture(QStringLiteral("config-v2.json"));
+    QString error;
+    Config::load(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QVERIFY(QFile::exists(configFile() + QStringLiteral(".v2.bak")));
+    const QJsonObject written = QJsonDocument::fromJson(read(configFile())).object();
+    QVERIFY(!written.contains(QStringLiteral("terminal")));
+    QVERIFY(!written.contains(QStringLiteral("konsoleProfile")));
+    QCOMPARE(written.value(QStringLiteral("terminalScrollback")).toInt(), 5000);
 }
 
 void ConfigMigrationsTest::freshInstallWritesCurrentVersion()

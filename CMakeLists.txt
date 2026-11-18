@@ -104,9 +104,6 @@ target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-ses
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)
-    find_package(KF6Parts REQUIRED)
-    find_package(KF6CoreAddons REQUIRED)
-    find_package(KF6XmlGui REQUIRED)
     find_package(KF6Notifications REQUIRED)
     find_package(KF6StatusNotifierItem 6.5 REQUIRED) # quitRequested/abortQuit
     find_package(KF6GlobalAccel REQUIRED)
@@ -123,7 +120,7 @@ if(NOT X3RO_DECK_CORE_ONLY)
     target_link_libraries(x3ro-deck PRIVATE
         x3ro-deck-base
         Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
-        KF6::Parts KF6::CoreAddons KF6::XmlGui KF6::Notifications KF6::StatusNotifierItem
+        KF6::Notifications KF6::StatusNotifierItem
         KF6::GlobalAccel KF6::DBusAddons KF6::WindowSystem
     )
 endif()
