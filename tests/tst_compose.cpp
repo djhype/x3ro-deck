@@ -110,6 +110,49 @@ private Q_SLOTS:
         app.select(1);
         QVERIFY(!app.current().value(QStringLiteral("composeFound")).toBool());
     }
+
+    // Two worktrees of one repo and stacks started from a terminal: the
+    // labels compose writes decide, not the project name.
+    void labelsPickTheCheckout()
+    {
+        QTemporaryDir tmp;
+        qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());
+        qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
+        qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
+        QVERIFY(QDir().mkpath(tmp.filePath(QStringLiteral("x3ro-deck"))));
+        const QString main = tmp.filePath(QStringLiteral("main/App"));
+        const QString wt = tmp.filePath(QStringLiteral("wt/App"));
+        const QString solo = tmp.filePath(QStringLiteral("Solo.Dir"));
+        for (const QString &d : {main, wt, solo, main + QStringLiteral("/sub")}) {
+            QVERIFY(QDir().mkpath(d));
+        }
+        QJsonArray checkouts;
+        for (const auto &[name, path] : {std::pair{"main", main}, std::pair{"wt", wt}, std::pair{"solo", solo}}) {
+            checkouts.append(QJsonObject{{QStringLiteral("name"), QLatin1String(name)}, {QStringLiteral("path"), path}});
+        }
+        QVERIFY(Config::writeJson(QJsonObject{{QStringLiteral("checkouts"), checkouts}}));
+        AppController app;
+        auto container = [](const QString &project, const QString &dir, const QStringList &files = {}) {
+            ContainerInfo ci;
+            ci.project = project;
+            ci.workingDir = dir;
+            ci.configFiles = files;
+            return ci;
+        };
+        // Both worktrees run the default project "app"; working_dir tells them apart.
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("app"), main)), 0);
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("app"), wt)), 1);
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("app"), main + QStringLiteral("/"))), 0);
+        // A project rooted in a subdirectory is not the checkout's.
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("sub"), main + QStringLiteral("/sub"))), -1);
+        // --project-directory elsewhere: the compose file says where it came from.
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("x"), tmp.path(), {wt + QStringLiteral("/compose.yml")})), 1);
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("x"), tmp.path())), -1);
+        // No labels at all: the project name, when only one checkout gives it.
+        QCOMPARE(AppController::defaultProjectName(solo), QStringLiteral("solodir"));
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("solodir"), QString())), 2);
+        QCOMPARE(app.checkoutForContainer(container(QStringLiteral("app"), QString())), -1);
+    }
 };
 
 QTEST_GUILESS_MAIN(ComposeTest)

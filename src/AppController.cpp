@@ -584,6 +584,62 @@ QString AppController::expand(int index, const QString &command) const
     return out;
 }
 
+QString AppController::defaultProjectName(const QString &dir)
+{
+    QString out;
+    for (const QChar ch : QFileInfo(dir).fileName().toLower()) {
+        if ((ch >= QLatin1Char('a') && ch <= QLatin1Char('z')) || ch.isDigit() || ch == QLatin1Char('_') || ch == QLatin1Char('-')) {
+            out += ch;
+        }
+    }
+    return out;
+}
+
+// In order: a checkout whose settings name the container's project; the
+// checkout rooted exactly at the project's working_dir; the one holding its
+// first compose file (for --project-directory elsewhere); and, only for containers without those labels (older
+// compose), the one checkout whose folder gives the same default project
+// name. Projects rooted in a checkout's subdirectory belong to none, and a
+// checkout that names its project takes no others.
+int AppController::checkoutForContainer(const ContainerInfo &ci) const
+{
+    for (int i = 0; i < m_checkouts.size(); ++i) {
+        if (!m_checkouts[i].cfg.composeProject.isEmpty() && ci.project == m_checkouts[i].cfg.composeProject) {
+            return i;
+        }
+    }
+    auto rootedAt = [this](const QString &dir) {
+        const QString path = Paths::normalize(dir);
+        for (int i = 0; i < m_checkouts.size(); ++i) {
+            if (m_checkouts[i].cfg.composeProject.isEmpty() && Paths::same(m_checkouts[i].cfg.path, path)) {
+                return i;
+            }
+        }
+        return -1;
+    };
+    if (!ci.workingDir.isEmpty()) {
+        if (const int i = rootedAt(ci.workingDir); i >= 0) {
+            return i;
+        }
+    }
+    if (!ci.configFiles.isEmpty()) {
+        return rootedAt(QFileInfo(ci.configFiles.first()).absolutePath());
+    }
+    if (!ci.workingDir.isEmpty()) {
+        return -1;
+    }
+    int found = -1;
+    for (int i = 0; i < m_checkouts.size(); ++i) {
+        if (m_checkouts[i].cfg.composeProject.isEmpty() && defaultProjectName(m_checkouts[i].cfg.path) == ci.project) {
+            if (found >= 0) {
+                return -1; // two checkouts share the name; neither is sure
+            }
+            found = i;
+        }
+    }
+    return found;
+}
+
 int AppController::checkoutForPath(const QString &path) const
 {
     int best = -1;
@@ -609,22 +665,9 @@ void AppController::onContainers(const QList<ContainerInfo> &containers)
     }
     QSet<QString> liveIssues;
     for (const ContainerInfo &ci : containers) {
-        // A checkout with a project name set takes that project's containers,
-        // wherever they run.
-        int idx = -1;
-        for (int i = 0; i < m_checkouts.size() && idx < 0; ++i) {
-            if (!m_checkouts[i].cfg.composeProject.isEmpty() && ci.project == m_checkouts[i].cfg.composeProject) {
-                idx = i;
-            }
-        }
+        const int idx = checkoutForContainer(ci);
         if (idx < 0) {
-            const QString dir = Paths::normalize(ci.workingDir);
-            idx = checkoutForPath(dir);
-            // Only compose projects rooted exactly at a checkout, not ones in
-            // subdirectories, and only its own project when it names one.
-            if (idx < 0 || !Paths::same(m_checkouts[idx].cfg.path, dir) || !m_checkouts[idx].cfg.composeProject.isEmpty()) {
-                continue;
-            }
+            continue;
         }
         m_checkouts[idx].containers.append(ci);
         m_checkouts[idx].project = ci.project;

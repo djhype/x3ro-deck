@@ -210,6 +210,15 @@ private:
     void onPr(const QString &key, const PrInfo &info);
 
     int checkoutForPath(const QString &path) const;
+
+public:
+    // The checkout a container belongs to, or -1 (see the definition).
+    int checkoutForContainer(const ContainerInfo &ci) const;
+    // Compose's default project name for a folder: its name, lowercased,
+    // with only a-z, 0-9, _ and - kept.
+    static QString defaultProjectName(const QString &dir);
+
+private:
     void setAgentState(int index, const QString &state);
     void useProfile(int index, const QString &id);
     void rebuildServices(int index);

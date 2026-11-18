@@ -23,6 +23,7 @@ struct ContainerInfo
     QString project;
     QString service;
     QString workingDir;
+    QStringList configFiles; // compose files the project was started with, absolute
     QString state; // docker State: running, exited, restarting, …
     QString status; // docker Status: "Up 27 minutes (healthy)"
     QString health; // derived: healthy | running | starting | unhealthy | exited | restarting | other

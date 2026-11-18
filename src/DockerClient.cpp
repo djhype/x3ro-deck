@@ -42,6 +42,8 @@ ContainerInfo parseContainer(const QJsonObject &o)
     c.project = labels.value(QStringLiteral("com.docker.compose.project")).toString();
     c.service = labels.value(QStringLiteral("com.docker.compose.service")).toString(c.name);
     c.workingDir = labels.value(QStringLiteral("com.docker.compose.project.working_dir")).toString();
+    c.configFiles
+        = labels.value(QStringLiteral("com.docker.compose.project.config_files")).toString().split(QLatin1Char(','), Qt::SkipEmptyParts);
     c.state = o.value(QStringLiteral("State")).toString();
     c.status = o.value(QStringLiteral("Status")).toString();
 
