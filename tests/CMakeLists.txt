@@ -86,3 +86,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_test(NAME notifier COMMAND dbus-run-session -- $<TARGET_FILE:tst_notifier>)
     set_tests_properties(notifier PROPERTIES TIMEOUT 120)
 endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Talks to a fake GlobalShortcuts portal on a private session bus.
+    add_executable(tst_globalhotkey tst_globalhotkey.cpp)
+    x3ro_deck_set_warnings(tst_globalhotkey)
+    target_link_libraries(tst_globalhotkey PRIVATE x3ro-deck-base Qt6::Test Qt6::DBus)
+    add_test(NAME globalhotkey COMMAND dbus-run-session -- $<TARGET_FILE:tst_globalhotkey>)
+    set_tests_properties(globalhotkey PROPERTIES TIMEOUT 120)
+endif()

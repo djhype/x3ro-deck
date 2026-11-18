@@ -71,10 +71,10 @@ target_link_libraries(x3ro-deck-attach PRIVATE x3ro-deck-sessionproto)
 # Desktop integration backends, one set per OS.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(Qt6 6.4 REQUIRED COMPONENTS DBus)
-    set(X3RO_DECK_DESKTOP_PLATFORM src/FreedesktopNotifier.cpp)
+    set(X3RO_DECK_DESKTOP_PLATFORM src/FreedesktopNotifier.cpp src/PortalGlobalHotkey.cpp)
     set(X3RO_DECK_DESKTOP_LIBS Qt6::DBus)
 else()
-    set(X3RO_DECK_DESKTOP_PLATFORM src/NotifierNone.cpp)
+    set(X3RO_DECK_DESKTOP_PLATFORM src/NotifierNone.cpp src/GlobalHotkeyNone.cpp)
     set(X3RO_DECK_DESKTOP_LIBS)
 endif()
 
@@ -104,6 +104,7 @@ add_library(x3ro-deck-base STATIC
     src/SingleInstance.cpp
     src/TrayIcon.cpp
     src/Notifier.h
+    src/GlobalHotkey.h
     ${X3RO_DECK_DESKTOP_PLATFORM}
     src/TerminalProfile.cpp
     src/TerminalSettingsSource.cpp
@@ -118,7 +119,6 @@ target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-ses
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)
-    find_package(KF6GlobalAccel REQUIRED)
     find_package(KF6WindowSystem REQUIRED)
 
     add_executable(x3ro-deck
@@ -131,7 +131,7 @@ if(NOT X3RO_DECK_CORE_ONLY)
     target_link_libraries(x3ro-deck PRIVATE
         x3ro-deck-base
         Qt6::Quick Qt6::QuickWidgets Qt6::Qml Qt6::DBus
-        KF6::GlobalAccel KF6::WindowSystem
+        KF6::WindowSystem
     )
 endif()
 

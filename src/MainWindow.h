@@ -7,6 +7,7 @@
 #include <QPointer>
 
 class AppController;
+class GlobalHotkey;
 class Notifier;
 class QQmlEngine;
 class QQuickWidget;
@@ -70,6 +71,7 @@ private:
     QHash<int, TerminalHost *> m_agentTerms;
     TrayIcon *m_tray = nullptr;
     Notifier *m_notifier = nullptr;
+    GlobalHotkey *m_hotkeys = nullptr;
     QPointer<SettingsDialog> m_settings;
     bool m_quitting = false;
     bool m_confirmingQuit = false;

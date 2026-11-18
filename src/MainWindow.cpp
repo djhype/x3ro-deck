@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AppController.h"
+#include "GlobalHotkey.h"
 #include "Notifier.h"
 #include "SettingsDialog.h"
 #include "TerminalHost.h"
@@ -8,7 +9,6 @@
 #include "TerminalSettings.h"
 #include "TrayIcon.h"
 
-#include <KGlobalAccel>
 #include <KWindowSystem>
 
 #include <QAction>
@@ -233,12 +233,19 @@ void MainWindow::buildShortcuts()
         }
     });
     add(QKeySequence(Qt::CTRL | Qt::Key_Q), [this] { confirmQuit(); });
+    // Also in the window, for desktops without the global shortcuts portal.
+    const QKeySequence toggle(Qt::META | Qt::ALT | Qt::Key_H);
+    add(toggle, [this] { toggleVisible(); });
     TerminalHost::setAppShortcuts(keys);
 
-    auto *toggle = new QAction(QStringLiteral("Show/hide X3RO Deck"), this);
-    toggle->setObjectName(QStringLiteral("toggle-window"));
-    connect(toggle, &QAction::triggered, this, &MainWindow::toggleVisible);
-    KGlobalAccel::setGlobalShortcut(toggle, QKeySequence(Qt::META | Qt::ALT | Qt::Key_H));
+    m_hotkeys = GlobalHotkey::create(this);
+    m_hotkeys->add(QStringLiteral("toggle-window"), QStringLiteral("Show/hide X3RO Deck"), toggle);
+    connect(m_hotkeys, &GlobalHotkey::activated, this, [this](const QString &id, const QString &) {
+        if (id == QLatin1String("toggle-window")) {
+            toggleVisible();
+        }
+    });
+    m_hotkeys->start();
 }
 
 void MainWindow::buildTray()
