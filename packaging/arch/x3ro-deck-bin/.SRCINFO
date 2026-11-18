@@ -1,0 +1,25 @@
+pkgbase = x3ro-deck-bin
+	pkgdesc = Desktop cockpit for coding agents and their Docker Compose stacks (release build)
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/x3ro/x3ro-deck
+	arch = x86_64
+	license = GPL-3.0-or-later
+	depends = qt6-base
+	depends = qt6-declarative
+	depends = libvterm
+	depends = hicolor-icon-theme
+	depends = glibc
+	depends = gcc-libs
+	depends = libxcb
+	optdepends = tmux: the tmux session backend
+	optdepends = docker: the Docker panel
+	optdepends = docker-compose: compose commands
+	optdepends = github-cli: pull request status
+	optdepends = git: branch and worktree display
+	provides = x3ro-deck=0.1.0
+	conflicts = x3ro-deck
+	source = x3ro-deck-0.1.0-linux-x86_64.tar.gz::https://github.com/x3ro/x3ro-deck/releases/download/v0.1.0/x3ro-deck-0.1.0-linux-x86_64.tar.gz
+	sha256sums = SKIP
+
+pkgname = x3ro-deck-bin

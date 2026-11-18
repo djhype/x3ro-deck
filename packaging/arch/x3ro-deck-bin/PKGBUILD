@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Maintainer: x3ro
+
+# Repackages the Linux release build (a tarball of `cmake --install` into
+# /usr, built by the release workflow).
+pkgname=x3ro-deck-bin
+_pkgname=x3ro-deck
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Desktop cockpit for coding agents and their Docker Compose stacks (release build)'
+arch=('x86_64')
+url='https://github.com/x3ro/x3ro-deck'
+license=('GPL-3.0-or-later')
+depends=('qt6-base' 'qt6-declarative' 'libvterm' 'hicolor-icon-theme' 'glibc' 'gcc-libs' 'libxcb')
+optdepends=('tmux: the tmux session backend'
+            'docker: the Docker panel'
+            'docker-compose: compose commands'
+            'github-cli: pull request status'
+            'git: branch and worktree display')
+provides=("$_pkgname=$pkgver")
+conflicts=("$_pkgname")
+source=("$_pkgname-$pkgver-linux-x86_64.tar.gz::$url/releases/download/v$pkgver/$_pkgname-$pkgver-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cp -a usr "$pkgdir/"
+    install -Dm644 "usr/share/doc/$_pkgname/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

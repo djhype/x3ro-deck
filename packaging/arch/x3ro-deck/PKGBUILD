@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 x3ro
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Maintainer: x3ro
+
+pkgname=x3ro-deck
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Desktop cockpit for coding agents and their Docker Compose stacks'
+arch=('x86_64' 'aarch64')
+url='https://github.com/x3ro/x3ro-deck'
+license=('GPL-3.0-or-later')
+depends=('qt6-base' 'qt6-declarative' 'libvterm' 'hicolor-icon-theme' 'glibc' 'gcc-libs' 'libxcb')
+makedepends=('cmake' 'ninja' 'pkgconf')
+checkdepends=('tmux')
+optdepends=('tmux: the tmux session backend'
+            'docker: the Docker panel'
+            'docker-compose: compose commands'
+            'github-cli: pull request status'
+            'git: branch and worktree display')
+conflicts=('x3ro-deck-bin')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cmake -S "$pkgname-$pkgver" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=None \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DBUILD_TESTING=OFF \
+        -Wno-dev
+    cmake --build build
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+    install -Dm644 "$pkgname-$pkgver/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 "$pkgname-$pkgver/TRADEMARKS.md" "$pkgdir/usr/share/licenses/$pkgname/TRADEMARKS.md"
+}
