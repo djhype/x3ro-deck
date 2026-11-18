@@ -20,7 +20,11 @@
 #include <vector>
 
 #include <fcntl.h>
+#if defined(Q_OS_MACOS)
+#include <util.h>
+#else
 #include <pty.h>
+#endif
 #include <pwd.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>

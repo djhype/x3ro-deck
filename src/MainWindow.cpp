@@ -312,6 +312,12 @@ void MainWindow::buildTray()
     // Queued: the prompt must not run inside the tray menu's activation.
     connect(m_tray, &TrayIcon::quitRequested, this, &MainWindow::confirmQuit, Qt::QueuedConnection);
     connect(m_tray, &TrayIcon::aboutRequested, this, &MainWindow::openAbout, Qt::QueuedConnection);
+    // The stand-in for notifications: a click opens the item, as a body click would.
+    connect(m_tray, &TrayIcon::messageClicked, this, [this] {
+        if (!m_trayMessageItem.isEmpty()) {
+            onNotificationAction(std::exchange(m_trayMessageItem, QString()), Notifier::defaultAction());
+        }
+    });
     m_tray->show();
 }
 
@@ -750,6 +756,11 @@ void MainWindow::notify(const QVariantMap &item)
     if (kind == QLatin1String("permission")) {
         n.urgency = Notifier::Urgency::Critical;
         n.actions = {{QStringLiteral("allow"), QStringLiteral("Allow")}, {QStringLiteral("deny"), QStringLiteral("Deny")}};
+    }
+    if (!m_notifier->isNative() && m_tray) {
+        m_trayMessageItem = id;
+        m_tray->showMessage(n.title, n.body);
+        return;
     }
     m_notifier->show(n, id);
 }

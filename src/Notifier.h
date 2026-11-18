@@ -33,6 +33,8 @@ public:
 
     // The platform's backend, or one that shows nothing.
     static Notifier *create(QObject *parent = nullptr);
+    // false for the stand-in that shows nothing; the tray shows a plain message instead.
+    virtual bool isNative() const { return true; }
 
     using QObject::QObject;
     virtual void show(const Notification &notification, const QString &tag) = 0;

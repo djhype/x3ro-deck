@@ -1,5 +1,7 @@
 #include "PtyChannel.h"
 
+#include "ProcessInfo.h"
+
 #include <QFile>
 #include <QFileInfo>
 #include <QProcessEnvironment>
@@ -12,7 +14,11 @@
 #include <cstring>
 #include <fcntl.h>
 #include <memory>
+#if defined(Q_OS_MACOS)
+#include <util.h>
+#else
 #include <pty.h>
+#endif
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -204,11 +210,8 @@ QString PtyChannel::foregroundProcessName() const
     if (pgrp <= 0) {
         return {};
     }
-    QFile comm(QStringLiteral("/proc/%1/comm").arg(pgrp));
-    if (!comm.open(QIODevice::ReadOnly)) {
-        return {};
-    }
-    return QString::fromLocal8Bit(comm.readAll()).trimmed();
+    const std::optional<ProcessInfo::Process> p = ProcessInfo::process(pgrp);
+    return p ? p->comm : QString();
 }
 
 void PtyChannel::hangUp()

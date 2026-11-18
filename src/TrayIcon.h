@@ -29,11 +29,14 @@ public:
 
     // `base` with a filled circle in the bottom-right corner.
     static QIcon withBadge(const QIcon &base, const QColor &color);
+    // A plain balloon, where the OS has no notification backend yet.
+    void showMessage(const QString &title, const QString &body);
 
 Q_SIGNALS:
     void toggleRequested();
     void quitRequested();
     void aboutRequested();
+    void messageClicked();
 
 private:
     QIcon m_icon;

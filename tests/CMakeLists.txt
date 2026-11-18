@@ -14,7 +14,7 @@ set_tests_properties(sessionflow-daemon PROPERTIES TIMEOUT 120 ENVIRONMENT
 
 add_executable(tst_sessiond tst_sessiond.cpp)
 x3ro_deck_set_warnings(tst_sessiond)
-target_link_libraries(tst_sessiond PRIVATE x3ro-deck-base Qt6::Test util)
+target_link_libraries(tst_sessiond PRIVATE x3ro-deck-base Qt6::Test ${X3RO_DECK_PTY_LIBS})
 target_compile_definitions(tst_sessiond PRIVATE X3RO_DECK_ATTACH_PATH="$<TARGET_FILE:x3ro-deck-attach>")
 add_dependencies(tst_sessiond x3ro-deck-sessiond x3ro-deck-attach)
 add_test(NAME sessiond COMMAND tst_sessiond)

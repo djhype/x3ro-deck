@@ -31,6 +31,13 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(vterm REQUIRED IMPORTED_TARGET vterm>=0.3)
 
+# forkpty: libutil on Linux, libSystem on macOS.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(X3RO_DECK_PTY_LIBS util)
+else()
+    set(X3RO_DECK_PTY_LIBS)
+endif()
+
 # The x3ro-deck-sessiond wire protocol and the attach client: QtCore only.
 add_library(x3ro-deck-sessionproto STATIC
     src/SessiondProtocol.cpp
@@ -61,7 +68,7 @@ target_link_libraries(x3ro-deck-sessionscreen PUBLIC Qt6::Core PkgConfig::vterm)
 # Owns agent PTYs so agents outlive the GUI (sessionBackend "daemon").
 add_executable(x3ro-deck-sessiond sessiond/main.cpp sessiond/Daemon.cpp)
 x3ro_deck_set_warnings(x3ro-deck-sessiond)
-target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Network util)
+target_link_libraries(x3ro-deck-sessiond PRIVATE x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Network ${X3RO_DECK_PTY_LIBS})
 
 # `x3ro-deck attach` without the GUI's libraries; the agent terminals run it.
 add_executable(x3ro-deck-attach attach/main.cpp)
@@ -139,7 +146,7 @@ add_library(x3ro-deck-base STATIC
 )
 x3ro_deck_set_warnings(x3ro-deck-base)
 target_include_directories(x3ro-deck-base PUBLIC src common)
-target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util ${X3RO_DECK_DESKTOP_LIBS})
+target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm ${X3RO_DECK_PTY_LIBS} ${X3RO_DECK_DESKTOP_LIBS})
 target_compile_definitions(x3ro-deck-base PRIVATE X3RO_DECK_HAVE_XCB=$<BOOL:${xcb_FOUND}>)
 # The theme and the style sheet templates it fills; tests read them too.
 qt_add_resources(x3ro-deck-base theme
@@ -167,12 +174,20 @@ target_compile_definitions(x3ro-deck-base PRIVATE X3RO_DECK_VERSION="${PROJECT_V
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)
 
-    add_executable(x3ro-deck
+    add_executable(x3ro-deck MACOSX_BUNDLE
         src/main.cpp
         src/MainWindow.cpp
         src/TerminalHost.cpp
         resources.qrc
     )
+    if(APPLE)
+        # life.x3ro.deck.app with its icon; the helpers live next to the app
+        # binary in Contents/MacOS, where it looks for them.
+        configure_file(data/macos/Info.plist.in ${CMAKE_CURRENT_BINARY_DIR}/Info.plist @ONLY)
+        target_sources(x3ro-deck PRIVATE data/icons/x3ro-deck.icns)
+        set_source_files_properties(data/icons/x3ro-deck.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+        set_target_properties(x3ro-deck PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_BINARY_DIR}/Info.plist OUTPUT_NAME x3ro-deck)
+    endif()
     x3ro_deck_set_warnings(x3ro-deck)
     target_link_libraries(x3ro-deck PRIVATE
         x3ro-deck-base
@@ -187,16 +202,27 @@ x3ro_deck_set_warnings(x3ro-deck-hook)
 target_include_directories(x3ro-deck-hook PRIVATE common)
 target_compile_options(x3ro-deck-hook PRIVATE $<IF:$<BOOL:${MSVC}>,/O2,-O2>)
 
+if(APPLE AND NOT X3RO_DECK_CORE_ONLY)
+    set_target_properties(x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/x3ro-deck.app/Contents/MacOS)
+endif()
+
 option(BUILD_TESTING "Build the tests" ON)
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
 endif()
 
-if(NOT X3RO_DECK_CORE_ONLY)
-    install(TARGETS x3ro-deck RUNTIME DESTINATION bin)
+if(APPLE AND NOT X3RO_DECK_CORE_ONLY)
+    # One bundle in ~/Applications (or the prefix's Applications), helpers inside.
+    install(TARGETS x3ro-deck BUNDLE DESTINATION Applications)
+    install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION Applications/x3ro-deck.app/Contents/MacOS)
+else()
+    if(NOT X3RO_DECK_CORE_ONLY)
+        install(TARGETS x3ro-deck RUNTIME DESTINATION bin)
+    endif()
+    install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
 endif()
-install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
 if(UNIX AND NOT APPLE)
     # Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually
     # comes from a shell rc file that only terminals read.

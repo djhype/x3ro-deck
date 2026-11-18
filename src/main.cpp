@@ -4,6 +4,7 @@
 #include "SingleInstance.h"
 
 #include <QApplication>
+#include <QFileInfo>
 #include <QProcess>
 #include <QTimer>
 
@@ -16,6 +17,18 @@ int main(int argc, char *argv[])
     if (argc > 1 && qstrcmp(argv[1], "attach") == 0) {
         return runAttach(argc - 1, argv + 1);
     }
+
+#if defined(Q_OS_MACOS)
+    // Finder and the Dock start apps with launchd's PATH, which lacks
+    // Homebrew, where tmux, gh and docker usually live.
+    QStringList path = qEnvironmentVariable("PATH").split(QLatin1Char(':'), Qt::SkipEmptyParts);
+    for (const char *dir : {"/opt/homebrew/bin", "/usr/local/bin"}) {
+        if (!path.contains(QLatin1String(dir)) && QFileInfo(QLatin1String(dir)).isDir()) {
+            path.append(QLatin1String(dir));
+        }
+    }
+    qputenv("PATH", path.join(QLatin1Char(':')).toLocal8Bit());
+#endif
 
     // Qt's platform plugins consume these while the application starts.
     const QString token = qEnvironmentVariable("XDG_ACTIVATION_TOKEN", qEnvironmentVariable("DESKTOP_STARTUP_ID"));

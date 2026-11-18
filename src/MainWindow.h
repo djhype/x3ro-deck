@@ -65,6 +65,7 @@ private:
     void selectTheme();
     void applyShortcuts();
     QHash<QString, QAction *> m_shortcuts;
+    QString m_trayMessageItem; // the attention item the last tray message shows
     // Quits after asking whether the agent sessions should stop too.
     void confirmQuit();
     void restart();

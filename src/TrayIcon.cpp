@@ -11,6 +11,11 @@ namespace
 const QColor kAttention(0xf5, 0xa6, 0x23);
 } // namespace
 
+void TrayIcon::showMessage(const QString &title, const QString &body)
+{
+    m_tray->showMessage(title, body, m_icon);
+}
+
 TrayIcon::TrayIcon(const QIcon &icon, QObject *parent)
     : QObject(parent)
     , m_icon(icon)
@@ -24,6 +29,7 @@ TrayIcon::TrayIcon(const QIcon &icon, QObject *parent)
             &TrayIcon::aboutRequested);
     m_quit = m_menu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), QStringLiteral("Quit"));
     connect(m_toggle, &QAction::triggered, this, &TrayIcon::toggleRequested);
+    connect(m_tray, &QSystemTrayIcon::messageClicked, this, &TrayIcon::messageClicked);
     connect(m_quit, &QAction::triggered, this, &TrayIcon::quitRequested);
     m_tray->setContextMenu(m_menu);
     connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {

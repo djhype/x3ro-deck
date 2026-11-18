@@ -17,11 +17,11 @@ jobs:
             runner: ubuntu-latest
             container: archlinux:latest
             preset: linux
-          # The bring-up tickets enable these:
-          # - name: macos
-          #   runner: macos-latest
-          #   container: ''
-          #   preset: macos
+          - name: macos
+            runner: macos-latest
+            container: ''
+            preset: macos
+          # The Windows bring-up ticket enables this:
           # - name: windows
           #   runner: windows-latest
           #   container: ''
@@ -42,7 +42,12 @@ jobs:
         if: matrix.name == 'linux'
         run: scripts/ci-linux-deps.sh
 
+      - name: Install dependencies (macOS)
+        if: matrix.name == 'macos'
+        run: scripts/ci-macos-deps.sh
+
       - name: Check formatting
+        if: matrix.name == 'linux'
         run: scripts/check-format.sh
 
       - name: Configure
@@ -52,14 +57,33 @@ jobs:
         run: cmake --build --preset ${{ matrix.preset }}
 
       - name: Test
+        if: matrix.name != 'macos'
         run: ctest --test-dir build --output-on-failure --no-tests=ignore
+
+      # x3ro-deck-sessiond reaches macOS with its own ticket; until then its
+      # tests run on Linux only.
+      - name: Test (macOS)
+        if: matrix.name == 'macos'
+        run: ctest --test-dir build --output-on-failure --no-tests=ignore -E "^(sessiond|sessionflow-daemon|backendswitch)$"
+
+      - name: Smoke test (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          # Qt's config location on macOS is ~/Library/Preferences.
+          mkdir -p "$HOME/Library/Preferences/x3ro-deck"
+          printf '{"autostartAgents": false, "checkouts": [{"name": "deck", "path": "%s"}]}' "$GITHUB_WORKSPACE" > "$HOME/Library/Preferences/x3ro-deck/config.json"
+          TMUX_TMPDIR="$RUNNER_TEMP" X3RO_DECK_SOCKET="$RUNNER_TEMP/deck.sock" \
+            X3RO_DECK_INSTANCE_SOCKET="$RUNNER_TEMP/instance.sock" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
+            build/x3ro-deck.app/Contents/MacOS/x3ro-deck --tab agents --select 0 --screenshot smoke-macos.png 8000 2>&1 | tee smoke.log
+          test -s smoke-macos.png
+          ! grep -E "qrc:/qml/.*(Error|error|TypeError|ReferenceError)" smoke.log
 
       - name: Smoke test
         if: matrix.name == 'linux'
         run: scripts/smoke-test.sh build/x3ro-deck smoke-${{ matrix.name }}.png
 
       - name: Upload screenshot
-        if: always() && matrix.name == 'linux'
+        if: always() && matrix.name != 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: screenshot-${{ matrix.name }}
