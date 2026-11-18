@@ -367,7 +367,6 @@ Config Config::load(QString *error)
         CheckoutConfig cc;
         cc.name = o.value(QStringLiteral("name")).toString();
         cc.path = Paths::normalize(o.value(QStringLiteral("path")).toString());
-        cc.portOffset = o.value(QStringLiteral("portOffset")).toInt();
         cc.agent = o.value(QStringLiteral("agent")).toString();
         cc.args = o.value(QStringLiteral("args")).toString().trimmed();
         const QJsonObject compose = o.value(QStringLiteral("compose")).toObject();

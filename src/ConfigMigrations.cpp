@@ -62,6 +62,20 @@ const QList<Migration> &all()
             }
             return c;
         },
+        // v4 → v5: browser links come from the ports Docker publishes, so a
+        // checkout's hand-kept portOffset is gone.
+        [](QJsonObject c) {
+            QJsonArray checkouts = c.value(QStringLiteral("checkouts")).toArray();
+            for (QJsonValueRef v : checkouts) {
+                QJsonObject o = v.toObject();
+                o.remove(QStringLiteral("portOffset"));
+                v = o;
+            }
+            if (c.contains(QStringLiteral("checkouts"))) {
+                c.insert(QStringLiteral("checkouts"), checkouts);
+            }
+            return c;
+        },
     };
     return migrations;
 }

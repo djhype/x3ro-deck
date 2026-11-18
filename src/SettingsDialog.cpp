@@ -354,7 +354,6 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     pathLayout->addWidget(m_checkoutPath, 1);
     pathLayout->addWidget(browse);
     m_checkoutPathWarning = hint(QString(), "warning");
-    m_checkoutOffset = numberEdit(65535);
     m_checkoutAgent = new QComboBox;
     m_checkoutArgs = lineEdit();
     m_checkoutArgs->setPlaceholderText(QStringLiteral("--name my-checkout"));
@@ -371,7 +370,6 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     addField(m_checkoutFields, QStringLiteral("Folder"), pathRow, hint(QStringLiteral("Where the agent and the compose commands run.")));
     m_checkoutFields->addWidget(m_checkoutPathWarning, nextRow(m_checkoutFields), 1);
     m_checkoutPathWarning->setContentsMargins(0, 0, 0, 8);
-    addField(m_checkoutFields, QStringLiteral("Port offset"), m_checkoutOffset, hint(QStringLiteral("Shown on the checkout's card.")));
     addField(m_checkoutFields, QStringLiteral("Agent"), m_checkoutAgent,
              hint(QStringLiteral("Starts whenever X3RO Deck creates the checkout's agent session: on the first launch, and on "
                                  "every launch after you stopped the agents when quitting. Switching agents in the session "
@@ -472,8 +470,6 @@ QWidget *SettingsDialog::buildCheckoutsPage()
             checkPath();
         }
     });
-    connect(m_checkoutOffset, &QLineEdit::textEdited, this,
-            [this](const QString &text) { editCheckout(QStringLiteral("portOffset"), text.toInt()); });
     connect(m_checkoutArgs, &QLineEdit::textEdited, this,
             [this](const QString &text) { editCheckout(QStringLiteral("args"), text.trimmed()); });
     connect(m_checkoutAgent, &QComboBox::activated, this, [this](int index) {
@@ -503,7 +499,6 @@ void SettingsDialog::loadCheckout(int row)
     const bool loading = std::exchange(m_loading, true);
     m_checkoutName->setText(c.value(QStringLiteral("name")).toString());
     m_checkoutPath->setText(c.value(QStringLiteral("path")).toString());
-    m_checkoutOffset->setText(QString::number(c.value(QStringLiteral("portOffset")).toInt()));
     m_checkoutAgent->setCurrentIndex(std::max(0, m_checkoutAgent->findData(c.value(QStringLiteral("agent")).toString())));
     m_checkoutArgs->setText(c.value(QStringLiteral("args")).toString());
     const QJsonObject compose = c.value(QStringLiteral("compose")).toObject();
@@ -616,18 +611,15 @@ void SettingsDialog::addCheckout()
         return;
     }
     QSet<QString> names;
-    int offset = 0;
     for (const QJsonObject &c : std::as_const(m_checkouts)) {
         names.insert(c.value(QStringLiteral("name")).toString());
-        offset = std::max(offset, c.value(QStringLiteral("portOffset")).toInt() + 10000);
     }
     const QString base = QFileInfo(dir).fileName();
     QString name = base;
     for (int n = 2; names.contains(name); ++n) {
         name = QStringLiteral("%1-%2").arg(base).arg(n);
     }
-    m_checkouts.append(
-        QJsonObject{{QStringLiteral("name"), name}, {QStringLiteral("path"), Paths::tilde(dir)}, {QStringLiteral("portOffset"), offset}});
+    m_checkouts.append(QJsonObject{{QStringLiteral("name"), name}, {QStringLiteral("path"), Paths::tilde(dir)}});
     m_checkoutList->addItem(name);
     m_checkoutList->setCurrentRow(static_cast<int>(m_checkouts.size()) - 1);
     m_checkoutName->setFocus();
@@ -1196,7 +1188,8 @@ QWidget *SettingsDialog::buildDockerPage()
     layout->addWidget(editable(m_quick, quickRow, setQuickRow), 3);
     layout->addSpacing(6);
     layout->addWidget(section(QStringLiteral("Links")));
-    layout->addWidget(hint(QStringLiteral("Each opens http://localhost on the port Docker published for the service's container port.")));
+    layout->addWidget(hint(QStringLiteral("Published ports that answer HTTP get a link by themselves, named after their service. Add one "
+                                          "here to name a port yourself; it opens http://localhost on the port Docker published for it.")));
     layout->addWidget(editable(m_links, linkRow, setLinkRow), 2);
     return page;
 }

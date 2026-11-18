@@ -350,6 +350,14 @@ Rectangle {
                         color: t.text
                         font.family: t.sans; font.pixelSize: 14; font.weight: Font.DemiBold
                     }
+                    Text {
+                        visible: app.links.length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Web ports of this checkout's running containers show up here."
+                        color: t.dim
+                        font.family: t.sans; font.pixelSize: 12
+                    }
                     Flow {
                         width: parent.width
                         spacing: 8

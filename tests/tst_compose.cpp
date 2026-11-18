@@ -4,11 +4,14 @@
 #include "ComposeFiles.h"
 #include "Config.h"
 #include "DockerClient.h"
+#include "PortProbe.h"
 
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -21,6 +24,24 @@ private:
     {
         QFile f(path);
         QVERIFY(f.open(QIODevice::WriteOnly));
+    }
+
+    // A TCP server that answers each connection with `reply` (or nothing).
+    static QTcpServer *serve(QObject *parent, const QByteArray &reply)
+    {
+        auto *server = new QTcpServer(parent);
+        server->listen(QHostAddress::LocalHost);
+        connect(server, &QTcpServer::newConnection, server, [server, reply] {
+            QTcpSocket *s = server->nextPendingConnection();
+            connect(s, &QTcpSocket::readyRead, s, [s, reply] {
+                s->readAll();
+                if (!reply.isEmpty()) {
+                    s->write(reply);
+                    s->disconnectFromHost();
+                }
+            });
+        });
+        return server;
     }
 
 private Q_SLOTS:
@@ -113,6 +134,61 @@ private Q_SLOTS:
 
     // Two worktrees of one repo and stacks started from a terminal: the
     // labels compose writes decide, not the project name.
+    void linksAreTheWebPorts()
+    {
+        QTemporaryDir tmp;
+        qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());
+        qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
+        qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
+        QVERIFY(QDir().mkpath(tmp.filePath(QStringLiteral("x3ro-deck"))));
+        const QString dir = tmp.filePath(QStringLiteral("stack"));
+        QVERIFY(QDir().mkpath(dir));
+        QVERIFY(Config::writeJson(
+            QJsonObject{{QStringLiteral("checkouts"),
+                         QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("s")}, {QStringLiteral("path"), dir}}}}}));
+        QObject servers;
+        const int web = serve(&servers, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")->serverPort();
+        const int api = serve(&servers, "HTTP/1.0 404 Not Found\r\n\r\n")->serverPort();
+        const int db = serve(&servers, QByteArray())->serverPort(); // Postgres says nothing to HTTP
+        const int redis = serve(&servers, "-ERR unknown command\r\n")->serverPort();
+
+        AppController app;
+        auto container = [&](const QString &service, int privatePort, int publicPort, const QString &state = QStringLiteral("running")) {
+            ContainerInfo ci;
+            ci.id = service;
+            ci.project = QStringLiteral("stack");
+            ci.service = service;
+            ci.workingDir = dir;
+            ci.state = state;
+            ci.ports = {PortMapping{privatePort, publicPort}};
+            return ci;
+        };
+        auto labels = [&app] {
+            QStringList out;
+            for (const QVariant &l : app.links()) {
+                out << l.toMap().value(QStringLiteral("label")).toString();
+            }
+            return out;
+        };
+        const QList<ContainerInfo> all{container(QStringLiteral("web"), 80, web), container(QStringLiteral("api"), 3000, api),
+                                       container(QStringLiteral("postgres"), 5432, db), container(QStringLiteral("redis"), 6379, redis)};
+        Q_EMIT app.docker()->containersUpdated(all);
+        QTRY_COMPARE_WITH_TIMEOUT(labels(), (QStringList{QStringLiteral("api"), QStringLiteral("web")}), 3000);
+        QCOMPARE(app.links().last().toMap().value(QStringLiteral("port")).toInt(), web);
+        // Postgres's probe times out; it must still be absent after that.
+        QTest::qWait(PortProbe::kTimeoutMs + 200);
+        QCOMPARE(labels(), (QStringList{QStringLiteral("api"), QStringLiteral("web")}));
+
+        // web stops: its link goes; it starts again: the link is back.
+        QList<ContainerInfo> stopped = all;
+        stopped[0] = container(QStringLiteral("web"), 80, 0, QStringLiteral("exited"));
+        stopped[0].ports.clear();
+        Q_EMIT app.docker()->containersUpdated(stopped);
+        QCOMPARE(labels(), QStringList{QStringLiteral("api")});
+        Q_EMIT app.docker()->containersUpdated(all);
+        QTRY_COMPARE_WITH_TIMEOUT(labels(), (QStringList{QStringLiteral("api"), QStringLiteral("web")}), 3000);
+    }
+
     void labelsPickTheCheckout()
     {
         QTemporaryDir tmp;

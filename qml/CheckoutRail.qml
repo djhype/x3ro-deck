@@ -31,7 +31,6 @@ Rectangle {
             id: card
             required property int index
             required property string name
-            required property string offsetLabel
             required property string ticket
             required property string agentState
             required property string agentLabel
@@ -83,7 +82,7 @@ Rectangle {
                     Text {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Alt+" + (card.index + 1) + "  " + card.offsetLabel
+                        text: "Alt+" + (card.index + 1)
                         color: t.dim
                         font.family: t.mono; font.pixelSize: 11
                     }

@@ -6,6 +6,7 @@
 #include "DockerClient.h"
 #include "GitWatcher.h"
 #include "Models.h"
+#include "PortProbe.h"
 #include "PrWatcher.h"
 #include "QuickCommands.h"
 #include "SessionBackend.h"
@@ -249,6 +250,7 @@ private:
     PrWatcher *m_prs;
     Dependencies *m_deps;
     QuickCommands *m_quick;
+    PortProbe *m_probe;
     bool m_firstRun = false;
     QList<Worktrees::Candidate> m_welcome;
     VariantListModel *m_checkoutModel;

@@ -119,7 +119,10 @@ void ConfigMigrationsTest::v0FileIsUpgradedWithBackup()
     // And it loads the same as before.
     QCOMPARE(c.checkouts.size(), 2);
     QCOMPARE(c.checkouts.at(0).agent, QStringLiteral("codex"));
-    QCOMPARE(c.checkouts.at(1).portOffset, 10000);
+    // v4 → v5 dropped portOffset.
+    for (const QJsonValue &v : written.value(QStringLiteral("checkouts")).toArray()) {
+        QVERIFY(!v.toObject().contains(QStringLiteral("portOffset")));
+    }
     QCOMPARE(c.defaultAgent, QStringLiteral("codex"));
     QVERIFY(!c.autostartAgents);
 

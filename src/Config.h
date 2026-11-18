@@ -12,7 +12,6 @@ struct CheckoutConfig
 {
     QString name;
     QString path; // absolute, canonical
-    int portOffset = 0;
     QString agent; // profile id; empty = Config::defaultAgent
     QString args; // shell fragment merged into the agent's command line; wins on flag conflicts
     // Compose commands run in the checkout's folder; empty = defaultCompose().

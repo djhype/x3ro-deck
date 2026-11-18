@@ -4,6 +4,7 @@
 #include "DaemonBackend.h"
 #include "DockerEndpoint.h"
 #include "Paths.h"
+#include "PortProbe.h"
 #include "SwitchingBackend.h"
 #include "TmuxManager.h"
 
@@ -22,10 +23,9 @@
 
 namespace
 {
-const QStringList kCheckoutRoles{QStringLiteral("id"),         QStringLiteral("name"),       QStringLiteral("offsetLabel"),
-                                 QStringLiteral("ticket"),     QStringLiteral("branch"),     QStringLiteral("agentState"),
-                                 QStringLiteral("agentLabel"), QStringLiteral("healthText"), QStringLiteral("healthState"),
-                                 QStringLiteral("selected")};
+const QStringList kCheckoutRoles{QStringLiteral("id"),         QStringLiteral("name"),        QStringLiteral("ticket"),
+                                 QStringLiteral("branch"),     QStringLiteral("agentState"),  QStringLiteral("agentLabel"),
+                                 QStringLiteral("healthText"), QStringLiteral("healthState"), QStringLiteral("selected")};
 const QStringList kServiceRoles{QStringLiteral("id"),     QStringLiteral("name"), QStringLiteral("health"), QStringLiteral("ports"),
                                 QStringLiteral("uptime"), QStringLiteral("cpu"),  QStringLiteral("mem")};
 const QStringList kAttentionRoles{QStringLiteral("id"),        QStringLiteral("itemId"),      QStringLiteral("key"),
@@ -284,6 +284,7 @@ AppController::AppController(QObject *parent)
     , m_prs(new PrWatcher(this))
     , m_deps(new Dependencies(this))
     , m_quick(new QuickCommands(this))
+    , m_probe(new PortProbe(this))
     , m_checkoutModel(new VariantListModel(kCheckoutRoles, this))
     , m_serviceModel(new VariantListModel(kServiceRoles, this))
     , m_attention(new VariantListModel(kAttentionRoles, this))
@@ -312,6 +313,7 @@ AppController::AppController(QObject *parent)
     connect(m_git, &GitWatcher::updated, this, &AppController::onGit);
     connect(m_prs, &PrWatcher::updated, this, &AppController::onPr);
     connect(m_attention, &VariantListModel::countChanged, this, &AppController::totalsChanged);
+    connect(m_probe, &PortProbe::changed, this, &AppController::currentChanged);
     connect(this, &AppController::configChanged, this, &AppController::quickCommandsChanged);
     connect(this, &AppController::currentChanged, this, &AppController::quickCommandsChanged);
     connect(m_quick, &QuickCommands::changed, this, [this](int checkout) {
@@ -411,7 +413,6 @@ QVariantMap AppController::current() const
          !c.cfg.composeFiles.isEmpty() || !c.cfg.composeUp.isEmpty() || !ComposeFiles::detect(c.cfg.path).isEmpty()},
         {QStringLiteral("session"), c.session},
         {QStringLiteral("attachHint"), m_sessions->attachHint(c.session)},
-        {QStringLiteral("offset"), c.cfg.portOffset},
         {QStringLiteral("containersUp"), up},
         {QStringLiteral("containersTotal"), total},
         {QStringLiteral("agentState"), a.state},
@@ -523,12 +524,47 @@ QVariantList AppController::agentProfiles() const
     return out;
 }
 
+// The configured links, then every published port of the checkout's
+// running containers that answers HTTP, named after its service.
 QVariantList AppController::links() const
 {
     QVariantList out;
     for (const LinkConfig &l : m_config.links) {
         out.append(
             QVariantMap{{QStringLiteral("label"), l.label}, {QStringLiteral("port"), publicPort(m_current, l.service, l.containerPort)}});
+    }
+    if (m_current >= m_checkouts.size()) {
+        return out;
+    }
+    struct Found
+    {
+        QString service;
+        int privatePort;
+        int publicPort;
+    };
+    QList<Found> found;
+    QSet<int> seen;
+    for (const ContainerInfo &c : m_checkouts.at(m_current).containers) {
+        if (c.state != QLatin1String("running")) {
+            continue;
+        }
+        for (const PortMapping &p : c.ports) {
+            const bool configured = std::any_of(m_config.links.cbegin(), m_config.links.cend(), [&](const LinkConfig &l) {
+                return l.service == c.service && l.containerPort == p.privatePort;
+            });
+            if (p.publicPort > 0 && !configured && m_probe->isHttp(p.publicPort) && !seen.contains(p.publicPort)) {
+                seen.insert(p.publicPort);
+                found.append({c.service, p.privatePort, p.publicPort});
+            }
+        }
+    }
+    std::sort(found.begin(), found.end(),
+              [](const Found &a, const Found &b) { return std::tie(a.service, a.publicPort) < std::tie(b.service, b.publicPort); });
+    for (const Found &f : std::as_const(found)) {
+        // A service with several web ports names each by its container port.
+        const bool several = std::count_if(found.cbegin(), found.cend(), [&](const Found &o) { return o.service == f.service; }) > 1;
+        out.append(QVariantMap{{QStringLiteral("label"), several ? QStringLiteral("%1:%2").arg(f.service).arg(f.privatePort) : f.service},
+                               {QStringLiteral("port"), f.publicPort}});
     }
     return out;
 }
@@ -684,6 +720,17 @@ void AppController::onContainers(const QList<ContainerInfo> &containers)
     for (int i = 0; i < m_checkouts.size(); ++i) {
         rebuildServices(i);
     }
+    QSet<int> published;
+    for (const Checkout &c : std::as_const(m_checkouts)) {
+        for (const ContainerInfo &ci : c.containers) {
+            for (const PortMapping &p : ci.ports) {
+                if (ci.state == QLatin1String("running") && p.publicPort > 0) {
+                    published.insert(p.publicPort);
+                }
+            }
+        }
+    }
+    m_probe->setPorts(published);
     publishCheckouts();
     publishServices();
     publishAttention();
@@ -983,7 +1030,6 @@ void AppController::publishCheckouts()
         rows.append({
             {QStringLiteral("id"), c.cfg.name},
             {QStringLiteral("name"), c.cfg.name},
-            {QStringLiteral("offsetLabel"), c.cfg.portOffset ? QStringLiteral("+%1").arg(c.cfg.portOffset) : QStringLiteral("base")},
             {QStringLiteral("ticket"), c.ticket.isEmpty() ? c.git.branch : c.ticket},
             {QStringLiteral("branch"), c.git.branch},
             {QStringLiteral("agentState"), c.agent.state},
