@@ -78,10 +78,13 @@ if(TARGET Qt6::Quick)
     set_tests_properties(qml PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 endif()
 
-add_executable(tst_singleinstance tst_singleinstance.cpp)
-x3ro_deck_set_warnings(tst_singleinstance)
-target_link_libraries(tst_singleinstance PRIVATE x3ro-deck-base Qt6::Test)
-add_test(NAME singleinstance COMMAND tst_singleinstance)
+if(NOT WIN32)
+    # Forks and talks to Unix sockets directly.
+    add_executable(tst_singleinstance tst_singleinstance.cpp)
+    x3ro_deck_set_warnings(tst_singleinstance)
+    target_link_libraries(tst_singleinstance PRIVATE x3ro-deck-base Qt6::Test)
+    add_test(NAME singleinstance COMMAND tst_singleinstance)
+endif()
 
 add_executable(tst_trayicon tst_trayicon.cpp)
 x3ro_deck_set_warnings(tst_trayicon)

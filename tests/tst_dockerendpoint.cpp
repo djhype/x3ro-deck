@@ -57,7 +57,8 @@ public:
                         s->write("HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n");
                         return;
                     }
-                    const QByteArray body = req.startsWith("GET /containers/json") ? QJsonDocument(m_containers).toJson() : "{}";
+                    const QByteArray body
+                        = req.startsWith("GET /containers/json") ? QJsonDocument(m_containers).toJson() : QByteArray("{}");
                     s->write("HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n" + body);
                     s->disconnectFromServer();
                 });
