@@ -59,6 +59,23 @@ constexpr qint64 kClientBacklog = 8 * 1024 * 1024;
 constexpr qint64 kIdleExitMs = 60 * 1000;
 constexpr int kKillGraceMs = 3000;
 
+// The socket is 0700 already; the peer check also covers a directory with
+// looser permissions. On Windows the pipe's ACL (UserAccessOption) does this.
+bool peerIsUs([[maybe_unused]] QLocalSocket *sock)
+{
+#if defined(Q_OS_LINUX)
+    struct ucred cred{};
+    socklen_t len = sizeof cred;
+    return getsockopt(int(sock->socketDescriptor()), SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0 && cred.uid == getuid();
+#elif defined(Q_OS_WIN)
+    return true;
+#else
+    uid_t uid = 0;
+    gid_t gid = 0;
+    return getpeereid(int(sock->socketDescriptor()), &uid, &gid) == 0 && uid == getuid();
+#endif
+}
+
 #if defined(Q_OS_WIN)
 // The deepest process under the session's shell: what runs in it now.
 QString foregroundName(qint64 shell, int)
@@ -223,11 +240,7 @@ Daemon::ListenResult Daemon::listen(QString *error)
 void Daemon::onNewConnection()
 {
     while (QLocalSocket *sock = m_server->nextPendingConnection()) {
-        // The socket is 0700 already; the peer check also covers a directory
-        // with looser permissions.
-        struct ucred cred{};
-        socklen_t len = sizeof cred;
-        if (getsockopt(int(sock->socketDescriptor()), SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0 || cred.uid != getuid()) {
+        if (!peerIsUs(sock)) {
             sock->abort();
             sock->deleteLater();
             continue;
@@ -307,7 +320,7 @@ void Daemon::handle(QLocalSocket *sock, const QJsonObject &req)
 
     if (op == QLatin1String("hello")) {
         reply.insert(QStringLiteral("version"), Sessiond::kProtocolVersion);
-        reply.insert(QStringLiteral("pid"), qint64(getpid()));
+        reply.insert(QStringLiteral("pid"), QCoreApplication::applicationPid());
     } else if (op == QLatin1String("create")) {
         reply = create(req, &error);
     } else if (op == QLatin1String("list")) {
