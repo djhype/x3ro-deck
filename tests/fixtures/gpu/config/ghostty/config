@@ -1,0 +1,11 @@
+# Ghostty fixture
+font-family = "Iosevka Term"
+font-family = Symbols Nerd Font
+font-size = 14
+theme = light:Solarized Light,dark:Nordish
+cursor-style = underline
+cursor-style-blink = false
+window-padding-x = 10
+command = /usr/bin/fish
+config-file = ?extra.conf
+config-file = ?missing.conf

@@ -1,0 +1,13 @@
+[colors.primary]
+background = "#282828"
+foreground = "#ebdbb2"
+
+[colors.normal]
+black = "#282828"
+red = "#cc241d"
+
+[colors.bright]
+white = "#fbf1c7"
+
+[colors.cursor]
+cursor = "#fe8019"

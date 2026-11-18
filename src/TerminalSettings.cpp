@@ -1,5 +1,6 @@
 #include "TerminalSettings.h"
 
+#include "GpuTerminalSettings.h"
 #include "KonsoleSettings.h"
 
 #include <QDir>
@@ -62,6 +63,9 @@ TerminalSettings::Sources TerminalSettings::builtinSources()
 {
     Sources sources;
     sources.push_back(std::make_unique<KonsoleSettings>());
+    sources.push_back(std::make_unique<KittySettings>());
+    sources.push_back(std::make_unique<GhosttySettings>());
+    sources.push_back(std::make_unique<AlacrittySettings>());
     return sources;
 }
 
