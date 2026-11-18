@@ -108,6 +108,7 @@ add_library(x3ro-deck-base STATIC
     src/SessionShell.cpp
     src/Dependencies.cpp
     src/Worktrees.cpp
+    src/AppTheme.cpp
     src/SingleInstance.cpp
     src/TrayIcon.cpp
     src/Notifier.h
@@ -125,6 +126,17 @@ x3ro_deck_set_warnings(x3ro-deck-base)
 target_include_directories(x3ro-deck-base PUBLIC src common)
 target_link_libraries(x3ro-deck-base PUBLIC x3ro-deck-sessionproto x3ro-deck-sessionscreen x3ro-deck-processinfo Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network PkgConfig::vterm util ${X3RO_DECK_DESKTOP_LIBS})
 target_compile_definitions(x3ro-deck-base PRIVATE X3RO_DECK_HAVE_XCB=$<BOOL:${xcb_FOUND}>)
+# The theme and the style sheet templates it fills; tests read them too.
+qt_add_resources(x3ro-deck-base theme
+    PREFIX /
+    FILES
+        data/style.qss
+        data/themes/cyberdecker.json
+        data/ui/check.svg
+        data/ui/chevron-down.svg
+        data/ui/close.svg
+        data/ui/close-hover.svg
+)
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)

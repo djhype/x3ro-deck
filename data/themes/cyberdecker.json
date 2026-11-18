@@ -1,0 +1,35 @@
+{
+    "name": "Cyberdecker",
+    "colors": {
+        "bg0": "#0a0a16",
+        "bg1": "#0d0d1f",
+        "panel": "#11112a",
+        "raised": "#14142e",
+        "selected": "#1c1c44",
+        "line": "#22224a",
+        "line2": "#33335e",
+        "rowLine": "#1a1a3a",
+        "well": "#07070f",
+        "shade": "#0a0a12",
+        "tabActive": "#2a1640",
+        "text": "#e6e6f5",
+        "soft": "#c8c8e8",
+        "dim": "#a0a0c8",
+        "muted": "#6a6a90",
+        "faint": "#4a4a70",
+        "magenta": "#ff6ff2",
+        "pink": "#ff5c7a",
+        "cyan": "#00fff5",
+        "amber": "#f5a623",
+        "ink": "#1a1a2e",
+        "permissionCard": "#15120a",
+        "dockerCard": "#170b10",
+        "doneCard": "#140d18"
+    },
+    "checkoutColors": ["#7aa2ff", "#9ece6a", "#bb9af7", "#7dcfff", "#e0af68", "#f7768e"],
+    "fonts": {
+        "sans": "Fira Sans",
+        "mono": "MesloLGS Nerd Font Mono",
+        "display": "Oxanium"
+    }
+}

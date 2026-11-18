@@ -60,6 +60,7 @@ QJsonObject defaults()
         {QStringLiteral("terminalScrollback"), 10000},
         {QStringLiteral("terminalSettings"), QString()},
         {QStringLiteral("terminalProfile"), QString()},
+        {QStringLiteral("theme"), QStringLiteral("cyberdecker")},
     };
 }
 
@@ -387,5 +388,6 @@ Config Config::load(QString *error)
     c.terminalScrollback = std::clamp(root.value(QStringLiteral("terminalScrollback")).toInt(c.terminalScrollback), 0, 1000000);
     c.terminalSettings = root.value(QStringLiteral("terminalSettings")).toString().trimmed();
     c.terminalProfile = root.value(QStringLiteral("terminalProfile")).toString().trimmed();
+    c.theme = root.value(QStringLiteral("theme")).toString().trimmed();
     return c;
 }

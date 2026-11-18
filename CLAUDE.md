@@ -90,8 +90,9 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container and on `ubuntu:
 - Compose and quick commands expand `{compose}` to the `composeBinary` setting (`docker compose`, `docker-compose` or `podman compose`).
 - `src/GitWatcher.cpp`: watches `HEAD` and `logs/HEAD` with `QFileSystemWatcher`.
 - `src/PrWatcher.cpp`: polls `gh pr view <branch> --json …` per checkout.
-- `qml/`: `Theme.qml` holds every color and font. Use its tokens and helpers (`agentColor`, `healthColor`, `elapsed`) and do not hardcode colors.
-- New QML files and data files must be added to `resources.qrc`. New C++ sources must be added to `CMakeLists.txt`, to `x3ro-deck-base` unless they need Qt Quick, and new tests to `tests/CMakeLists.txt`.
+- Themes: `src/AppTheme.{h,cpp}` loads `data/themes/cyberdecker.json` (the built-in default) and overlays the config's `theme`, a file in `~/.config/x3ro-deck/themes/<id>.json` or another built-in, so a theme only lists what it changes. MainWindow sets it as the QML context property `appTheme`. `data/style.qss` and `data/ui/*.svg` are templates: `fill` replaces `${token}`, `${token/alpha}`, `${font.sans}` and `${icon:name}`, and the recolored icons go to `~/.cache/x3ro-deck/theme/<hash>/`. These files are resources of `x3ro-deck-base` (`qt_add_resources` in `CMakeLists.txt`), not `resources.qrc`. A new color needs a token in the JSON, in `Theme.qml` (with its fallback) and possibly in the templates; `tst_theme` checks that every token resolves and that `qml/` has no hex colors outside `Theme.qml`.
+- `qml/`: `Theme.qml` holds every color and font token, reading `appTheme` with Cyberdecker's values as fallbacks. Use its tokens and helpers (`agentColor`, `healthColor`, `elapsed`, `alpha`) and do not hardcode colors.
+- New QML files and data files must be added to `resources.qrc` (theme files: see Themes). New C++ sources must be added to `CMakeLists.txt`, to `x3ro-deck-base` unless they need Qt Quick, and new tests to `tests/CMakeLists.txt`.
 
 # Code style
 

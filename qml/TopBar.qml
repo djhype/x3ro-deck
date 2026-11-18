@@ -20,16 +20,16 @@ Rectangle {
                 var ctx = getContext("2d")
                 ctx.lineWidth = 2
                 ctx.lineJoin = "round"
-                ctx.strokeStyle = "#ff6ff2"
+                ctx.strokeStyle = t.magenta
                 ctx.beginPath(); ctx.moveTo(3, 22); ctx.lineTo(13, 4); ctx.lineTo(23, 22); ctx.closePath(); ctx.stroke()
-                ctx.strokeStyle = "#00fff5"; ctx.lineCap = "round"
+                ctx.strokeStyle = t.cyan; ctx.lineCap = "round"
                 ctx.beginPath(); ctx.moveTo(8, 16); ctx.lineTo(18, 16); ctx.stroke()
             }
         }
         Text {
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.StyledText
-            text: "X3RO<font color='#ff6ff2'>//</font>DECK"
+            text: "X3RO<font color='" + t.magenta + "'>//</font>DECK"
             color: t.text
             font.family: t.display
             font.pixelSize: 17
@@ -63,7 +63,7 @@ Rectangle {
                     width: tabRow.implicitWidth + 32
                     height: 38
                     radius: 9
-                    color: active ? "#2a1640" : (tabMouse.containsMouse ? t.selected : "transparent")
+                    color: active ? t.tabActive : (tabMouse.containsMouse ? t.selected : "transparent")
                     Behavior on color { ColorAnimation { duration: 140 } }
                     Row {
                         id: tabRow

@@ -4,10 +4,10 @@ import QtQuick
 Rectangle {
     id: pill
     property alias text: label.text
-    property color fg: "#e6e6f5"
+    readonly property Theme t: Theme {}
+    property color fg: t.text
     property bool dot: true
     property bool mono: false
-    readonly property Theme t: Theme {}
 
     implicitWidth: row.implicitWidth + 16
     implicitHeight: 22

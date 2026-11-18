@@ -45,7 +45,7 @@ Rectangle {
             radius: 12
             color: selected ? t.selected : (mouse.containsMouse ? t.raised : t.panel)
             border.width: 1
-            border.color: selected ? t.magenta : (needsYou ? Qt.rgba(0.96, 0.65, 0.14, 0.6) : t.line)
+            border.color: selected ? t.magenta : (needsYou ? t.alpha(t.amber, 0.6) : t.line)
             Behavior on color { ColorAnimation { duration: 140 } }
             Behavior on border.color { ColorAnimation { duration: 140 } }
 
@@ -57,7 +57,7 @@ Rectangle {
                 z: -1
                 color: "transparent"
                 border.width: 4
-                border.color: card.selected ? Qt.rgba(1, 0.44, 0.95, 0.16) : Qt.rgba(0.96, 0.65, 0.14, 0.22)
+                border.color: card.selected ? t.alpha(t.magenta, 0.16) : t.alpha(t.amber, 0.22)
                 visible: card.selected || card.needsYou
                 SequentialAnimation on opacity {
                     running: card.needsYou && !card.selected

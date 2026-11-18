@@ -74,12 +74,12 @@ Rectangle {
 
             readonly property color accent: kind === "permission" || kind === "question" ? t.amber
                                           : kind === "docker" ? t.pink : t.magenta
-            readonly property var checkoutColors: ["#7aa2ff", "#9ece6a", "#bb9af7", "#7dcfff", "#e0af68", "#f7768e"]
+            readonly property var checkoutColors: t.checkoutColors
 
             width: ListView.view.width
             height: cardCol.implicitHeight + 28
             radius: 16
-            color: kind === "permission" || kind === "question" ? "#15120a" : kind === "docker" ? "#170b10" : "#140d18"
+            color: kind === "permission" || kind === "question" ? t.permissionCard : kind === "docker" ? t.dockerCard : t.doneCard
             border.width: 1
             border.color: kind === "permission" || kind === "question" ? accent : Qt.darker(accent, 2.2)
 
@@ -127,7 +127,7 @@ Rectangle {
                     width: parent.width
                     height: detailText.implicitHeight + 20
                     radius: 10
-                    color: "#0a0a12"
+                    color: t.shade
                     Text {
                         id: detailText
                         x: 12; y: 10

@@ -13,11 +13,6 @@
         <file>qml/Notice.qml</file>
         <file>qml/Welcome.qml</file>
         <file>qml/NeedsYouRail.qml</file>
-        <file>data/style.qss</file>
-        <file>data/close.svg</file>
         <file>data/icons/x3ro-deck.svg</file>
-        <file>data/close-hover.svg</file>
-        <file>data/chevron-down.svg</file>
-        <file>data/check.svg</file>
     </qresource>
 </RCC>

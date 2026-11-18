@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AppController.h"
+#include "AppTheme.h"
 #include "GlobalHotkey.h"
 #include "Notifier.h"
 #include "SettingsDialog.h"
@@ -67,12 +68,14 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     connect(m_app->terminalSettings(), &TerminalSettings::changed, this, [](const TerminalProfile &p) { TerminalHost::setProfile(p); });
     TerminalHost::setProfile(m_app->terminalSettings()->current());
 
-    QFile qss(QStringLiteral(":/data/style.qss"));
-    if (qss.open(QIODevice::ReadOnly)) {
-        setStyleSheet(QString::fromUtf8(qss.readAll()));
+    m_theme = new AppTheme(this);
+    if (QString error; !m_theme->load(m_app->config().theme, &error)) {
+        qWarning("x3ro-deck: theme %s: %s; using the default", qPrintable(m_app->config().theme), qPrintable(error));
     }
+    setStyleSheet(m_theme->styleSheet());
 
     m_engine->rootContext()->setContextProperty(QStringLiteral("app"), m_app);
+    m_engine->rootContext()->setContextProperty(QStringLiteral("appTheme"), m_theme);
 
     auto *central = new QWidget(this);
     central->setObjectName(QStringLiteral("central"));
@@ -213,7 +216,7 @@ QQuickWidget *MainWindow::quick(const QString &file, QWidget *parent)
 {
     auto *w = new QQuickWidget(m_engine, parent);
     w->setResizeMode(QQuickWidget::SizeRootObjectToView);
-    w->setClearColor(QColor(QStringLiteral("#0d0d1f")));
+    w->setClearColor(m_theme->color(QStringLiteral("bg1")));
     w->setSource(QUrl(QStringLiteral("qrc:/qml/") + file));
     for (const QQmlError &e : w->errors()) {
         qWarning("%s", qPrintable(e.toString()));

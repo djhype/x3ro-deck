@@ -13,6 +13,7 @@ class QQmlEngine;
 class QQuickWidget;
 class QSplitter;
 class QStackedWidget;
+class AppTheme;
 class QTabWidget;
 class SettingsDialog;
 class TerminalHost;
@@ -63,6 +64,7 @@ private:
 
     AppController *m_app;
     QQmlEngine *m_engine;
+    AppTheme *m_theme = nullptr;
     QStackedWidget *m_pages;
     QStackedWidget *m_shellStack;
     QStackedWidget *m_agentStack;

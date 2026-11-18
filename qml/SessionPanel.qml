@@ -78,7 +78,7 @@ Rectangle {
                                 height: 28
                                 radius: 7
                                 opacity: usable ? 1 : 0.4
-                                color: active ? Qt.rgba(1, 0.44, 0.95, 0.12) : (optMouse.containsMouse && usable ? t.selected : t.raised)
+                                color: active ? t.alpha(t.magenta, 0.12) : (optMouse.containsMouse && usable ? t.selected : t.raised)
                                 border.color: active ? t.magenta : t.line
                                 Text {
                                     id: optLabel

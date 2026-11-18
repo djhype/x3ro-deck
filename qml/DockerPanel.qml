@@ -87,7 +87,7 @@ Rectangle {
                 width: ListView.view.width
                 height: 36
                 color: rowHover.hovered ? t.raised : "transparent"
-                Rectangle { width: parent.width; height: 1; color: "#1a1a3a" }
+                Rectangle { width: parent.width; height: 1; color: t.rowLine }
 
                 HoverHandler { id: rowHover }
 
@@ -286,7 +286,7 @@ Rectangle {
                                     id: linkText
                                     anchors.centerIn: parent
                                     textFormat: Text.StyledText
-                                    text: modelData.label + (parent.live ? " <font color='#a0a0c8'>:" + modelData.port + "</font>" : "")
+                                    text: modelData.label + (parent.live ? " <font color='" + t.dim + "'>:" + modelData.port + "</font>" : "")
                                     color: t.cyan
                                     font.family: t.mono; font.pixelSize: 12
                                 }

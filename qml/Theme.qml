@@ -1,26 +1,48 @@
 import QtQuick
 
-// Synthwave palette from the another-hook tmux profile, tuned for contrast.
+// Color and font tokens. Values come from the theme JSON (data/themes);
+// the literals are Cyberdecker's, for when no theme is loaded.
 QtObject {
-    readonly property color bg0: "#0a0a16"
-    readonly property color bg1: "#0d0d1f"
-    readonly property color panel: "#11112a"
-    readonly property color raised: "#14142e"
-    readonly property color selected: "#1c1c44"
-    readonly property color line: "#22224a"
-    readonly property color line2: "#33335e"
-    readonly property color text: "#e6e6f5"
-    readonly property color soft: "#c8c8e8"
-    readonly property color dim: "#a0a0c8"
-    readonly property color magenta: "#ff6ff2"
-    readonly property color pink: "#ff5c7a"
-    readonly property color cyan: "#00fff5"
-    readonly property color amber: "#f5a623"
-    readonly property color ink: "#1a1a2e"
+    readonly property color bg0: c("bg0", "#0a0a16")
+    readonly property color bg1: c("bg1", "#0d0d1f")
+    readonly property color panel: c("panel", "#11112a")
+    readonly property color raised: c("raised", "#14142e")
+    readonly property color selected: c("selected", "#1c1c44")
+    readonly property color line: c("line", "#22224a")
+    readonly property color line2: c("line2", "#33335e")
+    readonly property color text: c("text", "#e6e6f5")
+    readonly property color soft: c("soft", "#c8c8e8")
+    readonly property color dim: c("dim", "#a0a0c8")
+    readonly property color magenta: c("magenta", "#ff6ff2")
+    readonly property color pink: c("pink", "#ff5c7a")
+    readonly property color cyan: c("cyan", "#00fff5")
+    readonly property color amber: c("amber", "#f5a623")
+    readonly property color ink: c("ink", "#1a1a2e")
+    readonly property color rowLine: c("rowLine", "#1a1a3a")
+    readonly property color shade: c("shade", "#0a0a12")
+    readonly property color tabActive: c("tabActive", "#2a1640")
+    readonly property color permissionCard: c("permissionCard", "#15120a")
+    readonly property color dockerCard: c("dockerCard", "#170b10")
+    readonly property color doneCard: c("doneCard", "#140d18")
+    readonly property var checkoutColors: typeof appTheme !== "undefined" && appTheme.checkoutColors.length
+                                          ? appTheme.checkoutColors
+                                          : ["#7aa2ff", "#9ece6a", "#bb9af7", "#7dcfff", "#e0af68", "#f7768e"]
 
-    readonly property string sans: "Fira Sans"
-    readonly property string mono: "MesloLGS Nerd Font Mono"
-    readonly property string display: "Oxanium"
+    readonly property string sans: font("sans", "Fira Sans")
+    readonly property string mono: font("mono", "MesloLGS Nerd Font Mono")
+    readonly property string display: font("display", "Oxanium")
+
+    // The active theme's value (AppTheme, the context property `appTheme`),
+    // or the Cyberdecker default where it is unset (tst_qml has no theme).
+    function c(token, fallback) {
+        return typeof appTheme !== "undefined" && appTheme.colors[token] ? appTheme.colors[token] : fallback
+    }
+    function font(name, fallback) {
+        return typeof appTheme !== "undefined" && appTheme.fonts[name] ? appTheme.fonts[name] : fallback
+    }
+    function alpha(color, a) {
+        return Qt.rgba(color.r, color.g, color.b, a)
+    }
 
     function agentColor(state) {
         switch (state) {
