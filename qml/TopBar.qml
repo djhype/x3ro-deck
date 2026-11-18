@@ -53,9 +53,9 @@ Rectangle {
             Repeater {
                 model: [
                     { key: "docker", label: "Docker", badge: app.dockerConnected ? app.containersUp + "/" + app.containersTotal : "offline",
-                      badgeBg: t.bg0, badgeFg: app.dockerConnected && app.containersUp === app.containersTotal ? t.cyan : t.pink, hint: "Ctrl+Alt+D" },
+                      badgeBg: t.bg0, badgeFg: app.dockerConnected && app.containersUp === app.containersTotal ? t.cyan : t.pink, hint: (app.shortcutHints || {})["docker-tab"] || "" },
                     { key: "agents", label: "Agents", badge: app.needsYou > 0 ? app.needsYou + " need you" : "all quiet",
-                      badgeBg: app.needsYou > 0 ? t.amber : t.bg0, badgeFg: app.needsYou > 0 ? t.ink : t.dim, hint: "Ctrl+Alt+A" }
+                      badgeBg: app.needsYou > 0 ? t.amber : t.bg0, badgeFg: app.needsYou > 0 ? t.ink : t.dim, hint: (app.shortcutHints || {})["agents-tab"] || "" }
                 ]
                 delegate: Rectangle {
                     required property var modelData

@@ -426,5 +426,6 @@ Config Config::load(QString *error)
     c.theme = root.value(QStringLiteral("theme")).toString().trimmed();
     c.themeLight = root.value(QStringLiteral("themeLight")).toString().trimmed();
     c.themeDark = root.value(QStringLiteral("themeDark")).toString().trimmed();
+    c.shortcuts = root.value(QStringLiteral("shortcuts")).toObject().toVariantMap();
     return c;
 }

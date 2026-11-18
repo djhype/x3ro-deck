@@ -14,6 +14,16 @@ Rectangle {
         color: t.dim
         font.family: t.sans; font.pixelSize: 11; font.letterSpacing: 1.6
     }
+    // The next-checkout shortcut.
+    Text {
+        anchors.right: parent.right; anchors.rightMargin: 20
+        anchors.verticalCenter: heading.verticalCenter
+        text: (app.shortcutHints || {})["next-checkout"] || ""
+        color: t.dim
+        font.family: t.mono; font.pixelSize: 10
+        elide: Text.ElideLeft
+        width: Math.min(implicitWidth, parent.width - heading.width - 56)
+    }
 
     ListView {
         id: list
@@ -82,7 +92,7 @@ Rectangle {
                     Text {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Alt+" + (card.index + 1)
+                        text: (app.shortcutHints || {})["select-" + (card.index + 1)] || ""
                         color: t.dim
                         font.family: t.mono; font.pixelSize: 11
                     }

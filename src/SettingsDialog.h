@@ -2,7 +2,9 @@
 
 #include "DeckDialog.h"
 
+#include <QHash>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QList>
 
 class QCheckBox;
@@ -15,6 +17,7 @@ class QListWidget;
 class QPlainTextEdit;
 class QPushButton;
 class QRadioButton;
+class QKeySequenceEdit;
 class QTabWidget;
 class QTableWidget;
 class TerminalSettings;
@@ -77,6 +80,9 @@ private:
     QWidget *buildAgentsPage();
     QWidget *buildDockerPage();
     QWidget *buildGeneralPage();
+    QWidget *buildShortcutsPage();
+    QHash<QString, QKeySequence> shortcutBindings() const;
+    void checkShortcuts();
     static ListButtons listButtons(const QString &addText);
 
     void loadCheckout(int row);
@@ -147,6 +153,8 @@ private:
     QLabel *m_dockerEndpoint;
     QComboBox *m_composeBinary;
     QComboBox *m_theme;
+    QHash<QString, QKeySequenceEdit *> m_shortcutEdits;
+    QHash<QString, QLabel *> m_shortcutWarnings;
     QRadioButton *m_backendTmux;
     QRadioButton *m_backendDaemon;
     QComboBox *m_themeLight;

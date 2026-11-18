@@ -6,6 +6,7 @@
 #include "GlobalHotkey.h"
 #include "Notifier.h"
 #include "SettingsDialog.h"
+#include "Shortcuts.h"
 #include "TerminalHost.h"
 #include "TerminalProfile.h"
 #include "TerminalSettings.h"
@@ -232,44 +233,74 @@ QQuickWidget *MainWindow::quick(const QString &file, QWidget *parent)
 
 void MainWindow::buildShortcuts()
 {
-    QList<QKeySequence> keys;
-    auto add = [this, &keys](const QKeySequence &seq, auto fn) {
+    auto add = [this](const QString &id, auto fn) {
         auto *a = new QAction(this);
-        a->setShortcut(seq);
         a->setShortcutContext(Qt::WindowShortcut);
         connect(a, &QAction::triggered, this, fn);
         addAction(a);
-        keys.append(seq);
+        m_shortcuts.insert(id, a);
     };
-    for (int i = 0; i < std::min(9, m_app->checkoutCount()); ++i) {
-        add(QKeySequence(Qt::ALT | Qt::Key(Qt::Key_1 + i)), [this, i] { m_app->select(i); });
+    for (int i = 0; i < 9; ++i) {
+        add(QStringLiteral("select-%1").arg(i + 1), [this, i] {
+            if (i < m_app->checkoutCount()) {
+                m_app->select(i);
+            }
+        });
     }
-    add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_D), [this] { m_app->setTab(QStringLiteral("docker")); });
-    add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_A), [this] { m_app->setTab(QStringLiteral("agents")); });
-    add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_R), [this] { m_app->toggleRail(); });
-    add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_T), [this] {
+    auto step = [this](int delta) {
+        const int n = m_app->checkoutCount();
+        if (n > 0) {
+            m_app->select((m_app->currentIndex() + delta + n) % n);
+        }
+    };
+    add(QStringLiteral("next-checkout"), [step] { step(1); });
+    add(QStringLiteral("previous-checkout"), [step] { step(-1); });
+    add(QStringLiteral("docker-tab"), [this] { m_app->setTab(QStringLiteral("docker")); });
+    add(QStringLiteral("agents-tab"), [this] { m_app->setTab(QStringLiteral("agents")); });
+    add(QStringLiteral("toggle-rail"), [this] { m_app->toggleRail(); });
+    add(QStringLiteral("new-shell"), [this] {
         m_app->setTab(QStringLiteral("docker"));
         addShellTab(m_app->currentIndex(), shellTitle())->focusTerminal();
     });
-    add(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_N), [this] {
+    add(QStringLiteral("next-attention"), [this] {
         if (m_app->attentionModel()->rowCount() > 0) {
             m_app->attentionAction(m_app->attentionModel()->row(0).value(QStringLiteral("id")).toString(), QStringLiteral("open"));
         }
     });
-    add(QKeySequence(Qt::CTRL | Qt::Key_Q), [this] { confirmQuit(); });
+    add(QStringLiteral("quit"), [this] { confirmQuit(); });
     // Also in the window, for desktops without the global shortcuts portal.
-    const QKeySequence toggle(Qt::META | Qt::ALT | Qt::Key_H);
-    add(toggle, [this] { toggleVisible(); });
-    TerminalHost::setAppShortcuts(keys);
+    add(QStringLiteral("toggle-window"), [this] { toggleVisible(); });
+    applyShortcuts();
 
+    // The binding is the portal's preferred trigger the first time; after
+    // that the desktop's own shortcut settings own it.
     m_hotkeys = GlobalHotkey::create(this);
-    m_hotkeys->add(QStringLiteral("toggle-window"), QStringLiteral("Show/hide X3RO Deck"), toggle);
+    for (const Shortcuts::Action &a : Shortcuts::actions()) {
+        if (a.global) {
+            m_hotkeys->add(a.id, a.label, Shortcuts::binding(m_app->config().shortcuts, a.id));
+        }
+    }
     connect(m_hotkeys, &GlobalHotkey::activated, this, [this](const QString &id, const QString &token) {
         if (id == QLatin1String("toggle-window")) {
             toggleVisible(token);
         }
     });
     m_hotkeys->start();
+}
+
+void MainWindow::applyShortcuts()
+{
+    const QHash<QString, QKeySequence> keys = Shortcuts::bindings(m_app->config().shortcuts);
+    QList<QKeySequence> reserved;
+    for (auto it = m_shortcuts.cbegin(); it != m_shortcuts.cend(); ++it) {
+        const QKeySequence seq = keys.value(it.key());
+        it.value()->setShortcut(seq);
+        if (!seq.isEmpty()) {
+            reserved.append(seq);
+        }
+    }
+    // The terminals hand these to the window instead of the program in them.
+    TerminalHost::setAppShortcuts(reserved);
 }
 
 void MainWindow::buildTray()
@@ -450,6 +481,7 @@ void MainWindow::applySettings(const QJsonObject &config)
     }
     const bool applied = m_app->reloadConfig();
     selectTheme();
+    applyShortcuts();
     TerminalHost::setScrollbackLines(m_app->config().terminalScrollback);
     if (applied) {
         return;

@@ -180,3 +180,8 @@ target_link_libraries(tst_desktopterminals PRIVATE x3ro-deck-base Qt6::Test)
 target_compile_definitions(tst_desktopterminals PRIVATE X3RO_DECK_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_test(NAME desktopterminals COMMAND tst_desktopterminals)
 set_tests_properties(desktopterminals PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(tst_shortcuts tst_shortcuts.cpp)
+x3ro_deck_set_warnings(tst_shortcuts)
+target_link_libraries(tst_shortcuts PRIVATE x3ro-deck-base Qt6::Test)
+add_test(NAME shortcuts COMMAND tst_shortcuts)

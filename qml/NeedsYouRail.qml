@@ -23,7 +23,7 @@ Rectangle {
         Text {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: "Ctrl+Alt+N"
+            text: (app.shortcutHints || {})["next-attention"] || ""
             color: t.dim
             font.family: t.mono; font.pixelSize: 11
         }

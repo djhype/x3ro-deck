@@ -76,6 +76,8 @@ class AppController : public QObject
     Q_PROPERTY(int currentIndex READ currentIndex NOTIFY currentChanged)
     Q_PROPERTY(QString tab READ tab NOTIFY tabChanged)
     Q_PROPERTY(QVariantMap current READ current NOTIFY currentChanged)
+    // Shortcut id → its keys as text, for the hints in the panels.
+    Q_PROPERTY(QVariantMap shortcutHints READ shortcutHints NOTIFY configChanged)
     Q_PROPERTY(QVariantList quickCommands READ quickCommands NOTIFY quickCommandsChanged)
     Q_PROPERTY(QVariantList agents READ agentProfiles NOTIFY configChanged)
     Q_PROPERTY(QVariantList links READ links NOTIFY currentChanged)
@@ -103,6 +105,7 @@ public:
     int currentIndex() const { return m_current; }
     QString tab() const { return m_tab; }
     QVariantMap current() const;
+    QVariantMap shortcutHints() const;
     QVariantList quickCommands() const;
     QVariantList agentProfiles() const;
     QVariantList links() const;

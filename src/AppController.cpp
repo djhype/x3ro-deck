@@ -6,6 +6,7 @@
 #include "ListeningPorts.h"
 #include "Paths.h"
 #include "PortProbe.h"
+#include "Shortcuts.h"
 #include "SwitchingBackend.h"
 #include "TmuxManager.h"
 
@@ -505,6 +506,11 @@ QVariantList AppController::dependencies() const
                                {QStringLiteral("checked"), m_deps->ready()}});
     }
     return out;
+}
+
+QVariantMap AppController::shortcutHints() const
+{
+    return Shortcuts::hints(m_config.shortcuts);
 }
 
 QVariantList AppController::quickCommands() const

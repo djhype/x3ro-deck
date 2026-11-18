@@ -7,6 +7,7 @@
 #include "DockerEndpoint.h"
 #include "HookInstaller.h"
 #include "Paths.h"
+#include "Shortcuts.h"
 #include "TerminalSettings.h"
 
 #include <QCheckBox>
@@ -22,6 +23,7 @@
 #include <QHeaderView>
 #include <QIntValidator>
 #include <QJsonArray>
+#include <QKeySequenceEdit>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -46,7 +48,8 @@
 namespace
 {
 const QString kNewAgent = QStringLiteral(":new-agent");
-const QStringList kPages{QStringLiteral("checkouts"), QStringLiteral("agents"), QStringLiteral("docker"), QStringLiteral("general")};
+const QStringList kPages{QStringLiteral("checkouts"), QStringLiteral("agents"), QStringLiteral("docker"), QStringLiteral("general"),
+                         QStringLiteral("shortcuts")};
 const QList<QPair<QString, QString>> kKinds{{QStringLiteral("claude"), QStringLiteral("Claude Code")},
                                             {QStringLiteral("codex"), QStringLiteral("Codex")},
                                             {QStringLiteral("custom"), QStringLiteral("Custom command")}};
@@ -267,6 +270,7 @@ SettingsDialog::SettingsDialog(const QJsonObject &json, QWidget *parent)
     m_tabs->addTab(buildAgentsPage(), QStringLiteral("Agents"));
     m_tabs->addTab(buildDockerPage(), QStringLiteral("Docker"));
     m_tabs->addTab(buildGeneralPage(), QStringLiteral("General"));
+    m_tabs->addTab(buildShortcutsPage(), QStringLiteral("Shortcuts"));
 
     auto *editJson = new QPushButton(QStringLiteral("Edit config.json…"));
     editJson->setAutoDefault(false);
@@ -1370,6 +1374,99 @@ void SettingsDialog::previewTheme()
     Q_EMIT themePreview(m_theme->currentData().toString(), m_themeLight->currentData().toString(), m_themeDark->currentData().toString());
 }
 
+QWidget *SettingsDialog::buildShortcutsPage()
+{
+    const QVariantMap saved = m_root.value(QStringLiteral("shortcuts")).toObject().toVariantMap();
+    auto *grid = form();
+    for (const Shortcuts::Action &a : Shortcuts::actions()) {
+        auto *edit = new QKeySequenceEdit(Shortcuts::binding(saved, a.id));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+        edit->setMaximumSequenceLength(1);
+        edit->setClearButtonEnabled(true);
+#endif
+        edit->setMinimumWidth(220);
+        auto *reset = new QPushButton(QStringLiteral("Reset"));
+        reset->setObjectName(QStringLiteral("small"));
+        reset->setAutoDefault(false);
+        auto *row = new QWidget;
+        auto *rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(8);
+        rowLayout->addWidget(edit, 1);
+        rowLayout->addWidget(reset);
+        auto *warning = hint(QString(), "warning");
+        warning->hide();
+        addField(grid, a.label, row, warning);
+        m_shortcutEdits.insert(a.id, edit);
+        m_shortcutWarnings.insert(a.id, warning);
+        connect(edit, &QKeySequenceEdit::keySequenceChanged, this, &SettingsDialog::checkShortcuts);
+        connect(reset, &QPushButton::clicked, this, [edit, a] { edit->setKeySequence(a.defaultKeys); });
+    }
+    auto *resetAll = new QPushButton(QStringLiteral("Reset all to defaults"));
+    resetAll->setAutoDefault(false);
+    connect(resetAll, &QPushButton::clicked, this, [this] {
+        for (const Shortcuts::Action &a : Shortcuts::actions()) {
+            m_shortcutEdits.value(a.id)->setKeySequence(a.defaultKeys);
+        }
+    });
+
+    auto *content = new QWidget;
+    content->setObjectName(QStringLiteral("scrollContent"));
+    auto *contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(0, 0, 12, 0);
+    contentLayout->addLayout(grid);
+    contentLayout->addStretch();
+    auto *scroll = new QScrollArea;
+    scroll->setWidget(content);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(20, 20, 20, 8);
+    layout->setSpacing(8);
+    layout->addWidget(
+        hint(QStringLiteral("Click a field and press the new keys; the clear button unbinds it. They also work while a terminal "
+                            "has focus. The system-wide show/hide shortcut takes this binding the first time it is registered; "
+                            "after that, change it in the desktop's own shortcut settings.")));
+    layout->addWidget(scroll, 1);
+    auto *bottom = new QHBoxLayout;
+    bottom->addWidget(resetAll);
+    bottom->addStretch();
+    layout->addLayout(bottom);
+    checkShortcuts();
+    return page;
+}
+
+QHash<QString, QKeySequence> SettingsDialog::shortcutBindings() const
+{
+    QHash<QString, QKeySequence> out;
+    for (auto it = m_shortcutEdits.cbegin(); it != m_shortcutEdits.cend(); ++it) {
+        out.insert(it.key(), it.value()->keySequence());
+    }
+    return out;
+}
+
+void SettingsDialog::checkShortcuts()
+{
+    for (QLabel *w : std::as_const(m_shortcutWarnings)) {
+        w->hide();
+    }
+    for (const QStringList &ids : Shortcuts::conflicts(shortcutBindings())) {
+        for (const QString &id : ids) {
+            QStringList others;
+            for (const QString &other : ids) {
+                if (other != id) {
+                    others.append(Shortcuts::action(other)->label);
+                }
+            }
+            QLabel *w = m_shortcutWarnings.value(id);
+            w->setText(QStringLiteral("Also used by %1.").arg(others.join(QStringLiteral(", "))));
+            w->show();
+        }
+    }
+}
+
 void SettingsDialog::setDependencies(const QList<Dependency> &list, bool ready)
 {
     while (QLayoutItem *item = m_dependencies->takeAt(0)) {
@@ -1482,6 +1579,19 @@ QJsonObject SettingsDialog::config() const
     root.insert(QStringLiteral("composeBinary"), m_composeBinary->currentText().trimmed());
     root.insert(QStringLiteral("sessionBackend"), m_backendDaemon->isChecked() ? QStringLiteral("daemon") : QStringLiteral("tmux"));
     root.insert(QStringLiteral("theme"), m_theme->currentData().toString());
+    // Only shortcuts that differ from their defaults; "" unbinds one.
+    QJsonObject shortcuts;
+    for (const Shortcuts::Action &a : Shortcuts::actions()) {
+        const QKeySequence keys = m_shortcutEdits.value(a.id)->keySequence();
+        if (keys != a.defaultKeys) {
+            shortcuts.insert(a.id, keys.toString(QKeySequence::PortableText));
+        }
+    }
+    if (shortcuts.isEmpty()) {
+        root.remove(QStringLiteral("shortcuts"));
+    } else {
+        root.insert(QStringLiteral("shortcuts"), shortcuts);
+    }
     root.insert(QStringLiteral("themeLight"), m_themeLight->currentData().toString());
     root.insert(QStringLiteral("themeDark"), m_themeDark->currentData().toString());
     QJsonArray quick;
@@ -1523,6 +1633,21 @@ bool SettingsDialog::validate()
         QMessageBox::warning(this, QStringLiteral("Settings"), message);
         return false;
     };
+
+    if (const QList<QStringList> clashes = Shortcuts::conflicts(shortcutBindings()); !clashes.isEmpty()) {
+        QStringList lines;
+        for (const QStringList &ids : clashes) {
+            QStringList labels;
+            for (const QString &id : ids) {
+                labels.append(Shortcuts::action(id)->label);
+            }
+            lines.append(QStringLiteral("%1: %2").arg(shortcutBindings().value(ids.first()).toString(QKeySequence::NativeText),
+                                                      labels.join(QStringLiteral(", "))));
+        }
+        return fail(
+            QStringLiteral("shortcuts"),
+            QStringLiteral("Some shortcuts are used twice:\n\n%1\n\nGive each its own keys first.").arg(lines.join(QLatin1Char('\n'))));
+    }
 
     QSet<QString> names;
     for (int i = 0; i < m_checkouts.size(); ++i) {

@@ -63,6 +63,8 @@ private:
     void saveLayout();
     void applySettings(const QJsonObject &config);
     void selectTheme();
+    void applyShortcuts();
+    QHash<QString, QAction *> m_shortcuts;
     // Quits after asking whether the agent sessions should stop too.
     void confirmQuit();
     void restart();
