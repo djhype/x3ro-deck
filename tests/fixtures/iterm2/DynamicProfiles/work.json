@@ -1,0 +1,10 @@
+{
+  "Profiles": [
+    {
+      "Name": "Work (dynamic)",
+      "Guid": "DYN-WORK",
+      "Dynamic Profile Parent Name": "Solarized",
+      "Normal Font": "JetBrainsMono-Regular 12"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Default Bookmark Guid</key>
+	<string>B9A1-SOLAR</string>
+	<key>New Bookmarks</key>
+	<array>
+		<dict>
+			<key>Name</key>
+			<string>Default</string>
+			<key>Guid</key>
+			<string>A0A0-DEFAULT</string>
+		</dict>
+		<dict>
+			<key>Name</key>
+			<string>Solarized</string>
+			<key>Guid</key>
+			<string>B9A1-SOLAR</string>
+			<key>Normal Font</key>
+			<string>MesloLGS-NF-Regular 14</string>
+			<key>Background Color</key>
+			<dict>
+				<key>Color Space</key>
+				<string>sRGB</string>
+				<key>Red Component</key>
+				<real>0.0</real>
+				<key>Green Component</key>
+				<real>0.16862745</real>
+				<key>Blue Component</key>
+				<real>0.21176471</real>
+			</dict>
+			<key>Ansi 1 Color</key>
+			<dict>
+				<key>Red Component</key>
+				<real>0.8627451</real>
+				<key>Green Component</key>
+				<real>0.19607843</real>
+				<key>Blue Component</key>
+				<real>0.18431373</real>
+			</dict>
+			<key>Cursor Type</key>
+			<integer>1</integer>
+			<key>Blinking Cursor</key>
+			<true/>
+			<key>Unlimited Scrollback</key>
+			<true/>
+			<key>Custom Command</key>
+			<string>Yes</string>
+			<key>Command</key>
+			<string>/opt/homebrew/bin/fish -l</string>
+		</dict>
+	</array>
+</dict>
+</plist>

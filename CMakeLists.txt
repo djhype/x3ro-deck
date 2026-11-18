@@ -118,9 +118,9 @@ elseif(APPLE)
     # UNUserNotificationCenter and Carbon hot keys, in Objective-C++
     # (manual retain/release).
     enable_language(OBJCXX)
-    set(X3RO_DECK_DESKTOP_PLATFORM src/MacNotifier.mm src/MacGlobalHotkey.mm)
-    set_source_files_properties(src/MacNotifier.mm src/MacGlobalHotkey.mm PROPERTIES COMPILE_OPTIONS -fno-objc-arc)
-    set(X3RO_DECK_DESKTOP_LIBS "-framework Foundation" "-framework UserNotifications" "-framework Carbon")
+    set(X3RO_DECK_DESKTOP_PLATFORM src/MacNotifier.mm src/MacGlobalHotkey.mm src/TerminalAppSettings.mm)
+    set_source_files_properties(src/MacNotifier.mm src/MacGlobalHotkey.mm src/TerminalAppSettings.mm PROPERTIES COMPILE_OPTIONS -fno-objc-arc)
+    set(X3RO_DECK_DESKTOP_LIBS "-framework Foundation" "-framework AppKit" "-framework UserNotifications" "-framework Carbon")
 else()
     set(X3RO_DECK_DESKTOP_PLATFORM src/NotifierNone.cpp src/GlobalHotkeyNone.cpp)
     set(X3RO_DECK_DESKTOP_LIBS)
@@ -177,6 +177,7 @@ add_library(x3ro-deck-base STATIC
     src/GpuTerminalSettings.cpp
     src/DconfTerminalSettings.cpp
     src/DesktopTerminalSettings.cpp
+    src/ITerm2Settings.cpp
     src/TerminalScreen.cpp
     src/TerminalView.cpp
 )
