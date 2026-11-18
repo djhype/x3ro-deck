@@ -1,20 +1,24 @@
 # x3ro-deck
 
-Qt 6 desktop app (C++20, Widgets + QML panels), with no KDE Frameworks dependency, for running coding agents and Docker Compose stacks across several checkouts. It drives Claude Code and Codex, and local models behind an Anthropic- or OpenAI-compatible server through either CLI. It targets Linux with KDE Plasma only, so portability is a non-goal.
+Qt 6 desktop app (C++20, Widgets + QML panels) for running coding agents and Docker Compose stacks across several checkouts, on Linux, macOS and Windows. It drives Claude Code and Codex, and local models behind an Anthropic- or OpenAI-compatible server through either CLI. It needs nothing beyond Qt and libvterm; everything platform-specific sits behind a small interface with one file per OS (`SessionBackend`, `ProcessInfo`, `Notifier`, `GlobalHotkey`, the terminal settings sources, `PtyChannel`).
 
 # Commands
 
-- `cmake --preset linux`: configure into `build/` with Ninja, RelWithDebInfo and `CMAKE_INSTALL_PREFIX=$HOME/.local`. Plain CMake, without extra-cmake-modules. `CMakePresets.json` also has `macos` and `windows` presets; each shows only on its own host.
-- `cmake --build --preset linux`: build both targets. The build must stay warning-free on GCC, Clang and MSVC; `x3ro_deck_set_warnings` in `CMakeLists.txt` picks the flags. Add `-DX3RO_DECK_WERROR=ON` to the configure step to turn warnings into errors (CI does).
+- Configure with the preset for the host; `CMakePresets.json` shows each only on its own OS. All use Ninja and RelWithDebInfo into `build/`:
+  - Linux: `cmake --preset linux` (prefix `~/.local`). Packages: `scripts/ci-linux-deps.sh`.
+  - macOS: `cmake --preset macos -DCMAKE_PREFIX_PATH=$(brew --prefix qt)`. Packages: `scripts/ci-macos-deps.sh` (Homebrew).
+  - Windows: from a Visual Studio Developer prompt with Qt for MSVC on `CMAKE_PREFIX_PATH`, `cmake --preset windows`.
+  - libvterm comes from pkg-config, else from its release tarball (`-DX3RO_DECK_BUNDLED_VTERM=ON` forces that).
+- `cmake --build --preset <linux|macos|windows>`: build everything. The build must stay warning-free on GCC, Clang and MSVC; `x3ro_deck_set_warnings` in `CMakeLists.txt` picks the flags. Add `-DX3RO_DECK_WERROR=ON` to the configure step to turn warnings into errors (CI does).
 - `cmake --install build`: install the binaries to `~/.local/bin`, plus the desktop file and hicolor icons. On macOS the app is a bundle (`x3ro-deck.app`, `data/macos/Info.plist.in`, `life.x3ro.deck`) with the hook, daemon and attach client in `Contents/MacOS`; it installs to `<prefix>/Applications`. `data/icons/x3ro-deck.icns` comes from `scripts/make-icns.py`. Without a native notification backend (`Notifier::isNative`), MainWindow shows a tray message instead. On Windows (MSVC) the build has the `.rc` icon and version info (`data/windows/x3ro-deck.rc.in`) and AppUserModelID `life.x3ro.deck`; it builds `x3ro-deck-sessiond` on ConPTY (the `Q_OS_WIN` branches in `sessiond/Daemon.cpp`: `spawn` with `CreatePseudoConsole`, a reader thread per session, `QWinEventNotifier` for exits, a `QLockFile` per pipe; `--detach` relaunches with `DETACHED_PROCESS | CREATE_BREAKAWAY_FROM_JOB`), `attach/AttachClientWin.cpp` (VT console mode, polled resize) and `ProcessInfoWin.cpp` (Toolhelp32); x3ro-deck-hook writes to the named pipe with `CreateFileW`/`WriteFile` (`AgentBus`'s `QLocalServer` listens on the same name); the Unix-only tests stay out, uses `PtyChannelNone.cpp`, and builds libvterm from its release tarball (`X3RO_DECK_BUNDLED_VTERM`, the fallback whenever pkg-config finds none). Docker Desktop's `npipe://` endpoint is supported, and a missing session daemon shows as the session panel's "The session daemon is required" notice. The desktop and icon rules apply only on `UNIX AND NOT APPLE`. The desktop file comes from `data/x3ro-deck.desktop.in` with an absolute `Exec`, because Plasma's session PATH lacks `~/.local/bin`.
-- After changing the desktop file or icons, refresh the desktop's caches (`update-desktop-database ~/.local/share/applications`; on Plasma, its sycoca rebuild).
+- Linux: after changing the desktop file or icons, refresh the desktop's caches (`update-desktop-database ~/.local/share/applications`, plus the desktop's own menu cache rebuild).
 - `-DX3RO_DECK_CORE_ONLY=ON`: skip the GUI app and its Qt Quick dependency, keeping the hook, `x3ro-deck-sessiond`, `x3ro-deck-attach` and every test. The Qt floor is 6.4 (Ubuntu 24.04 and Debian 12), and the full app builds there.
 - `scripts/check-format.sh [--fix]`: check (or apply) `.clang-format` on every tracked C++ file.
 - `scripts/check-spdx.sh [--fix]`: every tracked C++, Objective-C++, QML, CMake, shell and Python file starts with `SPDX-FileCopyrightText: 2026 x3ro` and `SPDX-License-Identifier: GPL-3.0-or-later` (after a shebang). New files need them; CI checks.
 - `scripts/smoke-test.sh [binary] [out.png]`: headless screenshot in an isolated environment. It fails without a PNG or on any QML error.
 - `ctest --test-dir build`: run the QtTest suites in `tests/`. They link `x3ro-deck-base`, the static library holding everything except the app executable's `main.cpp`, `MainWindow` and `TerminalHost`. `tst_qml` compiles every panel in `qml/`. `tst_sessionflow` drives AppController against a private tmux server, and again as `sessionflow-daemon` against a private `x3ro-deck-sessiond`. `tst_sessiond` covers the daemon's protocol (including the foreground job and process tree), `DaemonBackend`, the attach client in a PTY, `SessiondChannel` and `SessionScreen` redraws (checked against a `TerminalScreen` fed the raw output).
 
-CI (`.github/workflows/ci.yml`) runs in an `archlinux` container and on `ubuntu:24.04` with its distro Qt 6.4 and tmux 3.4, neither with KDE Frameworks. Both build the full app with `-DX3RO_DECK_WERROR=ON`, run `ctest` and the smoke test, and upload the screenshot; the Arch job also checks formatting. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
+CI (`.github/workflows/ci.yml`) builds and tests on Linux (an `archlinux` container, and `ubuntu:24.04` with its distro Qt 6.4 and tmux 3.4), macOS (Homebrew Qt) and Windows (MSVC, Qt 6.8). Both build the full app with `-DX3RO_DECK_WERROR=ON`, run `ctest` and the smoke test, and upload the screenshot; the Arch job also checks formatting. `scripts/ci-linux-deps.sh` lists the packages. For UI changes, also inspect a screenshot yourself (see Workflow).
 
 # Architecture
 
@@ -118,18 +122,18 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container and on `ubuntu:
 # Workflow
 
 - QML is compiled into the binary through `resources.qrc`, so rebuild before every screenshot.
-- Run a headless screenshot after every UI change and inspect the PNG. Add `--settings <page>` to capture the Settings dialog.
+- Run a headless screenshot after every UI change and inspect the PNG. Add `--settings <page>` to capture the Settings dialog, or `--demo` for made-up data that touches nothing (no config, tmux, Docker or gh).
   ```
   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1 \
-    dbus-run-session -- ./build/x3ro-deck --tab agents --select 0 --screenshot out.png 9000
+    ./build/x3ro-deck --demo --tab agents --select 0 --screenshot out.png 9000
   ```
-- Simulate agents by piping hook JSON into `./build/x3ro-deck-hook` with the test instance's `XDG_RUNTIME_DIR` (or `X3RO_DECK_SOCKET`).
-- IMPORTANT: the user usually has the app running. When testing alongside it:
-  - Use `dbus-run-session`, so the test's tray and notifications stay off the desktop's session bus.
-  - Point `XDG_RUNTIME_DIR` at a private 0700 directory with a short path, such as `/run/user/1000/xdt`. Without it, the test only hands its args to the live instance and exits, and `AgentBus` would otherwise take the live app's hooks. Setting `X3RO_DECK_SOCKET` on the test instance and the hook does the same for the socket alone.
-  - Point `TMUX_TMPDIR` at the same directory. The test instance then runs its own `-L x3ro-deck` tmux server, which is safe to kill. The same `XDG_RUNTIME_DIR` also gives a `sessionBackend: "daemon"` test instance its own `x3ro-deck-sessiond`.
-  - Point `XDG_CONFIG_HOME` at a temporary directory containing `{"autostartAgents": false}` in `x3ro-deck/config.json`, and set `GH_CONFIG_DIR=$HOME/.config/gh` so `gh` stays authenticated.
-  - Without `TMUX_TMPDIR`, the test instance attaches to the live `-L x3ro-deck` tmux server. NEVER run `tmux kill-server` or `kill-session` against that server, or choose "Stop agents and quit" in a test instance attached to it, because its sessions hold the user's live agents.
+  On Linux, wrap it in `dbus-run-session --` so the tray and notifications stay off the desktop's bus. On macOS the binary is `build/x3ro-deck.app/Contents/MacOS/x3ro-deck`, on Windows `build\x3ro-deck.exe`.
+- Simulate agents by piping hook JSON into `./build/x3ro-deck-hook` with the test instance's `X3RO_DECK_SOCKET`.
+- IMPORTANT: the user usually has the app running. A test instance against real data must not reach it:
+  - On every OS, point the three sockets at private paths (named pipes on Windows: any name): `X3RO_DECK_SOCKET` (hooks), `X3RO_DECK_INSTANCE_SOCKET` (otherwise the test only hands its args to the live instance and exits) and `X3RO_DECK_SESSIOND_SOCKET` (a private session daemon).
+  - Give it a private config: `XDG_CONFIG_HOME` on Linux, `HOME` on macOS (Qt reads `~/Library/Preferences`), `LOCALAPPDATA` on Windows, holding `{"autostartAgents": false}` in `x3ro-deck/config.json`. Set `GH_CONFIG_DIR` to the real gh config so `gh` stays authenticated.
+  - With the tmux backend (Linux, macOS), set `TMUX_TMPDIR` to a private directory. The test then runs its own `-L x3ro-deck` server, which is safe to kill. Without it, the test attaches to the live `-L x3ro-deck` server: NEVER run `tmux kill-server` or `kill-session` against that server, or choose "Stop agents and quit" in a test attached to it, because its sessions hold the user's live agents.
+  - Linux shortcut: one private 0700 directory with a short path as `XDG_RUNTIME_DIR` (and `TMUX_TMPDIR`) moves all three sockets and the tmux server at once.
 - QML errors go to journald unless `QT_FORCE_STDERR_LOGGING=1` is set.
 - `cmake --install` succeeds while the app runs. The user restarts the app (Ctrl+Q, then relaunch) to pick up the new binary, and agents keep running in tmux.
 - Edit `~/.claude/settings.json` and `~/.codex/hooks.json` only by merging. Other hooks (a notifier, a linter) live alongside `x3ro-deck-hook`.
