@@ -4,6 +4,8 @@
 #include "SessionScreen.h"
 #include "SessiondProtocol.h"
 
+#include <x3ro-deck-socket.h>
+
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
@@ -127,7 +129,7 @@ Daemon::Daemon(const QString &socketPath, QObject *parent)
     m_server->setSocketOptions(QLocalServer::UserAccessOption);
     connect(m_server, &QLocalServer::newConnection, this, &Daemon::onNewConnection);
 
-    if (pipe2(g_childPipe, O_CLOEXEC | O_NONBLOCK) == 0) {
+    if (x3ro_deck::cloexecPipe(g_childPipe, true) == 0) {
         struct sigaction sa{};
         sa.sa_handler = onSigchld;
         sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;

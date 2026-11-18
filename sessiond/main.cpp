@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
     int ready = -1;
     if (detach) {
         int fds[2];
-        if (pipe2(fds, O_CLOEXEC) != 0) {
+        if (x3ro_deck::cloexecPipe(fds, false) != 0) {
             std::perror("x3ro-deck-sessiond: pipe");
             return 1;
         }

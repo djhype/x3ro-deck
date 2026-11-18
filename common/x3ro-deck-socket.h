@@ -20,6 +20,8 @@
 #if defined(_WIN32)
 #include <cstdlib>
 #else
+#include <fcntl.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 #endif
@@ -87,6 +89,52 @@ inline SocketPath socketPathFor(const char *overrideVar, const std::string &file
 #endif
     return r;
 }
+
+#if !defined(_WIN32)
+// pipe2, SOCK_CLOEXEC and MSG_NOSIGNAL are Linux (and BSD) only; macOS
+// gets the same effect with fcntl and SO_NOSIGPIPE.
+inline int cloexecPipe(int fds[2], bool nonblock)
+{
+#if defined(__linux__)
+    return pipe2(fds, O_CLOEXEC | (nonblock ? O_NONBLOCK : 0));
+#else
+    if (pipe(fds) != 0) {
+        return -1;
+    }
+    for (int i = 0; i < 2; ++i) {
+        fcntl(fds[i], F_SETFD, FD_CLOEXEC);
+        if (nonblock) {
+            fcntl(fds[i], F_SETFL, fcntl(fds[i], F_GETFL) | O_NONBLOCK);
+        }
+    }
+    return 0;
+#endif
+}
+
+// A Unix stream socket that is closed on exec and never raises SIGPIPE.
+inline int unixStreamSocket()
+{
+#if defined(SOCK_CLOEXEC)
+    return socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#else
+    const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd >= 0) {
+        fcntl(fd, F_SETFD, FD_CLOEXEC);
+#if defined(SO_NOSIGPIPE)
+        const int one = 1;
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof one);
+#endif
+    }
+    return fd;
+#endif
+}
+
+#if defined(MSG_NOSIGNAL)
+constexpr int kSendNoSignal = MSG_NOSIGNAL;
+#else
+constexpr int kSendNoSignal = 0; // SO_NOSIGPIPE is set on the socket instead
+#endif
+#endif
 
 inline SocketPath hookSocketPath()
 {

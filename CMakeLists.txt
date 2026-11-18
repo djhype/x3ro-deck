@@ -240,13 +240,11 @@ endif()
 
 # The hook runs on every agent tool call, so it is plain C++ with no Qt
 # dependency: it starts in about a millisecond and never blocks the agent.
-# It speaks Unix sockets; Windows gets a named-pipe client in its own ticket.
-if(NOT WIN32)
-    add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
-    x3ro_deck_set_warnings(x3ro-deck-hook)
-    target_include_directories(x3ro-deck-hook PRIVATE common)
-    target_compile_options(x3ro-deck-hook PRIVATE $<IF:$<BOOL:${MSVC}>,/O2,-O2>)
-endif()
+# A Unix socket client, or a named-pipe one on Windows.
+add_executable(x3ro-deck-hook hook/x3ro-deck-hook.cpp)
+x3ro_deck_set_warnings(x3ro-deck-hook)
+target_include_directories(x3ro-deck-hook PRIVATE common)
+target_compile_options(x3ro-deck-hook PRIVATE $<IF:$<BOOL:${MSVC}>,/O2,-O2>)
 
 if(APPLE AND NOT X3RO_DECK_CORE_ONLY)
     set_target_properties(x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach PROPERTIES
@@ -267,10 +265,7 @@ else()
     if(NOT X3RO_DECK_CORE_ONLY)
         install(TARGETS x3ro-deck RUNTIME DESTINATION bin)
     endif()
-    install(TARGETS x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
-    if(NOT WIN32)
-        install(TARGETS x3ro-deck-hook RUNTIME DESTINATION bin)
-    endif()
+    install(TARGETS x3ro-deck-hook x3ro-deck-sessiond x3ro-deck-attach RUNTIME DESTINATION bin)
 endif()
 if(UNIX AND NOT APPLE)
     # Exec is absolute: Plasma's session PATH lacks ~/.local/bin, which usually

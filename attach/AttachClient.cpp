@@ -97,7 +97,7 @@ struct Connection
             return false;
         }
         std::memcpy(addr.sun_path, path.c_str(), path.size());
-        fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+        fd = x3ro_deck::unixStreamSocket();
         return fd >= 0 && ::connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof addr) == 0;
     }
     bool send(const QByteArray &frame) { return writeAll(fd, frame); }
@@ -236,7 +236,7 @@ int runAttach(int argc, char **argv)
         }
     }
 
-    if (pipe2(g_signalPipe, O_CLOEXEC | O_NONBLOCK) != 0) {
+    if (x3ro_deck::cloexecPipe(g_signalPipe, true) != 0) {
         std::perror("x3ro-deck attach: pipe");
         return 1;
     }
