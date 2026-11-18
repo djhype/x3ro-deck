@@ -1,12 +1,12 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJsonObject>
 #include <QMainWindow>
 #include <QPointer>
 
 class AppController;
-class KStatusNotifierItem;
 class QQmlEngine;
 class QQuickWidget;
 class QSplitter;
@@ -14,6 +14,7 @@ class QStackedWidget;
 class QTabWidget;
 class SettingsDialog;
 class TerminalHost;
+class TrayIcon;
 
 class MainWindow : public QMainWindow
 {
@@ -22,6 +23,9 @@ public:
     explicit MainWindow(AppController *app, QWidget *parent = nullptr);
 
     void toggleVisible();
+    // A tray click deactivates the window before it arrives, so a window
+    // that was active just before counts as active.
+    void toggleFromTray();
     void reveal();
     // checkouts | agents | docker | general; empty opens the first page.
     void openSettings(const QString &page);
@@ -32,6 +36,7 @@ protected:
     void closeEvent(QCloseEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void hideEvent(QHideEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 private:
     QQuickWidget *quick(const QString &file, QWidget *parent);
@@ -61,9 +66,10 @@ private:
     QList<QSplitter *> m_splitters;
     QHash<int, QTabWidget *> m_shellTabs;
     QHash<int, TerminalHost *> m_agentTerms;
-    KStatusNotifierItem *m_tray = nullptr;
+    TrayIcon *m_tray = nullptr;
     QPointer<SettingsDialog> m_settings;
     bool m_quitting = false;
     bool m_confirmingQuit = false;
     bool m_restart = false;
+    QElapsedTimer m_deactivated;
 };

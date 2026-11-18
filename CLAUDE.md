@@ -36,7 +36,8 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
   - A checkout's `agent` key names the profile a fresh session starts; `defaultAgent` covers the rest.
 - `src/SettingsDialog.cpp`: the Settings dialog, a Widgets form over `config.json`. It edits the JSON itself, so keys without a field survive a save, and it leaves profile keys at their kind's defaults out of the file. `data/style.qss` styles it under `SettingsDialog` and `QMessageBox` selectors.
 - `src/MainWindow.cpp`: builds the widget layout with `QSplitter`s and one `QQuickWidget` per QML panel; all panels share one `QQmlEngine`.
-  - It also owns the terminals, shortcuts, the tray icon and `KNotification`s.
+  - It also owns the terminals, shortcuts, the tray icon (`TrayIcon`) and `KNotification`s.
+  - Closing the window hides it to the tray, or minimizes it when the desktop has no tray. A tray click hides a window that was active just before the click (the click itself deactivates it).
   - Ctrl+Q and the tray's Quit go through `confirmQuit`, which offers to stop the agents by killing the tmux server.
   - Layout state persists in `~/.config/x3ro-deck/x3ro-deck.conf`.
 - `src/TerminalHost.cpp`: hosts one built-in terminal (`TerminalView`). An agent terminal reads the backend's `attachChannel()` when it has one (the daemon); otherwise it runs the backend's attach command (or the imported shell for shell tabs) in a `PtyChannel`. `setProfile` applies imported settings to every open terminal at once.
@@ -73,6 +74,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
 - `src/SessiondProtocol.h`: the daemon's wire format, documented there. Frames are a big-endian u32 length, a type byte and a payload: `Control` (JSON with `op`/`id`, replies with `re`, events with `event`), `Output` and `Input` (u32 session id plus bytes). Add ops or fields rather than bumping `kProtocolVersion`.
 - `attach/AttachClient.cpp`: `x3ro-deck attach [--socket PATH] <checkout>`. It runs both as `x3ro-deck-attach` (QtCore only) and as the `attach` subcommand that `main.cpp` handles before `QApplication`. It uses raw mode, forwards `SIGWINCH`, and Ctrl+\ detaches. On exit it resets every mode a redraw can set.
 - `src/SingleInstance.{h,cpp}`: one instance per user. A `QLockFile` at `<socket>.lock` (stale only when its owner's PID is gone) picks the primary, which listens on `x3ro-deck-instance.sock` in the runtime directory (`$X3RO_DECK_INSTANCE_SOCKET` overrides it). A later launch first tries to hand the primary its args and `XDG_ACTIVATION_TOKEN`/`DESKTOP_STARTUP_ID` as one JSON line, waits for `ok`, and exits. Trying the socket before the lock matters: after `cmake --install` the running owner's executable reads as deleted and QLockFile would call its lock stale.
+- `src/TrayIcon.{h,cpp}`: `QSystemTrayIcon` with a Show/Hide and Quit menu. `QSystemTrayIcon` has no attention status, so NEEDS YOU swaps in the app icon with an amber badge (`withBadge`) and updates the tooltip.
 - `src/AgentBus.cpp`: `QLocalServer` on the hook socket. It reads one JSON hook payload per connection.
 - `common/x3ro-deck-socket.h`: the socket paths, shared with the hook and free of Qt. `sessiondSocketPath()` resolves the daemon's `x3ro-deck-sessiond.sock` the same way, with `$X3RO_DECK_SESSIOND_SOCKET` as its override. `$X3RO_DECK_SOCKET` overrides it. Otherwise it is `$XDG_RUNTIME_DIR/x3ro-deck.sock` on Linux and `$TMPDIR/x3ro-deck.sock` on macOS, or `/tmp/x3ro-deck-<uid>/x3ro-deck.sock` when those are unset or too long for `sun_path` (107 bytes on Linux, 103 on macOS).
 - `hook/x3ro-deck-hook.cpp`: plain C++ with no Qt. Claude Code runs it from `~/.claude/settings.json` and Codex from `~/.codex/hooks.json`; both send the same Claude-style JSON. It must always exit 0, print nothing and finish in milliseconds.
@@ -127,5 +129,5 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container, plus a core-on
 - tmux before 3.5 prints tabs in `-F` output as `_`, so `TmuxManager` separates fields with `:`. Session names never contain `:`.
 - Exited containers with exit code 0 count as `completed`. They are excluded from up/total counts and never raise NEEDS YOU items.
 - `PrWatcher` skips `main`, `master` and `develop`. A closed, unmerged PR turns "View PR" back into the profile's `prPrompt`.
-- `KStatusNotifierItem` and `KGlobalAccel` log errors under `dbus-run-session`. These are expected in headless tests.
+- `KGlobalAccel` logs errors under `dbus-run-session`. These are expected in headless tests.
 - The icon source is `data/icons/x3ro-deck.svg`. After editing it, regenerate the PNGs with `rsvg-convert -w N -h N` and the ICO with `magick x3ro-deck-{16,24,32,48,64,128,256}.png x3ro-deck.ico`.

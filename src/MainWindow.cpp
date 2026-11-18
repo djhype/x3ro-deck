@@ -5,10 +5,10 @@
 #include "TerminalHost.h"
 #include "TerminalProfile.h"
 #include "TerminalSettings.h"
+#include "TrayIcon.h"
 
 #include <KGlobalAccel>
 #include <KNotification>
-#include <KStatusNotifierItem>
 #include <KWindowSystem>
 
 #include <QAction>
@@ -26,6 +26,7 @@
 #include <QSettings>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QSystemTrayIcon>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QTimer>
@@ -171,10 +172,7 @@ MainWindow::MainWindow(AppController *app, QWidget *parent)
     connect(m_app, &AppController::settingsRequested, this, &MainWindow::openSettings);
     connect(m_app, &AppController::totalsChanged, this, [this] {
         if (m_tray) {
-            const int n = m_app->needsYou();
-            m_tray->setStatus(n > 0 ? KStatusNotifierItem::NeedsAttention : KStatusNotifierItem::Active);
-            m_tray->setToolTip(QStringLiteral("utilities-terminal"), QStringLiteral("X3RO Deck"),
-                               n > 0 ? QStringLiteral("%1 item(s) need you").arg(n) : QStringLiteral("All quiet"));
+            m_tray->setNeedsYou(m_app->needsYou());
         }
     });
     connect(qApp, &QApplication::aboutToQuit, this, [this] {
@@ -243,18 +241,13 @@ void MainWindow::buildShortcuts()
 
 void MainWindow::buildTray()
 {
-    m_tray = new KStatusNotifierItem(QStringLiteral("x3ro-deck"), this);
-    m_tray->setIconByName(QStringLiteral("x3ro-deck"));
-    m_tray->setAttentionIconByName(QStringLiteral("dialog-warning"));
-    m_tray->setTitle(QStringLiteral("X3RO Deck"));
-    m_tray->setCategory(KStatusNotifierItem::ApplicationStatus);
-    m_tray->setStatus(KStatusNotifierItem::Active);
-    m_tray->setStandardActionsEnabled(true);
-    connect(m_tray, &KStatusNotifierItem::activateRequested, this, [this](bool, const QPoint &) { toggleVisible(); });
-    connect(m_tray, &KStatusNotifierItem::quitRequested, this, [this] {
-        m_tray->abortQuit();
-        QTimer::singleShot(0, this, &MainWindow::confirmQuit);
-    });
+    m_tray = new TrayIcon(windowIcon(), this);
+    m_tray->setNeedsYou(m_app->needsYou());
+    m_tray->setWindowVisible(isVisible());
+    connect(m_tray, &TrayIcon::toggleRequested, this, &MainWindow::toggleFromTray);
+    // Queued: the prompt must not run inside the tray menu's activation.
+    connect(m_tray, &TrayIcon::quitRequested, this, &MainWindow::confirmQuit, Qt::QueuedConnection);
+    m_tray->show();
 }
 
 void MainWindow::confirmQuit()
@@ -365,8 +358,27 @@ void MainWindow::toggleVisible()
     }
 }
 
+void MainWindow::toggleFromTray()
+{
+    const bool wasActive = isActiveWindow() || (m_deactivated.isValid() && m_deactivated.elapsed() < 500);
+    if (isVisible() && !isMinimized() && wasActive) {
+        hide();
+    } else {
+        reveal();
+    }
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::ActivationChange && !isActiveWindow()) {
+        m_deactivated.start();
+    }
+}
+
 void MainWindow::reveal()
 {
+    setWindowState(windowState() & ~Qt::WindowMinimized);
     show();
     raise();
     activateWindow();
@@ -388,9 +400,16 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     saveLayout();
     // Closing hides to the tray so hook events and notifications keep flowing.
-    // Ctrl+Q or the tray menu quits; agents keep running either way.
-    if (!m_quitting) {
-        hide();
+    // Ctrl+Q or the tray menu quits; agents keep running either way. Without
+    // a tray (stock GNOME) a hidden window could not come back, so it minimizes.
+    // Only the window manager's close counts: QApplication::quit() closes the
+    // windows first and gives up if one stays visible.
+    if (!m_quitting && event->spontaneous()) {
+        if (QSystemTrayIcon::isSystemTrayAvailable()) {
+            hide();
+        } else {
+            showMinimized();
+        }
         event->ignore();
         return;
     }
@@ -401,12 +420,18 @@ void MainWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
     updateStatsVisibility();
+    if (m_tray) {
+        m_tray->setWindowVisible(true);
+    }
 }
 
 void MainWindow::hideEvent(QHideEvent *event)
 {
     QMainWindow::hideEvent(event);
     updateStatsVisibility();
+    if (m_tray) {
+        m_tray->setWindowVisible(false);
+    }
 }
 
 void MainWindow::updateStatsVisibility()
