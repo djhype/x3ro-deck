@@ -3,6 +3,7 @@
 #include "ComposeFiles.h"
 #include "DaemonBackend.h"
 #include "DockerEndpoint.h"
+#include "ListeningPorts.h"
 #include "Paths.h"
 #include "PortProbe.h"
 #include "SwitchingBackend.h"
@@ -326,6 +327,10 @@ AppController::AppController(QObject *parent)
         Q_EMIT currentChanged();
     });
 
+    // Dev servers started in a checkout (an agent's, a quick command's) get
+    // browser links like Docker's published ports.
+    m_portScan.setInterval(3000);
+    connect(&m_portScan, &QTimer::timeout, this, &AppController::scanListeningPorts);
     m_statsTimer.setInterval(5000);
     connect(&m_statsTimer, &QTimer::timeout, this, &AppController::sampleStats);
 }
@@ -363,6 +368,8 @@ void AppController::start()
     m_docker->start();
     m_sessions->startPolling(3000);
     m_statsTimer.start();
+    m_portScan.start();
+    scanListeningPorts();
     m_deps->probeLoginPath(m_terminalSettings->current().shell);
     publishCheckouts();
     publishServices();
@@ -561,13 +568,60 @@ QVariantList AppController::links() const
     }
     std::sort(found.begin(), found.end(),
               [](const Found &a, const Found &b) { return std::tie(a.service, a.publicPort) < std::tie(b.service, b.publicPort); });
+    // Then the checkout's own processes, named after the program.
+    QList<QPair<QString, int>> processes;
+    for (const auto &[name, port] : m_checkouts.at(m_current).listening) {
+        if (m_probe->isHttp(port) && !seen.contains(port)) {
+            seen.insert(port);
+            processes.append({name, port});
+        }
+    }
     for (const Found &f : std::as_const(found)) {
         // A service with several web ports names each by its container port.
         const bool several = std::count_if(found.cbegin(), found.cend(), [&](const Found &o) { return o.service == f.service; }) > 1;
         out.append(QVariantMap{{QStringLiteral("label"), several ? QStringLiteral("%1:%2").arg(f.service).arg(f.privatePort) : f.service},
                                {QStringLiteral("port"), f.publicPort}});
     }
+    for (const auto &[name, port] : std::as_const(processes)) {
+        const bool several = std::count_if(processes.cbegin(), processes.cend(), [&](const auto &o) { return o.first == name; }) > 1;
+        out.append(QVariantMap{{QStringLiteral("label"), several ? QStringLiteral("%1:%2").arg(name).arg(port) : name},
+                               {QStringLiteral("port"), port}});
+    }
     return out;
+}
+
+void AppController::scanListeningPorts()
+{
+    QList<QList<QPair<QString, int>>> next(m_checkouts.size());
+    for (const ListeningPorts::Listener &l : ListeningPorts::scan()) {
+        const int idx = l.cwd.isEmpty() ? -1 : checkoutForPath(Paths::normalize(l.cwd));
+        if (idx >= 0 && !next[idx].contains(qMakePair(l.name, l.port))) {
+            next[idx].append({l.name, l.port});
+        }
+    }
+    bool changed = false;
+    for (int i = 0; i < m_checkouts.size(); ++i) {
+        std::sort(next[i].begin(), next[i].end(), [](const auto &a, const auto &b) { return a.second < b.second; });
+        if (next[i] != m_checkouts[i].listening) {
+            m_checkouts[i].listening = next[i];
+            changed = true;
+        }
+    }
+    if (changed) {
+        probePorts();
+        Q_EMIT currentChanged();
+    }
+}
+
+void AppController::probePorts()
+{
+    QSet<int> ports = m_dockerPorts;
+    for (const Checkout &c : std::as_const(m_checkouts)) {
+        for (const auto &l : c.listening) {
+            ports.insert(l.second);
+        }
+    }
+    m_probe->setPorts(ports);
 }
 
 int AppController::containersUp() const
@@ -731,7 +785,8 @@ void AppController::onContainers(const QList<ContainerInfo> &containers)
             }
         }
     }
-    m_probe->setPorts(published);
+    m_dockerPorts = published;
+    probePorts();
     publishCheckouts();
     publishServices();
     publishAttention();

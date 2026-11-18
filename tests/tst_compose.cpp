@@ -4,6 +4,7 @@
 #include "ComposeFiles.h"
 #include "Config.h"
 #include "DockerClient.h"
+#include "ListeningPorts.h"
 #include "PortProbe.h"
 
 #include <QFile>
@@ -187,6 +188,60 @@ private Q_SLOTS:
         QCOMPARE(labels(), QStringList{QStringLiteral("api")});
         Q_EMIT app.docker()->containersUpdated(all);
         QTRY_COMPARE_WITH_TIMEOUT(labels(), (QStringList{QStringLiteral("api"), QStringLiteral("web")}), 3000);
+    }
+
+    void netTcpTable()
+    {
+        const QByteArray table = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
+                                 "   0: 0100007F:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 111 1\n"
+                                 "   1: 00000000:0016 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 222 1\n"
+                                 "   2: 0100007F:1F91 0100007F:9C40 01 00000000:00000000 00:00000000 00000000  1000        0 333 1\n";
+        const QList<QPair<int, quint64>> ports = ListeningPorts::parseNetTcp(table, 1000);
+        QCOMPARE(ports.size(), 1); // root's sshd and an established connection are not ours
+        QCOMPARE(ports.first(), (QPair<int, quint64>(8080, 111)));
+    }
+
+    // A dev server in the checkout's folder gets a link named after its
+    // program; one that does not answer HTTP gets none.
+    void processLinks()
+    {
+#if !defined(Q_OS_LINUX)
+        QSKIP("reads /proc");
+#endif
+        QTemporaryDir tmp;
+        qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());
+        qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
+        qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
+        QVERIFY(QDir().mkpath(tmp.filePath(QStringLiteral("x3ro-deck"))));
+        const QString dir = QFileInfo(tmp.filePath(QStringLiteral("dev"))).absoluteFilePath();
+        QVERIFY(QDir().mkpath(dir));
+        QVERIFY(Config::writeJson(
+            QJsonObject{{QStringLiteral("checkouts"),
+                         QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("dev")}, {QStringLiteral("path"), dir}}}}}));
+        const QString before = QDir::currentPath();
+        QVERIFY(QDir::setCurrent(dir)); // this process now "runs in" the checkout
+        AppController app;
+        auto *web = serve(this, "HTTP/1.1 200 OK\r\n\r\n");
+        auto *raw = serve(this, "+PONG\r\n");
+        app.scanListeningPorts();
+        auto ports = [&app] {
+            QList<int> out;
+            for (const QVariant &l : app.links()) {
+                out << l.toMap().value(QStringLiteral("port")).toInt();
+            }
+            return out;
+        };
+        QTRY_COMPARE_WITH_TIMEOUT(ports(), QList<int>{web->serverPort()}, 3000);
+        const QString name = app.links().first().toMap().value(QStringLiteral("label")).toString();
+        QVERIFY2(QStringLiteral("tst_compose").startsWith(name), qPrintable(name));
+        QVERIFY(!ports().contains(raw->serverPort()));
+
+        web->close();
+        app.scanListeningPorts();
+        QCOMPARE(ports(), QList<int>());
+        delete raw;
+        delete web;
+        QDir::setCurrent(before);
     }
 
     void labelsPickTheCheckout()

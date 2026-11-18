@@ -66,6 +66,8 @@ struct Checkout
     QList<ServiceRow> services;
     AgentInfo agent;
     PrInfo pr;
+    // TCP ports processes in the checkout's folder listen on: name, port.
+    QList<QPair<QString, int>> listening;
 };
 
 class AppController : public QObject
@@ -126,6 +128,8 @@ public:
     const AgentProfile &profile(int i) const { return m_config.agent(m_checkouts.at(i).agent.profile); }
     SessionBackend *sessions() const { return m_sessions; }
     DockerClient *docker() const { return m_docker; }
+    // Finds the ports processes in each checkout listen on (every 3 s once started).
+    void scanListeningPorts();
     // How a change of sessionBackend treats sessions in the old backend; both
     // take effect at the next start.
     enum class BackendSwitch {
@@ -262,6 +266,9 @@ private:
     QSet<QString> m_dismissed; // attention keys
     QSet<QString> m_raised; // attention keys already announced
     QTimer m_statsTimer;
+    QTimer m_portScan;
+    QSet<int> m_dockerPorts;
+    void probePorts();
     bool m_statsVisible = false;
     bool m_panesPolled = false;
 };

@@ -115,6 +115,7 @@ add_library(x3ro-deck-base STATIC
     src/SwitchingBackend.cpp
     src/ComposeFiles.cpp
     src/PortProbe.cpp
+    src/ListeningPorts.cpp
     src/AppTheme.cpp
     src/DeckDialog.h
     src/AboutDialog.cpp
