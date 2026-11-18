@@ -117,3 +117,8 @@ x3ro_deck_set_warnings(tst_theme)
 target_link_libraries(tst_theme PRIVATE x3ro-deck-base Qt6::Test)
 target_compile_definitions(tst_theme PRIVATE X3RO_DECK_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 add_test(NAME theme COMMAND tst_theme)
+
+add_executable(tst_prwatcher tst_prwatcher.cpp)
+x3ro_deck_set_warnings(tst_prwatcher)
+target_link_libraries(tst_prwatcher PRIVATE x3ro-deck-base Qt6::Test)
+add_test(NAME prwatcher COMMAND tst_prwatcher)

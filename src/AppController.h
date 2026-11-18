@@ -199,6 +199,7 @@ private:
     void publishAttention();
     QString expand(int index, const QString &command) const;
     QVariantMap missingNotice(const QString &dependency) const;
+    static QVariantMap prNotice(const QString &problem);
     // The current profile's command, when it is missing.
     const Dependency *agentMissing(int index) const;
     int publicPort(int index, const QString &service, int containerPort) const;

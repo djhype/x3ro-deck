@@ -159,7 +159,8 @@ Rectangle {
 
             Notice {
                 width: parent.width
-                notice: cur.ghMissing || ({})
+                notice: cur.prNotice || ({})
+                onActivated: app.refreshPr()
             }
 
             PrPanel {

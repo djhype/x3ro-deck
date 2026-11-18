@@ -362,7 +362,7 @@ QVariantMap AppController::current() const
         {QStringLiteral("lastMessage"), a.lastMessage},
         {QStringLiteral("pr"), prMap(c.pr)},
         {QStringLiteral("prUrl"), viewableUrl(c.pr)},
-        {QStringLiteral("ghMissing"), missingNotice(QStringLiteral("gh"))},
+        {QStringLiteral("prNotice"), prNotice(c.pr.problem)},
         {QStringLiteral("agentMissing"),
          [&] {
              const Dependency *d = agentMissing(m_current);
@@ -372,6 +372,30 @@ QVariantMap AppController::current() const
                       : QVariantMap{};
          }()},
     };
+}
+
+QVariantMap AppController::prNotice(const QString &problem)
+{
+    auto notice = [](const QString &title, const QString &hint, bool info = false) {
+        return QVariantMap{{QStringLiteral("title"), title},
+                           {QStringLiteral("hint"), hint},
+                           {QStringLiteral("tone"), info ? QStringLiteral("info") : QStringLiteral("warning")},
+                           {QStringLiteral("action"), info ? QString() : QStringLiteral("Check again")}};
+    };
+    if (problem == QLatin1String("gh-missing")) {
+        return notice(QStringLiteral("GitHub CLI (gh) not found"),
+                      QStringLiteral("Install the GitHub CLI (https://cli.github.com), then run gh auth login. "
+                                     "Pull request status is off until then."));
+    }
+    if (problem == QLatin1String("gh-logged-out")) {
+        return notice(QStringLiteral("GitHub CLI is not logged in"),
+                      QStringLiteral("Run gh auth login in a terminal. X3RO Deck checks again every few minutes."));
+    }
+    if (problem == QLatin1String("no-github-remote")) {
+        return notice(QStringLiteral("No GitHub remote"),
+                      QStringLiteral("The origin remote is missing or not on GitHub, so there is no pull request status."), true);
+    }
+    return {};
 }
 
 QVariantMap AppController::missingNotice(const QString &dependency) const
@@ -1264,6 +1288,7 @@ QVariantList AppController::welcomeCandidates() const
 
 void AppController::refreshPr()
 {
+    m_prs->recheck();
     if (m_current < m_checkouts.size()) {
         m_prs->refresh(m_checkouts[m_current].cfg.name);
     }
