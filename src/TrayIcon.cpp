@@ -20,6 +20,8 @@ TrayIcon::TrayIcon(const QIcon &icon, QObject *parent)
 {
     m_toggle = m_menu->addAction(QStringLiteral("Hide X3RO Deck"));
     m_menu->addSeparator();
+    connect(m_menu->addAction(QIcon::fromTheme(QStringLiteral("help-about")), QStringLiteral("About x3ro deck")), &QAction::triggered, this,
+            &TrayIcon::aboutRequested);
     m_quit = m_menu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), QStringLiteral("Quit"));
     connect(m_toggle, &QAction::triggered, this, &TrayIcon::toggleRequested);
     connect(m_quit, &QAction::triggered, this, &TrayIcon::quitRequested);

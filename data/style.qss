@@ -82,30 +82,30 @@ QToolButton#newTab:hover {
 /* Settings and message boxes, in the QML panels' palette. Scoped by class so
    the Konsole parts and the system file dialog keep their own look. */
 
-SettingsDialog, QMessageBox {
+DeckDialog, QMessageBox {
     background: ${bg1};
 }
-SettingsDialog QLabel, QMessageBox QLabel {
+DeckDialog QLabel, QMessageBox QLabel {
     color: ${soft};
     font-family: "${font.sans}";
     font-size: 13px;
 }
-SettingsDialog QLabel#hint {
+DeckDialog QLabel#hint {
     color: ${dim};
     font-size: 12px;
 }
-SettingsDialog QLabel#warning {
+DeckDialog QLabel#warning {
     color: ${amber};
     font-size: 12px;
 }
-SettingsDialog QLabel#section {
+DeckDialog QLabel#section {
     color: ${dim};
     font-size: 11px;
     font-weight: 600;
     padding-top: 6px;
 }
 
-SettingsDialog QLineEdit, SettingsDialog QPlainTextEdit, SettingsDialog QComboBox {
+DeckDialog QLineEdit, DeckDialog QPlainTextEdit, DeckDialog QComboBox {
     background: ${bg0};
     color: ${text};
     border: 1px solid ${line};
@@ -116,33 +116,33 @@ SettingsDialog QLineEdit, SettingsDialog QPlainTextEdit, SettingsDialog QComboBo
     selection-background-color: ${magenta};
     selection-color: ${ink};
 }
-SettingsDialog QLineEdit[mono="true"], SettingsDialog QPlainTextEdit[mono="true"] {
+DeckDialog QLineEdit[mono="true"], DeckDialog QPlainTextEdit[mono="true"] {
     font-family: "${font.mono}";
     font-size: 12px;
 }
-SettingsDialog QLineEdit:focus, SettingsDialog QPlainTextEdit:focus, SettingsDialog QComboBox:focus {
+DeckDialog QLineEdit:focus, DeckDialog QPlainTextEdit:focus, DeckDialog QComboBox:focus {
     border-color: ${magenta};
 }
-SettingsDialog QLineEdit:disabled, SettingsDialog QPlainTextEdit:disabled, SettingsDialog QComboBox:disabled {
+DeckDialog QLineEdit:disabled, DeckDialog QPlainTextEdit:disabled, DeckDialog QComboBox:disabled {
     color: ${muted};
     border-color: ${rowLine};
 }
-SettingsDialog QComboBox QLineEdit {
+DeckDialog QComboBox QLineEdit {
     background: transparent;
     border: none;
     border-radius: 0;
     padding: 0;
 }
-SettingsDialog QComboBox::drop-down {
+DeckDialog QComboBox::drop-down {
     border: none;
     width: 26px;
 }
-SettingsDialog QComboBox::down-arrow {
+DeckDialog QComboBox::down-arrow {
     image: url(${icon:chevron-down});
     width: 12px;
     height: 12px;
 }
-SettingsDialog QComboBox QAbstractItemView {
+DeckDialog QComboBox QAbstractItemView {
     background: ${panel};
     color: ${text};
     border: 1px solid ${line2};
@@ -152,7 +152,7 @@ SettingsDialog QComboBox QAbstractItemView {
     selection-color: ${magenta};
 }
 
-SettingsDialog QPushButton, QMessageBox QPushButton {
+DeckDialog QPushButton, QMessageBox QPushButton {
     background: ${raised};
     color: ${text};
     border: 1px solid ${line};
@@ -161,30 +161,30 @@ SettingsDialog QPushButton, QMessageBox QPushButton {
     font-family: "${font.sans}";
     font-size: 13px;
 }
-SettingsDialog QPushButton:hover, QMessageBox QPushButton:hover {
+DeckDialog QPushButton:hover, QMessageBox QPushButton:hover {
     background: ${selected};
     border-color: ${line2};
 }
-SettingsDialog QPushButton:default, QMessageBox QPushButton:default {
+DeckDialog QPushButton:default, QMessageBox QPushButton:default {
     background: ${magenta/0.08};
     color: ${magenta};
     border-color: ${magenta};
     font-weight: 600;
 }
-SettingsDialog QPushButton:default:hover, QMessageBox QPushButton:default:hover {
+DeckDialog QPushButton:default:hover, QMessageBox QPushButton:default:hover {
     background: ${magenta/0.18};
 }
-SettingsDialog QPushButton:disabled {
+DeckDialog QPushButton:disabled {
     color: ${faint};
     border-color: ${rowLine};
 }
-SettingsDialog QPushButton#small {
+DeckDialog QPushButton#small {
     padding: 5px 12px;
     border-radius: 7px;
     font-size: 12px;
 }
 
-SettingsDialog QListWidget, SettingsDialog QTableWidget {
+DeckDialog QListWidget, DeckDialog QTableWidget {
     background: ${panel};
     color: ${text};
     border: 1px solid ${line};
@@ -193,45 +193,45 @@ SettingsDialog QListWidget, SettingsDialog QTableWidget {
     font-family: "${font.sans}";
     font-size: 13px;
 }
-SettingsDialog QListWidget {
+DeckDialog QListWidget {
     padding: 4px;
 }
-SettingsDialog QListWidget::item {
+DeckDialog QListWidget::item {
     padding: 8px 10px;
     border-radius: 7px;
 }
-SettingsDialog QListWidget::item:selected {
+DeckDialog QListWidget::item:selected {
     background: ${selected};
     color: ${magenta};
 }
-SettingsDialog QListWidget::item:hover:!selected {
+DeckDialog QListWidget::item:hover:!selected {
     background: ${raised};
 }
-SettingsDialog QTableWidget {
+DeckDialog QTableWidget {
     font-family: "${font.mono}";
     font-size: 12px;
 }
-SettingsDialog QTableWidget::item {
+DeckDialog QTableWidget::item {
     padding: 0 8px;
 }
-SettingsDialog QTableWidget::item:selected {
+DeckDialog QTableWidget::item:selected {
     background: ${selected};
     color: ${text};
 }
-SettingsDialog QTableWidget QLineEdit {
+DeckDialog QTableWidget QLineEdit {
     border-radius: 0;
     padding: 0 6px;
     font-family: "${font.mono}";
     font-size: 12px;
 }
-SettingsDialog QTableWidget QComboBox {
+DeckDialog QTableWidget QComboBox {
     background: transparent;
     border: none;
     border-radius: 0;
     padding: 0 8px;
     font-size: 12px;
 }
-SettingsDialog QHeaderView::section {
+DeckDialog QHeaderView::section {
     background: ${bg1};
     color: ${dim};
     border: none;
@@ -240,46 +240,46 @@ SettingsDialog QHeaderView::section {
     font-family: "${font.sans}";
     font-size: 11px;
 }
-SettingsDialog QTableCornerButton::section {
+DeckDialog QTableCornerButton::section {
     background: ${bg1};
     border: none;
 }
 
-SettingsDialog QCheckBox {
+DeckDialog QCheckBox {
     color: ${text};
     font-family: "${font.sans}";
     font-size: 13px;
     spacing: 10px;
 }
-SettingsDialog QCheckBox::indicator {
+DeckDialog QCheckBox::indicator {
     width: 16px;
     height: 16px;
     border: 1px solid ${line2};
     border-radius: 4px;
     background: ${bg0};
 }
-SettingsDialog QCheckBox::indicator:checked {
+DeckDialog QCheckBox::indicator:checked {
     background: ${magenta};
     border-color: ${magenta};
     image: url(${icon:check});
 }
 
-SettingsDialog QScrollArea, SettingsDialog #scrollContent {
+DeckDialog QScrollArea, DeckDialog #scrollContent {
     background: transparent;
     border: none;
 }
-SettingsDialog QScrollBar:vertical {
+DeckDialog QScrollBar:vertical {
     background: transparent;
     width: 10px;
 }
-SettingsDialog QScrollBar::handle:vertical {
+DeckDialog QScrollBar::handle:vertical {
     background: ${line2};
     border-radius: 4px;
     min-height: 30px;
     margin: 2px;
 }
-SettingsDialog QScrollBar::add-line, SettingsDialog QScrollBar::sub-line,
-SettingsDialog QScrollBar::add-page, SettingsDialog QScrollBar::sub-page {
+DeckDialog QScrollBar::add-line, DeckDialog QScrollBar::sub-line,
+DeckDialog QScrollBar::add-page, DeckDialog QScrollBar::sub-page {
     background: none;
     height: 0;
 }
@@ -311,4 +311,10 @@ QTabWidget#settingsTabs QTabBar::tab:selected {
 }
 QTabWidget#settingsTabs QTabBar::tab:hover:!selected {
     background: ${selected};
+}
+DeckDialog QLabel#title {
+    color: ${text};
+    font-family: "${font.display}";
+    font-size: 24px;
+    font-weight: 600;
 }

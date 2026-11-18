@@ -1,6 +1,7 @@
 #pragma once
 
-#include <QDialog>
+#include "DeckDialog.h"
+
 #include <QJsonObject>
 #include <QList>
 
@@ -20,7 +21,7 @@ struct Dependency;
 
 // config.json as a form. It edits the JSON itself, so keys it has no field
 // for survive a save.
-class SettingsDialog : public QDialog
+class SettingsDialog : public DeckDialog
 {
     Q_OBJECT
 public:
@@ -34,6 +35,11 @@ public:
     void setDependencies(const QList<Dependency> &list, bool ready);
 
     void accept() override;
+
+Q_SIGNALS:
+    void aboutRequested();
+
+public:
     void reject() override;
 
 private:

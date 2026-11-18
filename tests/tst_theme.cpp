@@ -116,7 +116,7 @@ private Q_SLOTS:
         qputenv("XDG_CACHE_HOME", cache.path().toUtf8());
         AppTheme theme;
         const QString qss = theme.styleSheet();
-        QVERIFY(qss.contains(QLatin1String("SettingsDialog")));
+        QVERIFY(qss.contains(QLatin1String("DeckDialog")));
         QVERIFY(!qss.contains(QLatin1String("${")));
         static const QRegularExpression url(QStringLiteral("url\\(([^)]+)\\)"));
         int icons = 0;

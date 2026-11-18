@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include "AboutDialog.h"
 #include "AppController.h"
 #include "AppTheme.h"
 #include "GlobalHotkey.h"
@@ -274,6 +275,7 @@ void MainWindow::buildTray()
     connect(m_tray, &TrayIcon::toggleRequested, this, &MainWindow::toggleFromTray);
     // Queued: the prompt must not run inside the tray menu's activation.
     connect(m_tray, &TrayIcon::quitRequested, this, &MainWindow::confirmQuit, Qt::QueuedConnection);
+    connect(m_tray, &TrayIcon::aboutRequested, this, &MainWindow::openAbout, Qt::QueuedConnection);
     m_tray->show();
 }
 
@@ -322,6 +324,24 @@ void MainWindow::restart()
     qApp->quit();
 }
 
+void MainWindow::openAbout()
+{
+    if (m_about) {
+        m_about->raise();
+        m_about->activateWindow();
+        return;
+    }
+    // Over Settings when it is open, so it stays in front of it.
+    QWidget *parent = m_settings ? static_cast<QWidget *>(m_settings) : this;
+    if (parent == this) {
+        reveal();
+    }
+    auto *dialog = new AboutDialog(m_theme->color(QStringLiteral("cyan")), parent);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    m_about = dialog;
+    dialog->open();
+}
+
 void MainWindow::openSettings(const QString &page)
 {
     if (m_settings) {
@@ -351,6 +371,7 @@ void MainWindow::openSettings(const QString &page)
     fillDependencies();
     connect(m_app, &AppController::dependenciesChanged, dialog, fillDependencies);
     connect(dialog, &QDialog::accepted, this, [this, dialog] { applySettings(dialog->config()); });
+    connect(dialog, &SettingsDialog::aboutRequested, this, &MainWindow::openAbout);
     m_settings = dialog;
     dialog->open();
 }

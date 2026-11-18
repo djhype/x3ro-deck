@@ -109,6 +109,8 @@ add_library(x3ro-deck-base STATIC
     src/Dependencies.cpp
     src/Worktrees.cpp
     src/AppTheme.cpp
+    src/DeckDialog.h
+    src/AboutDialog.cpp
     src/SingleInstance.cpp
     src/TrayIcon.cpp
     src/Notifier.h
@@ -137,6 +139,16 @@ qt_add_resources(x3ro-deck-base theme
         data/ui/close.svg
         data/ui/close-hover.svg
 )
+# The license and third-party notices the About dialog shows.
+qt_add_resources(x3ro-deck-base licenses
+    PREFIX /
+    FILES
+        LICENSE
+        data/licenses/LGPL-3.0.txt
+        data/licenses/libvterm-MIT.txt
+)
+set(X3RO_DECK_SOURCE_URL "https://github.com/x3ro/x3ro-deck" CACHE STRING "Where the About dialog says the source code is")
+target_compile_definitions(x3ro-deck-base PRIVATE X3RO_DECK_VERSION="${PROJECT_VERSION}" X3RO_DECK_SOURCE_URL="${X3RO_DECK_SOURCE_URL}")
 
 if(NOT X3RO_DECK_CORE_ONLY)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Quick QuickWidgets Qml DBus)

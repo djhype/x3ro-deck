@@ -223,7 +223,7 @@ QString slug(const QString &label, const QSet<QString> &taken)
 } // namespace
 
 SettingsDialog::SettingsDialog(const QJsonObject &json, QWidget *parent)
-    : QDialog(parent)
+    : DeckDialog(parent)
     , m_root(json)
 {
     setWindowTitle(QStringLiteral("Settings — X3RO Deck"));
@@ -1055,6 +1055,12 @@ QWidget *SettingsDialog::buildGeneralPage()
     m_dependencies = form();
     layout->addLayout(m_dependencies);
     layout->addStretch();
+    auto *about = new QPushButton(QStringLiteral("About x3ro deck…"));
+    connect(about, &QPushButton::clicked, this, &SettingsDialog::aboutRequested);
+    auto *aboutRow = new QHBoxLayout;
+    aboutRow->addWidget(about);
+    aboutRow->addStretch();
+    layout->addLayout(aboutRow);
     return page;
 }
 

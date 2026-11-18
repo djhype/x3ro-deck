@@ -15,6 +15,7 @@ class QSplitter;
 class QStackedWidget;
 class AppTheme;
 class QTabWidget;
+class AboutDialog;
 class SettingsDialog;
 class TerminalHost;
 class TrayIcon;
@@ -33,6 +34,7 @@ public:
     void reveal(const QString &token = QString());
     // checkouts | agents | docker | general; empty opens the first page.
     void openSettings(const QString &page);
+    void openAbout();
     // Set when the app quit to start again; main() relaunches it.
     bool restartRequested() const { return m_restart; }
 
@@ -78,6 +80,7 @@ private:
     // From the notification whose action comes next.
     QString m_notificationToken;
     QPointer<SettingsDialog> m_settings;
+    QPointer<AboutDialog> m_about;
     bool m_quitting = false;
     bool m_confirmingQuit = false;
     bool m_restart = false;

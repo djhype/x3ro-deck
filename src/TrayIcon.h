@@ -33,6 +33,7 @@ public:
 Q_SIGNALS:
     void toggleRequested();
     void quitRequested();
+    void aboutRequested();
 
 private:
     QIcon m_icon;

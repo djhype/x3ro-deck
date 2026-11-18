@@ -71,6 +71,9 @@ int main(int argc, char *argv[])
         if (const qsizetype settings = args.indexOf(QStringLiteral("--settings")); settings >= 0) {
             window.openSettings(settings + 1 < args.size() ? args.at(settings + 1) : QString());
         }
+        if (args.contains(QStringLiteral("--about"))) {
+            window.openAbout();
+        }
         const qsizetype shot = args.indexOf(QStringLiteral("--screenshot"));
         if (shot >= 0 && shot + 1 < args.size()) {
             const QString path = args.at(shot + 1);
