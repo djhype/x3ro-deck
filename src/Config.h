@@ -51,7 +51,8 @@ struct LinkConfig
 // One way to run an agent. `kind` names the CLI it drives ("claude" or
 // "codex"), which fixes the hook dialect, prompt keys and resume flags; a
 // profile can point that CLI at another backend through `env`, which is how a
-// local model (a model on a local server, say) runs under Claude Code or Codex. Kind
+// local model behind an Anthropic- or OpenAI-compatible server runs under
+// Claude Code or Codex. Kind
 // "custom" runs any other command; it sends no hooks, so only the pane poll
 // tracks it.
 struct AgentProfile

@@ -1,6 +1,6 @@
 # x3ro-deck
 
-Qt 6 desktop app (C++20, Widgets + QML panels), with no KDE Frameworks dependency, for running coding agents and Docker Compose stacks across several checkouts. It drives Claude Code and Codex, and local models (for example A model on a local server) through either CLI. It targets Linux with KDE Plasma only, so portability is a non-goal.
+Qt 6 desktop app (C++20, Widgets + QML panels), with no KDE Frameworks dependency, for running coding agents and Docker Compose stacks across several checkouts. It drives Claude Code and Codex, and local models behind an Anthropic- or OpenAI-compatible server through either CLI. It targets Linux with KDE Plasma only, so portability is a non-goal.
 
 # Commands
 
@@ -30,6 +30,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container and on `ubuntu:
   - `configVersion` names the file's layout (missing = 0). `src/ConfigMigrations.cpp` holds one function per version step. `readJson` runs them on the user's keys before merging defaults, keeps the original as `config.json.v<N>.bak`, and writes the result. A file from a newer build is left untouched, and `configError` warns in the checkout rail, which also keeps Settings from saving over it.
   - To change the layout, append a migration. Its index is the version it upgrades from; add a fixture and a case to `tests/tst_configmigrations.cpp`.
   - `agents` is an ordered list of `AgentProfile`s. `kind` (`claude`, `codex` or `custom`) selects `kindDefaults`: command, resume args, process name, permission keys, prompt buttons and submit delay. Profile keys override them.
+  - Fresh configs have two profiles, Claude and Codex; Claude's buttons are its built-in `/review` and a plain-text PR prompt. Migration v5 → v6 writes the older defaults (`/full-review`, `/create-pr`) into existing Claude profiles that relied on them.
   - `custom` runs any CLI. It sends no hooks, so only the pane poll tracks it, and its `process` defaults to the command's first word.
   - `env` makes a profile run its CLI against another backend. `AgentProfile::sessionEnv` expands `$VAR`/`${VAR}` against the app's own environment (unset → empty), and the session backend sets the result when it creates the session (`tmux new-session -e`). It is never typed, so it stays out of the pane and shell history.
   - A session's env is fixed at creation, and tmux records it in the session option `@x3ro-deck-env`. Start or Continue with a profile whose env differs kills the idle session and creates a fresh one; the attached terminal reattaches.
@@ -129,7 +130,7 @@ CI (`.github/workflows/ci.yml`) runs in an `archlinux` container and on `ubuntu:
   - Without `TMUX_TMPDIR`, the test instance attaches to the live `-L x3ro-deck` tmux server. NEVER run `tmux kill-server` or `kill-session` against that server, or choose "Stop agents and quit" in a test instance attached to it, because its sessions hold the user's live agents.
 - QML errors go to journald unless `QT_FORCE_STDERR_LOGGING=1` is set.
 - `cmake --install` succeeds while the app runs. The user restarts the app (Ctrl+Q, then relaunch) to pick up the new binary, and agents keep running in tmux.
-- Edit `~/.claude/settings.json` and `~/.codex/hooks.json` only by merging. Other hooks (for example `agent-notify`) live alongside `x3ro-deck-hook`.
+- Edit `~/.claude/settings.json` and `~/.codex/hooks.json` only by merging. Other hooks (a notifier, a linter) live alongside `x3ro-deck-hook`.
 
 # Quirks
 

@@ -312,7 +312,7 @@ std::optional<TerminalProfile> KonsoleSettings::load(const QString &profile) con
             a.cursor = *c;
         }
     }
-    // Konsole inverts selected cells; a wash keeps colored text readable.
+    // Konsole inverts selected cells; a blend keeps colored text readable.
     a.selection = mix(a.background, a.foreground, 0.3);
 
     switch (value(QStringLiteral("Cursor Options"), QStringLiteral("CursorShape")).toInt()) {

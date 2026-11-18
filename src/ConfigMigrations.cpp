@@ -76,6 +76,29 @@ const QList<Migration> &all()
             }
             return c;
         },
+        // v5 → v6: Claude Code profiles default to its built-in /review and a
+        // plain-text PR prompt. Profiles that relied on the old defaults keep
+        // them, written out.
+        [](QJsonObject c) {
+            QJsonArray agents = c.value(QStringLiteral("agents")).toArray();
+            for (QJsonValueRef v : agents) {
+                QJsonObject o = v.toObject();
+                if (o.value(QStringLiteral("kind")).toString(QStringLiteral("claude")) != QLatin1String("claude")) {
+                    continue;
+                }
+                if (!o.contains(QStringLiteral("prPrompt"))) {
+                    o.insert(QStringLiteral("prPrompt"), QStringLiteral("/create-pr"));
+                }
+                if (!o.contains(QStringLiteral("prompts"))) {
+                    o.insert(QStringLiteral("prompts"), QJsonArray{QStringLiteral("/full-review")});
+                }
+                v = o;
+            }
+            if (c.contains(QStringLiteral("agents"))) {
+                c.insert(QStringLiteral("agents"), agents);
+            }
+            return c;
+        },
     };
     return migrations;
 }

@@ -26,6 +26,8 @@ private Q_SLOTS:
     void v2DropsTheKonsoleKeys();
     void freshInstallWritesCurrentVersion();
     void savingStampsTheVersion();
+    void v5KeepsTheOldClaudePrompts();
+    void freshInstallHasClaudeAndCodex();
 
 private:
     QString configFile() const { return m_tmp->path() + QStringLiteral("/x3ro-deck/config.json"); }
@@ -220,6 +222,41 @@ void ConfigMigrationsTest::savingStampsTheVersion()
     QVERIFY(Config::writeJson(QJsonObject{{QStringLiteral("checkouts"), QJsonArray{}}}));
     const QJsonObject written = QJsonDocument::fromJson(read(configFile())).object();
     QCOMPARE(written.value(QStringLiteral("configVersion")).toInt(), ConfigMigrations::currentVersion());
+}
+
+void ConfigMigrationsTest::v5KeepsTheOldClaudePrompts()
+{
+    const QJsonObject v5{
+        {QStringLiteral("configVersion"), 5},
+        {QStringLiteral("agents"),
+         QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("claude")}, {QStringLiteral("kind"), QStringLiteral("claude")}},
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("mine")},
+                                {QStringLiteral("kind"), QStringLiteral("claude")},
+                                {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/x")}}},
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("local")},
+                                {QStringLiteral("kind"), QStringLiteral("claude")},
+                                {QStringLiteral("env"),
+                                 QJsonObject{{QStringLiteral("ANTHROPIC_BASE_URL"), QStringLiteral("http://localhost:8080")}}}},
+                    QJsonObject{{QStringLiteral("id"), QStringLiteral("codex")}, {QStringLiteral("kind"), QStringLiteral("codex")}}}}};
+    const QJsonArray agents = ConfigMigrations::run(v5).config.value(QStringLiteral("agents")).toArray();
+    QCOMPARE(agents.at(0).toObject().value(QStringLiteral("prompts")).toArray(), QJsonArray{QStringLiteral("/full-review")});
+    QCOMPARE(agents.at(0).toObject().value(QStringLiteral("prPrompt")).toString(), QStringLiteral("/create-pr"));
+    QCOMPARE(agents.at(1).toObject().value(QStringLiteral("prompts")).toArray(), QJsonArray{QStringLiteral("/x")});
+    // A local-model profile from an older default stays, as the user's own.
+    QCOMPARE(agents.at(2).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("local"));
+    QVERIFY(!agents.at(3).toObject().contains(QStringLiteral("prompts")));
+}
+
+void ConfigMigrationsTest::freshInstallHasClaudeAndCodex()
+{
+    QString error;
+    const Config c = Config::load(&error);
+    QStringList ids;
+    for (const AgentProfile &p : c.agents) {
+        ids << p.id;
+    }
+    QCOMPARE(ids, (QStringList{QStringLiteral("claude"), QStringLiteral("codex")}));
+    QCOMPARE(c.agents.first().prompts, QStringList{QStringLiteral("/review")});
 }
 
 QTEST_GUILESS_MAIN(ConfigMigrationsTest)

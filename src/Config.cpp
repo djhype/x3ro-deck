@@ -25,20 +25,7 @@ QJsonArray defaultAgents()
                            {QStringLiteral("label"), QLatin1String(label)},
                            {QStringLiteral("kind"), QLatin1String(kind)}};
     };
-    // A model on a local server, through Claude Code's Anthropic-compatible
-    // client. ANTHROPIC_AUTH_TOKEN must stay set: without it Claude Code would
-    // send the claude.ai login to the server. `local connect` prints the
-    // values for a running server.
-    const QString localModel = QStringLiteral("local-model");
-    QJsonObject local = agent("local", "Local", "claude");
-    local.insert(QStringLiteral("env"),
-                QJsonObject{{QStringLiteral("ANTHROPIC_BASE_URL"), QStringLiteral("http://localhost:8080")},
-                            {QStringLiteral("ANTHROPIC_AUTH_TOKEN"), QStringLiteral("local")},
-                            {QStringLiteral("ANTHROPIC_MODEL"), localModel},
-                            {QStringLiteral("ANTHROPIC_DEFAULT_OPUS_MODEL"), localModel},
-                            {QStringLiteral("ANTHROPIC_DEFAULT_SONNET_MODEL"), localModel},
-                            {QStringLiteral("ANTHROPIC_DEFAULT_HAIKU_MODEL"), localModel}});
-    return QJsonArray{agent("claude", "Claude", "claude"), agent("codex", "Codex", "codex"), local};
+    return QJsonArray{agent("claude", "Claude", "claude"), agent("codex", "Codex", "codex")};
 }
 
 QJsonObject defaults()
@@ -234,8 +221,8 @@ QJsonObject Config::kindDefaults(const QString &kind)
          QJsonObject{{QStringLiteral("allow"), QStringLiteral("1")},
                      {QStringLiteral("always"), QStringLiteral("2")},
                      {QStringLiteral("deny"), QStringLiteral("Escape")}}},
-        {QStringLiteral("prPrompt"), QStringLiteral("/create-pr")},
-        {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/full-review")}},
+        {QStringLiteral("prPrompt"), QStringLiteral("Open a pull request for this branch")},
+        {QStringLiteral("prompts"), QJsonArray{QStringLiteral("/review")}},
         {QStringLiteral("submitDelayMs"), 0},
     };
 }
