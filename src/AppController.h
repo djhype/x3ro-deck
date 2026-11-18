@@ -115,7 +115,7 @@ public:
     int containersUp() const;
     int containersTotal() const;
     int needsYou() const { return static_cast<int>(m_attention->rowCount()); }
-    bool dockerConnected() const { return m_docker->connected(); }
+    bool dockerConnected() const { return s_demo || m_docker->connected(); }
     bool railVisible() const { return m_railVisible; }
     QString configError() const { return m_configError; }
     QVariantList dependencies() const;
