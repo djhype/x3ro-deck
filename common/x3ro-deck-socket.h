@@ -51,8 +51,20 @@ struct SocketPath
 
 inline std::string envVar(const char *name)
 {
+#if defined(_MSC_VER)
+    // MSVC deprecates getenv (C4996).
+    char *v = nullptr;
+    std::size_t len = 0;
+    if (_dupenv_s(&v, &len, name) != 0 || !v) {
+        return std::string();
+    }
+    std::string r(v);
+    std::free(v);
+    return r;
+#else
     const char *v = std::getenv(name);
     return v ? std::string(v) : std::string();
+#endif
 }
 
 // `file` lives in the per-user runtime directory unless `overrideVar` names

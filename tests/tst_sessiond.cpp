@@ -845,6 +845,16 @@ void SessiondTest::directChannel()
     auto rows = [&c] {
         return sessionNamed(c.request(op("list")), QStringLiteral("dc")).value(QStringLiteral("rows")).toInt();
     };
+    // Typed before the first prompt, dash (Ubuntu's sh) prints the output on
+    // the prompt's line, so wait for the prompt.
+    QTRY_VERIFY_WITH_TIMEOUT(!c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("dc")}}))
+                                  .value(QStringLiteral("lines"))
+                                  .toArray()
+                                  .first()
+                                  .toString()
+                                  .trimmed()
+                                  .isEmpty(),
+                             5000);
     c.request(
         op("write", {{QStringLiteral("name"), QStringLiteral("dc")}, {QStringLiteral("data"), QStringLiteral("echo before-attach\r")}}));
     QTRY_VERIFY_WITH_TIMEOUT(c.request(op("screen", {{QStringLiteral("name"), QStringLiteral("dc")}}))
