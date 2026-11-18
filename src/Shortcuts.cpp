@@ -9,9 +9,16 @@ const QList<Action> &actions()
 {
     static const QList<Action> list = [] {
         QList<Action> out;
+        // On macOS Qt's Ctrl is ⌘, and ⌥+digit types characters, so
+        // checkouts switch with ⌘+digit there and Alt+digit elsewhere.
+#if defined(Q_OS_MACOS)
+        const Qt::Modifier selectModifier = Qt::CTRL;
+#else
+        const Qt::Modifier selectModifier = Qt::ALT;
+#endif
         for (int i = 0; i < 9; ++i) {
             out.append({QStringLiteral("select-%1").arg(i + 1), QStringLiteral("Checkout %1").arg(i + 1),
-                        QKeySequence(Qt::ALT | Qt::Key(Qt::Key_1 + i))});
+                        QKeySequence(selectModifier | Qt::Key(Qt::Key_1 + i))});
         }
         out.append({QStringLiteral("next-checkout"), QStringLiteral("Next checkout"), QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_PageDown)});
         out.append(
@@ -23,6 +30,7 @@ const QList<Action> &actions()
         out.append({QStringLiteral("new-shell"), QStringLiteral("New shell tab"), QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_T)});
         out.append({QStringLiteral("next-attention"), QStringLiteral("Open the first NEEDS YOU item"),
                     QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_N)});
+        out.append({QStringLiteral("settings"), QStringLiteral("Settings"), QKeySequence(Qt::CTRL | Qt::Key_Comma)});
         out.append({QStringLiteral("quit"), QStringLiteral("Quit"), QKeySequence(Qt::CTRL | Qt::Key_Q)});
         out.append({QStringLiteral("toggle-window"), QStringLiteral("Show or hide X3RO Deck (system-wide)"),
                     QKeySequence(Qt::META | Qt::ALT | Qt::Key_H), true});

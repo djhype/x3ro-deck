@@ -22,6 +22,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QQmlContext>
@@ -267,10 +268,19 @@ void MainWindow::buildShortcuts()
             m_app->attentionAction(m_app->attentionModel()->row(0).value(QStringLiteral("id")).toString(), QStringLiteral("open"));
         }
     });
+    add(QStringLiteral("settings"), [this] { openSettings(QString()); });
     add(QStringLiteral("quit"), [this] { confirmQuit(); });
     // Also in the window, for desktops without the global shortcuts portal.
     add(QStringLiteral("toggle-window"), [this] { toggleVisible(); });
+    for (const Shortcuts::Action &a : Shortcuts::actions()) {
+        if (QAction *action = m_shortcuts.value(a.id)) {
+            action->setText(a.label);
+        }
+    }
     applyShortcuts();
+#if defined(Q_OS_MACOS)
+    buildMenuBar();
+#endif
 
     // The binding is the portal's preferred trigger the first time; after
     // that the desktop's own shortcut settings own it.
@@ -287,6 +297,45 @@ void MainWindow::buildShortcuts()
     });
     m_hotkeys->start();
 }
+
+#if defined(Q_OS_MACOS)
+// The macOS menu bar. Qt moves the About, Preferences and Quit roles into
+// the app menu; the same actions as the shortcuts, so rebinding them in
+// Settings updates the menus.
+void MainWindow::buildMenuBar()
+{
+    auto *bar = new QMenuBar(nullptr); // parentless: the one global menu bar
+    auto *app = bar->addMenu(QStringLiteral("x3ro deck"));
+    auto *about = app->addAction(QStringLiteral("About x3ro deck"), this, &MainWindow::openAbout);
+    about->setMenuRole(QAction::AboutRole);
+    QAction *settings = m_shortcuts.value(QStringLiteral("settings"));
+    settings->setText(QStringLiteral("Settings…"));
+    settings->setMenuRole(QAction::PreferencesRole);
+    app->addAction(settings);
+    QAction *quit = m_shortcuts.value(QStringLiteral("quit"));
+    quit->setText(QStringLiteral("Quit x3ro deck"));
+    quit->setMenuRole(QAction::QuitRole);
+    app->addAction(quit);
+
+    auto *checkouts = bar->addMenu(QStringLiteral("Checkout"));
+    for (int i = 0; i < std::min(9, m_app->checkoutCount()); ++i) {
+        QAction *select = m_shortcuts.value(QStringLiteral("select-%1").arg(i + 1));
+        select->setText(m_app->checkout(i).cfg.name);
+        checkouts->addAction(select);
+    }
+    checkouts->addSeparator();
+    for (const char *id : {"next-checkout", "previous-checkout", "new-shell"}) {
+        checkouts->addAction(m_shortcuts.value(QLatin1String(id)));
+    }
+    auto *window = bar->addMenu(QStringLiteral("Window"));
+    for (const char *id : {"docker-tab", "agents-tab", "toggle-rail", "next-attention", "toggle-window"}) {
+        window->addAction(m_shortcuts.value(QLatin1String(id)));
+    }
+    for (QAction *a : {settings, quit}) {
+        a->setShortcutContext(Qt::ApplicationShortcut);
+    }
+}
+#endif
 
 void MainWindow::applyShortcuts()
 {

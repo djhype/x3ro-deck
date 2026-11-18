@@ -64,6 +64,9 @@ private:
     void applySettings(const QJsonObject &config);
     void selectTheme();
     void applyShortcuts();
+#if defined(Q_OS_MACOS)
+    void buildMenuBar();
+#endif
     QHash<QString, QAction *> m_shortcuts;
     QString m_trayMessageItem; // the attention item the last tray message shows
     // Quits after asking whether the agent sessions should stop too.

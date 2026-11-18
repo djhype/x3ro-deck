@@ -11,9 +11,14 @@ private Q_SLOTS:
     void defaultsHaveNoConflicts()
     {
         QVERIFY(Shortcuts::conflicts(Shortcuts::bindings({})).isEmpty());
+#if defined(Q_OS_MACOS)
+        QCOMPARE(Shortcuts::binding({}, QStringLiteral("select-1")), QKeySequence(Qt::CTRL | Qt::Key_1)); // ⌘1
+#else
         QCOMPARE(Shortcuts::binding({}, QStringLiteral("select-1")), QKeySequence(Qt::ALT | Qt::Key_1));
+#endif
         QVERIFY(Shortcuts::action(QStringLiteral("toggle-window"))->global);
         QVERIFY(!Shortcuts::action(QStringLiteral("nope")));
+        QCOMPARE(Shortcuts::binding({}, QStringLiteral("settings")), QKeySequence(Qt::CTRL | Qt::Key_Comma));
     }
 
     void overridesAndUnbinding()
