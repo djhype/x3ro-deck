@@ -75,6 +75,8 @@ target_link_libraries(x3ro-deck-sessionproto PUBLIC Qt6::Core)
 # file per OS; the others report nothing for now.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoLinux.cpp)
+elseif(APPLE)
+    set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoMac.cpp)
 else()
     set(X3RO_DECK_PROCESSINFO_PLATFORM src/ProcessInfoNone.cpp)
 endif()

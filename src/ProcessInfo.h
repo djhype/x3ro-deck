@@ -8,8 +8,8 @@
 
 // What runs in a session's terminal, for the pane poll and detected links.
 // QtCore only. The platform layer (foregroundGroup, process, tree) lives in
-// one file per OS: ProcessInfoLinux.cpp reads /proc; ProcessInfoNone.cpp
-// stands in where nothing is implemented yet.
+// one file per OS: ProcessInfoLinux.cpp reads /proc, ProcessInfoMac.cpp uses
+// libproc; ProcessInfoNone.cpp stands in where nothing is implemented yet.
 namespace ProcessInfo
 {
 

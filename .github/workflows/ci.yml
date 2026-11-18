@@ -69,14 +69,7 @@ jobs:
         run: cmake --build --preset ${{ matrix.preset }}
 
       - name: Test
-        if: matrix.name != 'macos'
         run: ctest --test-dir build --output-on-failure --no-tests=ignore
-
-      # x3ro-deck-sessiond reaches macOS with its own ticket; until then its
-      # tests run on Linux only.
-      - name: Test (macOS)
-        if: matrix.name == 'macos'
-        run: ctest --test-dir build --output-on-failure --no-tests=ignore -E "^(sessiond|sessionflow-daemon|backendswitch)$"
 
       - name: Smoke test (Windows)
         if: matrix.name == 'windows'

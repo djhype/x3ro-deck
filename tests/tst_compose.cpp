@@ -205,8 +205,8 @@ private Q_SLOTS:
     // program; one that does not answer HTTP gets none.
     void processLinks()
     {
-#if !defined(Q_OS_LINUX)
-        QSKIP("reads /proc");
+#if !defined(Q_OS_LINUX) && !defined(Q_OS_MACOS)
+        QSKIP("reads /proc or libproc");
 #endif
         QTemporaryDir tmp;
         qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());

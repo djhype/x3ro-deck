@@ -4,7 +4,7 @@
 #include <QString>
 
 // TCP ports the user's own processes listen on, with each process's name and
-// working directory. Linux reads /proc; other systems report nothing yet.
+// working directory. Linux reads /proc, macOS libproc; other systems report nothing yet.
 namespace ListeningPorts
 {
 struct Listener
