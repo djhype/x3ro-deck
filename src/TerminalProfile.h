@@ -5,6 +5,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
 #include <optional>
 
 // Settings imported from a terminal emulator's profile (see
@@ -24,5 +25,22 @@ struct TerminalProfile
     static TerminalProfile fallback();
 };
 
-// $SHELL, else the passwd entry's shell, else /bin/sh.
+// $SHELL, else the passwd entry's shell, else /bin/sh. On Windows, the
+// program of the configured Windows shell (see windowsShellArgv).
 QString loginShell();
+
+// Windows shells the Settings picker offers, as far as `find` (a program name,
+// or "Git/bin/bash" under Program Files, to its path) finds them.
+struct WindowsShell
+{
+    QString id; // config "windowsShell": pwsh | powershell | cmd | bash
+    QString label;
+    QStringList argv;
+};
+QList<WindowsShell> windowsShells(const std::function<QString(const QString &)> &find);
+// The argv for config "windowsShell"; empty or unknown picks PowerShell 7,
+// else Windows PowerShell, else cmd.
+QStringList windowsShellArgv(const QString &choice, const std::function<QString(const QString &)> &find);
+QString findWindowsProgram(const QString &name);
+// Set from the config; the fallback profile and loginShell() use it on Windows.
+void setWindowsShell(const QString &choice);

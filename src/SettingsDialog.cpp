@@ -8,6 +8,7 @@
 #include "HookInstaller.h"
 #include "Paths.h"
 #include "Shortcuts.h"
+#include "TerminalProfile.h"
 #include "TerminalSettings.h"
 
 #include <QCheckBox>
@@ -1279,6 +1280,17 @@ QWidget *SettingsDialog::buildGeneralPage()
              hint(QStringLiteral("The terminals take the colors, font, cursor, scrollback and shell from this terminal's "
                                  "profile, and follow changes to it.")));
     addField(terminals, QStringLiteral("Profile"), m_terminalProfile);
+#if defined(Q_OS_WIN)
+    // Sessions and shell tabs run this when no imported profile names a shell.
+    m_windowsShell = new QComboBox;
+    m_windowsShell->addItem(QStringLiteral("Automatic (PowerShell 7, else Windows PowerShell)"), QString());
+    for (const WindowsShell &s : windowsShells(findWindowsProgram)) {
+        m_windowsShell->addItem(s.label, s.id);
+    }
+    m_windowsShell->setCurrentIndex(std::max(0, m_windowsShell->findData(m_root.value(QStringLiteral("windowsShell")).toString())));
+    addField(terminals, QStringLiteral("Shell"), m_windowsShell,
+             hint(QStringLiteral("New agent sessions and shell tabs start in it; running sessions keep theirs.")));
+#endif
 
     auto *page = new QWidget;
     auto *layout = new QVBoxLayout(page);
@@ -1579,6 +1591,9 @@ QJsonObject SettingsDialog::config() const
     root.insert(QStringLiteral("composeBinary"), m_composeBinary->currentText().trimmed());
     root.insert(QStringLiteral("sessionBackend"), m_backendDaemon->isChecked() ? QStringLiteral("daemon") : QStringLiteral("tmux"));
     root.insert(QStringLiteral("theme"), m_theme->currentData().toString());
+    if (m_windowsShell) {
+        root.insert(QStringLiteral("windowsShell"), m_windowsShell->currentData().toString());
+    }
     // Only shortcuts that differ from their defaults; "" unbinds one.
     QJsonObject shortcuts;
     for (const Shortcuts::Action &a : Shortcuts::actions()) {

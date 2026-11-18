@@ -70,6 +70,8 @@ class TerminalSettingsTest : public QObject
     Q_OBJECT
 private Q_SLOTS:
     void iniKeepsCommasAndDropsTranslations();
+    void windowsShellChoice();
+    void loginShellOnUnix();
     void konsoleListsProfiles();
     void konsoleDefaultProfileInheritsParent();
     void konsoleColorScheme();
@@ -303,6 +305,45 @@ void TerminalSettingsTest::reimportsOnChange()
     // A new default profile in konsolerc.
     QVERIFY(writeFile(dir.filePath(QStringLiteral("config/konsolerc")), "[Desktop Entry]\nDefaultProfile=Plain.profile\n"));
     QTRY_COMPARE_WITH_TIMEOUT(settings.current().name, QStringLiteral("Plain"), 1000);
+}
+
+void TerminalSettingsTest::windowsShellChoice()
+{
+    // A machine with all four; WSL's bash in System32 is not Git Bash.
+    const QHash<QString, QString> installed{{QStringLiteral("pwsh"), QStringLiteral("C:\\PS7\\pwsh.exe")},
+                                            {QStringLiteral("powershell"), QStringLiteral("C:\\Windows\\powershell.exe")},
+                                            {QStringLiteral("cmd"), QStringLiteral("C:\\Windows\\System32\\cmd.exe")},
+                                            {QStringLiteral("bash"), QStringLiteral("C:\\Windows\\System32\\bash.exe")},
+                                            {QStringLiteral("Git/bin/bash"), QStringLiteral("C:\\Git\\bin\\bash.exe")}};
+    auto find = [&installed](const QString &name) {
+        return installed.value(name);
+    };
+    QStringList ids;
+    for (const WindowsShell &s : windowsShells(find)) {
+        ids << s.id;
+    }
+    QCOMPARE(ids, (QStringList{QStringLiteral("pwsh"), QStringLiteral("powershell"), QStringLiteral("cmd"), QStringLiteral("bash")}));
+    QCOMPARE(windowsShellArgv(QString(), find).first(), QStringLiteral("C:\\PS7\\pwsh.exe"));
+    QCOMPARE(windowsShellArgv(QStringLiteral("cmd"), find), QStringList{QStringLiteral("C:\\Windows\\System32\\cmd.exe")});
+    QCOMPARE(windowsShellArgv(QStringLiteral("bash"), find).first(), QStringLiteral("C:\\Git\\bin\\bash.exe"));
+    // Without PowerShell 7 the default is Windows PowerShell; without Git, no Git Bash.
+    auto older = [&installed](const QString &name) {
+        return name == QLatin1String("pwsh") || name.contains(QLatin1String("bash")) ? QString() : installed.value(name);
+    };
+    QCOMPARE(windowsShellArgv(QString(), older).first(), QStringLiteral("C:\\Windows\\powershell.exe"));
+    QCOMPARE(windowsShells(older).size(), 2);
+}
+
+void TerminalSettingsTest::loginShellOnUnix()
+{
+#if defined(Q_OS_WIN)
+    QSKIP("Windows picks a Windows shell");
+#endif
+    const QByteArray saved = qgetenv("SHELL");
+    qputenv("SHELL", "/usr/bin/fish");
+    QCOMPARE(loginShell(), QStringLiteral("/usr/bin/fish"));
+    QCOMPARE(TerminalProfile::fallback().shell, QStringList{QStringLiteral("/usr/bin/fish")});
+    qputenv("SHELL", saved);
 }
 
 QTEST_MAIN(TerminalSettingsTest)

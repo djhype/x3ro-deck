@@ -100,6 +100,7 @@ struct Config
     QString theme = QStringLiteral("cyberdecker"); // a file in ~/.config/x3ro-deck/themes, a built-in theme, or "system"
     QString themeLight = QStringLiteral("cyberdecker-light"); // what "system" shows in light mode
     QString themeDark = QStringLiteral("cyberdecker"); // and in dark mode
+    QString windowsShell; // pwsh | powershell | cmd | bash; empty = PowerShell 7, else Windows PowerShell
     QVariantMap shortcuts; // id → key sequence (PortableText) for rebound shortcuts; see Shortcuts.h
 
     // The profile with this id, else the default one.

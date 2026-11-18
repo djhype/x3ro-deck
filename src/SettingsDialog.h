@@ -153,6 +153,7 @@ private:
     QLabel *m_dockerEndpoint;
     QComboBox *m_composeBinary;
     QComboBox *m_theme;
+    QComboBox *m_windowsShell = nullptr; // Windows only
     QHash<QString, QKeySequenceEdit *> m_shortcutEdits;
     QHash<QString, QLabel *> m_shortcutWarnings;
     QRadioButton *m_backendTmux;

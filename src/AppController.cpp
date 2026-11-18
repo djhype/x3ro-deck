@@ -291,6 +291,7 @@ AppController::AppController(QObject *parent)
     , m_serviceModel(new VariantListModel(kServiceRoles, this))
     , m_attention(new VariantListModel(kAttentionRoles, this))
 {
+    setWindowsShell(m_config.windowsShell);
     m_terminalSettings->select(m_config.terminalSettings, m_config.terminalProfile);
     m_deps->setConfig(m_config);
     m_firstRun = m_config.checkouts.isEmpty();
@@ -1418,6 +1419,7 @@ bool AppController::reloadConfig()
         sameCheckouts = next.checkouts.at(i).name == m_checkouts.at(i).cfg.name && next.checkouts.at(i).path == m_checkouts.at(i).cfg.path;
     }
     const Config prev = std::exchange(m_config, next);
+    setWindowsShell(m_config.windowsShell);
     m_terminalSettings->select(m_config.terminalSettings, m_config.terminalProfile);
     m_deps->setConfig(m_config);
     m_docker->setSocketPath(resolveDockerEndpoint(m_config.dockerHost).socketPath);

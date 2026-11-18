@@ -32,9 +32,14 @@ QString shellQuote(const QString &s)
     if (safe.match(s).hasMatch()) {
         return s;
     }
+#if defined(Q_OS_WIN)
+    // Double quotes mean the same in PowerShell, cmd and Git Bash.
+    return QLatin1Char('"') + QString(s).remove(QLatin1Char('"')) + QLatin1Char('"');
+#else
     QString q = s;
     q.replace(QLatin1Char('\''), QStringLiteral("'\\''"));
     return QLatin1Char('\'') + q + QLatin1Char('\'');
+#endif
 }
 
 QString options(const QStringList &files, const QStringList &profiles, const QString &envFile, const QString &project)
