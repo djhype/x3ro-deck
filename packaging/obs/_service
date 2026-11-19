@@ -3,9 +3,10 @@
        version comes from that tag (v1.2.3 -> 1.2.3). The build recipes are
        exported straight from the checkout, because OBS needs them before
        anything builds; the Debian files get the debian.* names debtransform
-       expects. Every service runs on the server: the build roots of Debian,
-       Ubuntu and Arch have no obs-service-* tools. -->
-  <service name="obs_scm">
+       expects. Every service runs on the server (the build roots of Debian,
+       Ubuntu and Arch have no obs-service-* tools), so tar_scm makes the
+       tarball: the server has no `tar` service, which goes with obs_scm. -->
+  <service name="tar_scm">
     <param name="scm">git</param>
     <param name="url">https://github.com/djhype/x3ro-deck.git</param>
     <param name="revision">release</param>
@@ -20,7 +21,6 @@
     <param name="extract-rename">packaging/debian/changelog:debian.changelog</param>
     <param name="extract-rename">packaging/debian/copyright:debian.copyright</param>
   </service>
-  <service name="tar"/>
   <service name="recompress">
     <param name="file">*.tar</param>
     <param name="compression">gz</param>
