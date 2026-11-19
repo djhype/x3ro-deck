@@ -6,7 +6,7 @@
 # signed openSUSE Build Service repository (Arch, Debian, Ubuntu, Fedora,
 # openSUSE).
 # Read it first:
-#   curl -fsSLO https://x3ro.life/install.sh && less install.sh && sh install.sh
+#   curl -fsSLO https://deck.x3ro.life/install.sh && less install.sh && sh install.sh
 #
 # Everything runs from main() on the last line, so a truncated download does
 # nothing.

@@ -51,7 +51,7 @@ The install script picks your package manager and adds the signed repository.
 Read it before running it:
 
 ```sh
-curl -fsSLO https://x3ro.life/deck/install.sh
+curl -fsSLO https://deck.x3ro.life/install.sh
 less install.sh            # check what it does
 sh install.sh
 ```
@@ -59,7 +59,7 @@ sh install.sh
 On Windows the same is `install.ps1`:
 
 ```powershell
-Invoke-WebRequest https://x3ro.life/deck/install.ps1 -OutFile install.ps1
+Invoke-WebRequest https://deck.x3ro.life/install.ps1 -OutFile install.ps1
 notepad install.ps1        # check what it does
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
