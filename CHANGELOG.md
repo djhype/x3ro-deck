@@ -6,6 +6,10 @@ All notable changes to x3ro deck are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-19
+
+First release.
+
 ### Added
 
 - Agent sessions for Claude Code, Codex or any CLI per checkout, in tmux or
@@ -28,5 +32,14 @@ All notable changes to x3ro deck are recorded here. The format follows
   light and dark mode, user themes and a theme editor.
 - Rebindable shortcuts, a global show/hide hotkey, and a macOS menu bar.
 - First-run welcome screen with git worktree discovery.
-- macOS and Windows builds.
 - `--demo` mode for screenshots.
+
+### Packages
+
+- Linux: signed pacman, apt, dnf and zypper repositories for Arch, Debian 12
+  and 13, Ubuntu 24.04 to 26.10, Fedora 41 to 44 and openSUSE Tumbleweed,
+  set up by `install.sh` from https://deck.x3ro.life/, plus a binary tarball.
+- macOS 12 and later: a universal DMG (Apple silicon and Intel).
+- Windows 10 and 11: an installer, also set up by `install.ps1`.
+- The macOS and Windows builds are not code-signed yet; the README shows how
+  to open them the first time.

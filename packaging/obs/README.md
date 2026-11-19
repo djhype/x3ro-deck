@@ -3,15 +3,19 @@
 OBS builds and signs the pacman, apt, dnf and zypper repositories from
 `packaging/arch/x3ro-deck/PKGBUILD`, `packaging/debian/` and
 `packaging/rpm/x3ro-deck.spec`; each repository uses the recipe for its
-distribution.
+distribution. `_service` exports them from the checkout, the Debian files as
+`debian.control`, `debian.rules`, … next to `x3ro-deck.dsc`, from which OBS
+makes the Debian source package. Keep the `.dsc`'s `Build-Depends` the same
+as `packaging/debian/control`'s.
 
 ## Project setup (once)
 
 1. Create the project `home:x3ro:deck` (or an `x3ro` project) on
    build.opensuse.org and the package `x3ro-deck` in it.
-2. Add repositories: `xUbuntu_24.04`, `xUbuntu_24.10`, `Debian_12`,
-   `Debian_13`, `Fedora_41`, `Fedora_42`, `openSUSE_Tumbleweed`
-   (x86_64 and aarch64), and Arch Linux ("Arch Extra", x86_64) under the
+2. Add repositories for Ubuntu, Debian, Fedora and openSUSE Tumbleweed
+   (x86_64 and aarch64) named the way `install.sh` asks for them
+   (`xUbuntu_<version>`, `Debian_<major>`, `Fedora_<version>`,
+   `openSUSE_Tumbleweed`), and Arch Linux ("Arch Extra", x86_64) under the
    repository name `Arch`: `install.sh` expects
    `<project>/Arch/x86_64/home_x3ro_deck_Arch.key` and the pacman
    repository `[home_x3ro_deck_Arch]`.

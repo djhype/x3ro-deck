@@ -1,7 +1,10 @@
 <services>
   <!-- The release workflow moves the `release` branch to each new tag; the
-       version comes from that tag (v1.2.3 -> 1.2.3) and set_version writes it
-       into the spec and the PKGBUILD (OBS builds Arch from the PKGBUILD). -->
+       version comes from that tag (v1.2.3 -> 1.2.3). The build recipes are
+       exported straight from the checkout, because OBS needs them before
+       anything builds; the Debian files get the debian.* names debtransform
+       expects. Every service runs on the server: the build roots of Debian,
+       Ubuntu and Arch have no obs-service-* tools. -->
   <service name="obs_scm">
     <param name="scm">git</param>
     <param name="url">https://github.com/djhype/x3ro-deck.git</param>
@@ -9,15 +12,19 @@
     <param name="versionformat">@PARENT_TAG@</param>
     <param name="versionrewrite-pattern">v(.*)</param>
     <param name="filename">x3ro-deck</param>
+    <param name="extract">packaging/rpm/x3ro-deck.spec</param>
+    <param name="extract">packaging/arch/x3ro-deck/PKGBUILD</param>
+    <param name="extract">packaging/obs/x3ro-deck.dsc</param>
+    <param name="extract-rename">packaging/debian/control:debian.control</param>
+    <param name="extract-rename">packaging/debian/rules:debian.rules</param>
+    <param name="extract-rename">packaging/debian/changelog:debian.changelog</param>
+    <param name="extract-rename">packaging/debian/copyright:debian.copyright</param>
   </service>
-  <service name="set_version" mode="buildtime"/>
-  <service name="tar" mode="buildtime"/>
-  <service name="recompress" mode="buildtime">
+  <service name="tar"/>
+  <service name="recompress">
     <param name="file">*.tar</param>
     <param name="compression">gz</param>
   </service>
-  <service name="extract_file">
-    <param name="archive">*.tar</param>
-    <param name="files">*/packaging/rpm/x3ro-deck.spec */packaging/arch/x3ro-deck/PKGBUILD</param>
-  </service>
+  <!-- Writes the version into the spec, PKGBUILD, .dsc and debian.changelog. -->
+  <service name="set_version"/>
 </services>
