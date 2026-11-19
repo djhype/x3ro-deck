@@ -46,10 +46,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Open-source Qt 6.8 ends at 6.8.3, which still links AGL, a framework
-      # current macOS SDKs no longer ship; 6.9.2 and later dropped it.
+      # current macOS SDKs no longer ship; 6.9.2 and later dropped it. Pinned to
+      # a settled release: a brand-new one can lack checksums on the mirrors.
       - uses: jurplel/install-qt-action@v4
         with:
-          version: '6.12.*'
+          version: '6.11.3'
           cache: true
       - run: brew install --quiet ninja pkg-config
       - name: Import the Developer ID certificate
