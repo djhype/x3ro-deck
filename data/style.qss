@@ -328,6 +328,31 @@ QTabWidget#settingsTabs QTabBar::tab:selected {
 QTabWidget#settingsTabs QTabBar::tab:hover:!selected {
     background: ${selected};
 }
+QTabWidget#checkoutTabs::pane {
+    border: none;
+    border-top: 1px solid ${line};
+}
+QTabWidget#checkoutTabs QTabBar {
+    qproperty-drawBase: 0;
+}
+QTabWidget#checkoutTabs QTabBar::tab {
+    background: transparent;
+    color: ${dim};
+    font-family: "${font.sans}";
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    margin: 0 2px 8px 0;
+    border-radius: 7px;
+    border: none;
+}
+QTabWidget#checkoutTabs QTabBar::tab:selected {
+    background: ${tabActive};
+    color: ${magenta};
+}
+QTabWidget#checkoutTabs QTabBar::tab:hover:!selected {
+    background: ${selected};
+}
 DeckDialog QLabel#title {
     color: ${text};
     font-family: "${font.display}";

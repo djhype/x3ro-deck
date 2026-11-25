@@ -54,6 +54,8 @@ namespace
 const QString kNewAgent = QStringLiteral(":new-agent");
 const QStringList kPages{QStringLiteral("checkouts"), QStringLiteral("agents"), QStringLiteral("docker"), QStringLiteral("general"),
                          QStringLiteral("shortcuts")};
+// The checkout form's tabs, for showPage("checkouts/<tab>").
+const QStringList kCheckoutTabs{QStringLiteral("general"), QStringLiteral("agent"), QStringLiteral("docker")};
 const QList<QPair<QString, QString>> kKinds{{QStringLiteral("claude"), QStringLiteral("Claude Code")},
                                             {QStringLiteral("codex"), QStringLiteral("Codex")},
                                             {QStringLiteral("custom"), QStringLiteral("Custom command")}};
@@ -111,6 +113,22 @@ QGridLayout *form()
     grid->setVerticalSpacing(6);
     grid->setColumnStretch(1, 1);
     return grid;
+}
+
+// A form grid in a scroll area, as one tab of a QTabWidget.
+QScrollArea *scrollPage(QGridLayout *grid)
+{
+    auto *content = new QWidget;
+    content->setObjectName(QStringLiteral("scrollContent"));
+    auto *layout = new QVBoxLayout(content);
+    layout->setContentsMargins(0, 16, 12, 0);
+    layout->addLayout(grid);
+    layout->addStretch();
+    auto *scroll = new QScrollArea;
+    scroll->setWidget(content);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    return scroll;
 }
 
 int nextRow(const QGridLayout *grid)
@@ -455,21 +473,22 @@ QWidget *SettingsDialog::buildCheckoutsPage()
         });
     }
 
-    m_checkoutFields = form();
-    addField(m_checkoutFields, QStringLiteral("Name"), m_checkoutName, hint(QStringLiteral("Also names the checkout's agent session.")));
-    addField(m_checkoutFields, QStringLiteral("Folder"), pathRow, hint(QStringLiteral("Where the agent and the compose commands run.")));
-    m_checkoutFields->addWidget(m_checkoutPathWarning, nextRow(m_checkoutFields), 1);
+    auto *general = form();
+    addField(general, QStringLiteral("Name"), m_checkoutName, hint(QStringLiteral("Also names the checkout's agent session.")));
+    addField(general, QStringLiteral("Folder"), pathRow, hint(QStringLiteral("Where the agent and the compose commands run.")));
+    general->addWidget(m_checkoutPathWarning, nextRow(general), 1);
     m_checkoutPathWarning->setContentsMargins(0, 0, 0, 8);
-    addField(m_checkoutFields, QStringLiteral("Agent"), m_checkoutAgent,
+    auto *agent = form();
+    addField(agent, QStringLiteral("Agent"), m_checkoutAgent,
              hint(QStringLiteral("Starts whenever X3RO Deck creates the checkout's agent session: on the first launch, and on "
                                  "every launch after you stopped the agents when quitting. Switching agents in the session "
                                  "panel lasts until then.")));
-    addField(m_checkoutFields, QStringLiteral("Custom args"), m_checkoutArgs,
+    addField(agent, QStringLiteral("Custom args"), m_checkoutArgs,
              hint(QStringLiteral("Added to the agent's command line. A flag set here replaces the same flag in the agent's command. "
                                  "Quote values with spaces.")));
     m_checkoutQuick = quickTable();
     m_checkoutQuick->setMinimumHeight(150);
-    addField(m_checkoutFields, QStringLiteral("Quick commands"), editableTable(m_checkoutQuick, quickRow, setQuickRow),
+    addField(general, QStringLiteral("Quick commands"), editableTable(m_checkoutQuick, quickRow, setQuickRow),
              hint(QStringLiteral("Shown with the quick commands from the Docker page, for this checkout only. One with the same "
                                  "label as a Docker page command replaces it.")),
              true);
@@ -488,31 +507,27 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     m_composeEnvFile = lineEdit(true);
     m_composeEnvFile->setPlaceholderText(QStringLiteral(".env"));
     m_composeProject = lineEdit(true);
-    m_checkoutFields->addWidget(section(QStringLiteral("Docker Compose")), nextRow(m_checkoutFields), 0, 1, 2);
-    addField(m_checkoutFields, QStringLiteral("Files"), filesBox,
+    auto *docker = form();
+    addField(docker, QStringLiteral("Files"), filesBox,
              hint(QStringLiteral("Checked files go to compose with -f, top to bottom; drag to reorder. With none checked, compose "
                                  "finds compose.yaml or docker-compose.yml itself.")),
              true);
-    addField(m_checkoutFields, QStringLiteral("Profiles"), m_composeProfiles, hint(QStringLiteral("Each becomes --profile.")));
-    addField(m_checkoutFields, QStringLiteral("Env file"), m_composeEnvFile);
-    addField(m_checkoutFields, QStringLiteral("Project name"), m_composeProject,
+    addField(docker, QStringLiteral("Profiles"), m_composeProfiles, hint(QStringLiteral("Each becomes --profile.")));
+    addField(docker, QStringLiteral("Env file"), m_composeEnvFile);
+    addField(docker, QStringLiteral("Project name"), m_composeProject,
              hint(QStringLiteral("Passed with -p. The Docker panel then shows that project's containers.")));
-    addField(m_checkoutFields, QStringLiteral("Up"), m_composeUp);
-    addField(m_checkoutFields, QStringLiteral("Down"), m_composeDown);
-    addField(m_checkoutFields, QStringLiteral("Restart"), m_composeRestart,
+    addField(docker, QStringLiteral("Up"), m_composeUp);
+    addField(docker, QStringLiteral("Down"), m_composeDown);
+    addField(docker, QStringLiteral("Restart"), m_composeRestart,
              hint(QStringLiteral("The Docker panel's buttons run these in a shell tab in the checkout's folder. Empty runs the "
                                  "default shown, built from the options above; {compose} becomes the compose binary from the "
                                  "Docker page.")));
-    m_checkoutForm = new QWidget;
-    m_checkoutForm->setObjectName(QStringLiteral("scrollContent"));
-    auto *formLayout = new QVBoxLayout(m_checkoutForm);
-    formLayout->setContentsMargins(0, 0, 12, 0);
-    formLayout->addLayout(m_checkoutFields);
-    formLayout->addStretch();
-    auto *checkoutScroll = new QScrollArea;
-    checkoutScroll->setWidget(m_checkoutForm);
-    checkoutScroll->setWidgetResizable(true);
-    checkoutScroll->setFrameShape(QFrame::NoFrame);
+    m_checkoutTabs = new QTabWidget;
+    m_checkoutTabs->setObjectName(QStringLiteral("checkoutTabs"));
+    m_checkoutTabs->setDocumentMode(true);
+    m_checkoutTabs->addTab(scrollPage(general), QStringLiteral("General"));
+    m_checkoutTabs->addTab(scrollPage(agent), QStringLiteral("Coding Agent"));
+    m_checkoutTabs->addTab(scrollPage(docker), QStringLiteral("Docker"));
 
     connect(m_composeFiles, &QListWidget::itemChanged, this, &SettingsDialog::storeComposeFiles);
     connect(m_composeFiles->model(), &QAbstractItemModel::rowsMoved, this, &SettingsDialog::storeComposeFiles);
@@ -533,7 +548,7 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     layout->setContentsMargins(20, 20, 20, 8);
     layout->setSpacing(24);
     layout->addWidget(left);
-    layout->addWidget(checkoutScroll, 1);
+    layout->addWidget(m_checkoutTabs, 1);
 
     connect(m_checkoutList, &QListWidget::currentRowChanged, this, &SettingsDialog::loadCheckout);
     connect(m_checkoutButtons.add, &QPushButton::clicked, this, &SettingsDialog::addCheckout);
@@ -591,7 +606,7 @@ void SettingsDialog::loadCheckout(int row)
     const bool valid = row >= 0 && row < m_checkouts.size();
     m_checkoutQuickRow = valid ? row : -1;
     fillQuick(m_checkoutQuick, valid ? m_checkouts.at(row).value(QStringLiteral("quickCommands")).toArray() : QJsonArray());
-    m_checkoutForm->setEnabled(valid);
+    m_checkoutTabs->setEnabled(valid);
     m_checkoutButtons.remove->setEnabled(valid);
     m_checkoutButtons.up->setEnabled(valid && row > 0);
     m_checkoutButtons.down->setEnabled(valid && row + 1 < m_checkouts.size());
@@ -1703,8 +1718,15 @@ QJsonObject SettingsDialog::config() const
 
 void SettingsDialog::showPage(const QString &page)
 {
-    if (const qsizetype index = kPages.indexOf(page); index >= 0) {
+    // "checkouts/docker" also picks the checkout form's tab.
+    const QString top = page.section(QLatin1Char('/'), 0, 0);
+    if (const qsizetype index = kPages.indexOf(top); index >= 0) {
         m_tabs->setCurrentIndex(static_cast<int>(index));
+    }
+    if (top == QLatin1String("checkouts")) {
+        if (const qsizetype tab = kCheckoutTabs.indexOf(page.section(QLatin1Char('/'), 1, 1)); tab >= 0) {
+            m_checkoutTabs->setCurrentIndex(static_cast<int>(tab));
+        }
     }
 }
 
@@ -1744,7 +1766,7 @@ bool SettingsDialog::validate()
         }
         if (!problem.isEmpty()) {
             m_checkoutList->setCurrentRow(i);
-            return fail(QStringLiteral("checkouts"), problem);
+            return fail(QStringLiteral("checkouts/general"), problem);
         }
         names.insert(name);
     }
@@ -1781,7 +1803,7 @@ bool SettingsDialog::validate()
             }
             loadCheckout(i);
             m_checkoutQuick->setCurrentCell(row, 0);
-            return fail(QStringLiteral("checkouts"),
+            return fail(QStringLiteral("checkouts/general"),
                         QStringLiteral("%1: every quick command needs a label and a command.")
                             .arg(m_checkouts.at(i).value(QStringLiteral("name")).toString()));
         }

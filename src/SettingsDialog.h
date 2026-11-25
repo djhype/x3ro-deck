@@ -129,8 +129,7 @@ private:
 
     QListWidget *m_checkoutList;
     ListButtons m_checkoutButtons;
-    QWidget *m_checkoutForm;
-    QGridLayout *m_checkoutFields;
+    QTabWidget *m_checkoutTabs; // General, Coding Agent, Docker
     QLineEdit *m_checkoutName;
     QLineEdit *m_checkoutPath;
     QLabel *m_checkoutPathWarning;
