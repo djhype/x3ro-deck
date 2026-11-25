@@ -25,6 +25,17 @@
 
 #include <memory>
 
+namespace
+{
+// `program` under another name, as the pane poll should see it. A copy, not
+// a symlink: tmux on macOS names a process after the file it resolves to.
+bool alias(const QString &program, const QString &as)
+{
+    return QFile::copy(program, as)
+        && QFile::setPermissions(as, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner | QFile::ReadUser | QFile::ExeUser);
+}
+} // namespace
+
 class SessionFlowTest : public QObject
 {
     Q_OBJECT
@@ -107,7 +118,7 @@ void SessionFlowTest::initTestCase()
     QVERIFY(QDir().mkpath(m_bin));
     const QString sleep = QStandardPaths::findExecutable(QStringLiteral("sleep"));
     QVERIFY(!sleep.isEmpty());
-    QVERIFY(QFile::link(sleep, m_bin + QStringLiteral("/codex")));
+    QVERIFY(alias(sleep, m_bin + QStringLiteral("/codex")));
 
     // Sessions run a fixture shell in a private HOME, never the user's shell
     // or rc files: bash under names of its own, so the pane poll tells them
@@ -117,8 +128,8 @@ void SessionFlowTest::initTestCase()
     QVERIFY(!bash.isEmpty());
     m_shellA = m_bin + QStringLiteral("/deckshell-a");
     m_shellB = m_bin + QStringLiteral("/deckshell-b");
-    QVERIFY(QFile::link(bash, m_shellA));
-    QVERIFY(QFile::link(bash, m_shellB));
+    QVERIFY(alias(bash, m_shellA));
+    QVERIFY(alias(bash, m_shellB));
     const QString home = m_tmp.path() + QStringLiteral("/home");
     QVERIFY(QDir().mkpath(home + QStringLiteral("/nvm/bin")));
     qputenv("HOME", home.toLocal8Bit());
@@ -140,7 +151,7 @@ void SessionFlowTest::initTestCase()
     // The script logs and then becomes "fakeclaude" for the pane poll, which
     // reads argv[0] as tmux does.
     QVERIFY(QDir().mkpath(home + QStringLiteral("/nvm/lib")));
-    QVERIFY(QFile::link(sleep, home + QStringLiteral("/nvm/lib/fakeclaude")));
+    QVERIFY(alias(sleep, home + QStringLiteral("/nvm/lib/fakeclaude")));
     writeFile(home + QStringLiteral("/nvm/bin/fakeclaude"),
               QStringLiteral("#!/bin/sh\necho ran >> %1\nexec \"$HOME/nvm/lib/fakeclaude\" 300\n").arg(m_nvmLog), true);
     QVERIFY(QStandardPaths::findExecutable(QStringLiteral("fakeclaude")).isEmpty());

@@ -72,9 +72,14 @@ private Q_SLOTS:
         cc.composeProfiles = {QStringLiteral("worker")};
         cc.composeEnvFile = QStringLiteral("my env/.env");
         cc.composeProject = QStringLiteral("p135");
+#if defined(Q_OS_WIN)
+        const QString envFile = QStringLiteral("\"my env/.env\""); // cmd and PowerShell quote with "
+#else
+        const QString envFile = QStringLiteral("'my env/.env'");
+#endif
         QCOMPARE(
             cc.composeCommand(QStringLiteral("up")),
-            QStringLiteral("{compose} -f compose.yml -f docker-compose.dev.yml --profile worker --env-file 'my env/.env' -p p135 up -d"));
+            QStringLiteral("{compose} -f compose.yml -f docker-compose.dev.yml --profile worker --env-file %1 -p p135 up -d").arg(envFile));
         QCOMPARE(cc.composeCommand(QStringLiteral("down")),
                  cc.composeCommand(QStringLiteral("up")).replace(QStringLiteral("up -d"), QStringLiteral("down")));
         cc.composeUp = QStringLiteral("make up");

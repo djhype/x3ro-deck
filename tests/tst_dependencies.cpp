@@ -4,6 +4,7 @@
 #include "Config.h"
 #include "Dependencies.h"
 
+#include <QDir>
 #include <QFile>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -14,9 +15,19 @@ class TestDependencies : public QObject
     Q_OBJECT
 
 private:
+    // Windows finds programs by suffix and runs no #! scripts.
+    static QString exe(const QString &name)
+    {
+#if defined(Q_OS_WIN)
+        return name + QStringLiteral(".exe");
+#else
+        return name;
+#endif
+    }
+
     static void tool(const QString &dir, const QString &name)
     {
-        QFile f(dir + QLatin1Char('/') + name);
+        QFile f(dir + QLatin1Char('/') + exe(name));
         QVERIFY(f.open(QIODevice::WriteOnly));
         f.write("#!/bin/sh\n");
         f.close();
@@ -37,11 +48,17 @@ private Q_SLOTS:
         QTemporaryDir app, login;
         tool(app.path(), QStringLiteral("gh"));
         tool(login.path(), QStringLiteral("codex"));
-        QCOMPARE(Dependencies::resolve(QStringLiteral("gh"), app.path(), login.path()), app.path() + QStringLiteral("/gh"));
-        QCOMPARE(Dependencies::resolve(QStringLiteral("codex"), app.path(), login.path()), login.path() + QStringLiteral("/codex"));
+        QCOMPARE(Dependencies::resolve(QStringLiteral("gh"), app.path(), login.path()),
+                 app.path() + QLatin1Char('/') + exe(QStringLiteral("gh")));
+        QCOMPARE(Dependencies::resolve(QStringLiteral("codex"), app.path(), login.path()),
+                 login.path() + QLatin1Char('/') + exe(QStringLiteral("codex")));
         QVERIFY(Dependencies::resolve(QStringLiteral("claude"), app.path(), login.path()).isEmpty());
-        QCOMPARE(Dependencies::resolve(login.path() + QStringLiteral("/codex"), QString(), QString()),
-                 login.path() + QStringLiteral("/codex"));
+        QCOMPARE(Dependencies::resolve(login.path() + QLatin1Char('/') + exe(QStringLiteral("codex")), QString(), QString()),
+                 login.path() + QLatin1Char('/') + exe(QStringLiteral("codex")));
+        // Several directories, joined the platform's way.
+        const QString both = app.path() + QDir::listSeparator() + login.path();
+        QCOMPARE(Dependencies::resolve(QStringLiteral("codex"), both, QString()),
+                 login.path() + QLatin1Char('/') + exe(QStringLiteral("codex")));
     }
 
     void parseProbe()
@@ -64,7 +81,7 @@ private Q_SLOTS:
         deps.setLoginPath(QString());
         QVERIFY(deps.missing(QStringLiteral("sessiond")));
         QTemporaryDir dir;
-        const QString bin = dir.filePath(QStringLiteral("x3ro-deck-sessiond"));
+        const QString bin = dir.filePath(exe(QStringLiteral("x3ro-deck-sessiond")));
         QFile f(bin);
         QVERIFY(f.open(QIODevice::WriteOnly));
         f.close();
@@ -116,6 +133,21 @@ private Q_SLOTS:
 
     void probeReadsTheLoginShellsPath()
     {
+#if defined(Q_OS_WIN)
+        // No login shell there: the probe takes the app's PATH at once.
+        QTemporaryDir app;
+        tool(app.path(), QStringLiteral("codex"));
+        Config windows;
+        AgentProfile agent;
+        agent.id = agent.label = agent.command = QStringLiteral("codex");
+        windows.agents = {agent};
+        Dependencies onWindows;
+        onWindows.setAppPath(app.path());
+        onWindows.setConfig(windows);
+        onWindows.probeLoginPath({QStringLiteral("pwsh")});
+        QVERIFY(onWindows.ready());
+        QVERIFY(!onWindows.missing(QStringLiteral("codex")));
+#else
         QTemporaryDir dir, login;
         tool(login.path(), QStringLiteral("codex"));
         // A shell whose rc files print a banner before the probe's output.
@@ -140,6 +172,7 @@ private Q_SLOTS:
         QVERIFY(deps.ready());
         QVERIFY(!deps.missing(QStringLiteral("codex")));
         QVERIFY(deps.missing(QStringLiteral("gh")));
+#endif
     }
 };
 

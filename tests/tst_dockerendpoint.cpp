@@ -9,6 +9,7 @@
 #include "DockerEndpoint.h"
 #include "TestEnv.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -39,6 +40,13 @@ void writeJson(const QString &path, const QJsonObject &o)
     QVERIFY(f.open(QIODevice::WriteOnly));
     f.write(QJsonDocument(o).toJson());
 }
+
+// Where Docker is looked for when nothing else answers, and its label.
+#if defined(Q_OS_WIN)
+const QPair<QString, QString> kSystemSocket{QStringLiteral("\\\\.\\pipe\\docker_engine"), QStringLiteral("Docker Desktop")};
+#else
+const QPair<QString, QString> kSystemSocket{QStringLiteral("/var/run/docker.sock"), QStringLiteral("default")};
+#endif
 
 // Answers /containers/json with `containers` and holds /events open.
 class FakeEngine : public QObject
@@ -149,7 +157,7 @@ void DockerEndpointTest::activeContext()
     e = resolveDockerEndpoint(QString(), fakeEnv({QStringLiteral("DOCKER_CONTEXT=rootless")}, home.path(), {}));
     QCOMPARE(e.socketPath, QStringLiteral("/ctx/rootless.sock"));
     e = resolveDockerEndpoint(QString(), fakeEnv({QStringLiteral("DOCKER_CONTEXT=default")}, home.path(), {}));
-    QCOMPARE(e.source, QStringLiteral("default"));
+    QCOMPARE(e.source, kSystemSocket.second);
 
     // DOCKER_CONFIG moves the whole directory.
     e = resolveDockerEndpoint(QString(), fakeEnv({QStringLiteral("DOCKER_CONFIG=") + cfg}, QStringLiteral("/elsewhere"), {}));
@@ -173,24 +181,33 @@ void DockerEndpointTest::socketCandidatesInOrder()
 void DockerEndpointTest::fallsBackToTheSystemSocket()
 {
     const auto e = resolveDockerEndpoint(QString(), fakeEnv({}, QStringLiteral("/h"), {}));
-    QCOMPARE(e.socketPath, QStringLiteral("/var/run/docker.sock"));
-    QCOMPARE(e.source, QStringLiteral("default"));
+    QCOMPARE(e.socketPath, kSystemSocket.first);
+    QCOMPARE(e.source, kSystemSocket.second);
 }
 
 void DockerEndpointTest::appUsesResolvedSocketAndComposeBinary()
 {
-    QTemporaryDir tmp(QStringLiteral("/tmp/xdd-XXXXXX"));
+#if defined(Q_OS_WIN)
+    // Docker Desktop's kind of endpoint: a named pipe.
+    QTemporaryDir tmp;
+    const QString pipe = QStringLiteral("xdd-%1").arg(QCoreApplication::applicationPid());
+    const QString sock = QStringLiteral("\\\\.\\pipe\\") + pipe;
+    const QString host = QStringLiteral("npipe:////./pipe/") + pipe;
+#else
+    QTemporaryDir tmp(QStringLiteral("/tmp/xdd-XXXXXX")); // short enough for sun_path
+    const QString sock = tmp.path() + QStringLiteral("/podman.sock");
+    const QString host = QStringLiteral("unix://") + sock;
+#endif
     QVERIFY(tmp.isValid());
     const QString repo = tmp.path() + QStringLiteral("/repo");
     QVERIFY(QDir().mkpath(repo));
-    const QString sock = tmp.path() + QStringLiteral("/podman.sock");
     setConfigHome(tmp.path() + QStringLiteral("/config"));
     qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
     qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
     qputenv("DOCKER_HOST", "unix:///nonexistent/should-lose.sock");
     writeJson(tmp.path() + QStringLiteral("/config/x3ro-deck/config.json"),
               {{QStringLiteral("autostartAgents"), false},
-               {QStringLiteral("dockerHost"), QStringLiteral("unix://") + sock},
+               {QStringLiteral("dockerHost"), host},
                {QStringLiteral("composeBinary"), QStringLiteral("podman compose")},
                {QStringLiteral("checkouts"),
                 QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("web")}, {QStringLiteral("path"), repo}}}}});

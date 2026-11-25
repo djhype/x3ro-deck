@@ -3,6 +3,7 @@
 
 #include "PrWatcher.h"
 
+#include <QDir>
 #include <QFile>
 #include <QProcess>
 #include <QSignalSpy>
@@ -68,17 +69,12 @@ private Q_SLOTS:
         m_bin = m_tmp.path() + QStringLiteral("/bin");
         m_log = m_tmp.path() + QStringLiteral("/gh.log");
         QDir().mkpath(m_bin);
-        QFile gh(m_bin + QStringLiteral("/gh"));
-        QVERIFY(gh.open(QIODevice::WriteOnly));
-        gh.write("#!/bin/sh\n"
-                 "echo \"$*\" >> \"$FAKE_GH_LOG\"\n"
-                 "case \"$1 $2\" in\n"
-                 "  'auth status') exit \"${FAKE_GH_AUTH:-0}\" ;;\n"
-                 "  'repo view') echo trunk ;;\n"
-                 "  'pr view') echo 'no pull requests found for branch' >&2; exit 1 ;;\n"
-                 "esac\n");
-        gh.close();
-        gh.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+#if defined(Q_OS_WIN)
+        const QString gh = m_bin + QStringLiteral("/gh.exe");
+#else
+        const QString gh = m_bin + QStringLiteral("/gh");
+#endif
+        QVERIFY(QFile::copy(QStringLiteral(FAKE_GH), gh));
         m_path = qgetenv("PATH");
         qputenv("FAKE_GH_LOG", m_log.toUtf8());
     }
@@ -86,7 +82,7 @@ private Q_SLOTS:
     void init()
     {
         QFile::remove(m_log);
-        qputenv("PATH", m_bin.toUtf8() + ':' + m_path);
+        qputenv("PATH", QDir::toNativeSeparators(m_bin).toLocal8Bit() + QDir::listSeparator().toLatin1() + m_path);
         qunsetenv("FAKE_GH_AUTH");
     }
 

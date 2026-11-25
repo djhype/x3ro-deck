@@ -73,6 +73,9 @@ void PathsTest::tildeRoundTrip()
 
 void PathsTest::symlinksResolve()
 {
+#if defined(Q_OS_WIN)
+    QSKIP("QFile::link makes a .lnk shortcut on Windows, not a symlink");
+#else
     QTemporaryDir tmp;
     QVERIFY(tmp.isValid());
     const QString real = tmp.path() + QStringLiteral("/real");
@@ -81,6 +84,7 @@ void PathsTest::symlinksResolve()
     QVERIFY(QFile::link(real, link));
     QCOMPARE(Paths::normalize(link), Paths::normalize(real));
     QVERIFY(Paths::isWithin(Paths::normalize(link + QStringLiteral("/sub")), Paths::normalize(real)));
+#endif
 }
 
 void PathsTest::subdirectoryOfCheckout()

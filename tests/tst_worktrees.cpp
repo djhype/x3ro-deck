@@ -120,9 +120,12 @@ private Q_SLOTS:
             QCOMPARE(app.welcomeCandidates().size(), 2);
             app.cancelWelcome();
             QVERIFY(app.welcomeCandidates().isEmpty());
-            QFile f(Config::configPath());
-            QVERIFY(f.open(QIODevice::ReadOnly));
-            QCOMPARE(f.readAll(), before);
+            {
+                // Closed again before Finish replaces it, which Windows refuses while it is open.
+                QFile f(Config::configPath());
+                QVERIFY(f.open(QIODevice::ReadOnly));
+                QCOMPARE(f.readAll(), before);
+            }
 
             app.setWelcomeFolder(repo.at(0));
             QSignalSpy finished(&app, &AppController::welcomeFinished);

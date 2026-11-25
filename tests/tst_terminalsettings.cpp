@@ -239,7 +239,9 @@ void TerminalSettingsTest::noTerminalFallsBack()
         QCOMPARE(settings.current(), TerminalProfile::fallback());
     }
     QCOMPARE(settings.current().appearance, TerminalAppearance::fallback());
+#if !defined(Q_OS_WIN) // Windows falls back to its configured shell (windowsShellArgv), not a login shell
     QCOMPARE(settings.current().shell, QStringList{loginShell()});
+#endif
 }
 
 void TerminalSettingsTest::desktopDefault()

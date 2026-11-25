@@ -60,12 +60,13 @@ QString Dependencies::resolve(const QString &binary, const QString &appPath, con
     if (program.startsWith(QLatin1String("~/"))) {
         program = QDir::homePath() + program.mid(1);
     }
-    if (program.contains(QLatin1Char('/'))) {
+    if (program.contains(QLatin1Char('/')) || program.contains(QLatin1Char('\\'))) {
         const QFileInfo fi(program);
         return fi.isFile() && fi.isExecutable() ? fi.absoluteFilePath() : QString();
     }
     for (const QString &path : {appPath, loginPath}) {
-        const QStringList dirs = path.split(QLatin1Char(':'), Qt::SkipEmptyParts);
+        // ';' on Windows, where ':' follows every drive letter.
+        const QStringList dirs = path.split(QDir::listSeparator(), Qt::SkipEmptyParts);
         if (dirs.isEmpty()) {
             continue;
         }
@@ -175,6 +176,11 @@ void Dependencies::probeLoginPath(const QStringList &shell)
     if (m_probe) {
         return;
     }
+#if defined(Q_OS_WIN)
+    // No login shell sets up PATH there: the app's own is the one sessions get.
+    Q_UNUSED(shell)
+    setLoginPath(m_appPath);
+#else
     const SessionShell s = SessionShell::resolve(shell);
     m_probe = new QProcess(this);
     m_probe->setStandardInputFile(QProcess::nullDevice());
@@ -194,6 +200,7 @@ void Dependencies::probeLoginPath(const QStringList &shell)
     QProcess *probe = m_probe;
     QTimer::singleShot(kProbeTimeoutMs, probe, [probe] { probe->kill(); });
     m_probe->start(s.program, probeArgs());
+#endif
 }
 
 void Dependencies::check()

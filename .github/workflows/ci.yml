@@ -72,43 +72,12 @@ jobs:
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
-      # Windows still runs the suites for the log only (PE-174): ctest showed
-      # no output for its failures, so the next step reruns them into files.
+      # Qt sends QtTest's output through its message handler, which on Windows
+      # writes to the debugger rather than stderr unless this is set.
       - name: Test
-        id: test
-        continue-on-error: ${{ matrix.name == 'windows' }}
         env:
           QT_FORCE_STDERR_LOGGING: '1'
         run: ctest --test-dir build --output-on-failure --no-tests=ignore
-
-      # Each failed suite once more, run directly with QtTest writing its log
-      # to a file, which also catches output lost on the way to ctest.
-      - name: Failed test logs
-        if: always() && steps.test.outcome == 'failure'
-        shell: bash
-        env:
-          QT_FORCE_STDERR_LOGGING: '1'
-          QT_QPA_PLATFORM: offscreen
-          QT_QUICK_BACKEND: software
-        run: |
-          mkdir -p test-logs
-          while IFS=: read -r _ name; do
-            name=${name%$'\r'}
-            exe=$(find build -type f \( -name "tst_${name%-daemon}" -o -name "tst_${name%-daemon}.exe" \) | head -n 1)
-            echo "::group::$name ($exe)"
-            code=0
-            "$exe" -o "test-logs/$name.txt,txt" > "test-logs/$name.out" 2>&1 || code=$?
-            echo "exit code: $code"
-            cat "test-logs/$name.txt" "test-logs/$name.out" 2>/dev/null || true
-            echo "::endgroup::"
-          done < build/Testing/Temporary/LastTestsFailed.log
-
-      - name: Upload failed test logs
-        if: always() && steps.test.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-logs-${{ matrix.name }}
-          path: test-logs/
 
       - name: Smoke test (Windows)
         if: matrix.name == 'windows'

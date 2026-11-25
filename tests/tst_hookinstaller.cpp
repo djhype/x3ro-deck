@@ -42,7 +42,7 @@ QStringList commands(const QByteArray &json, const QString &event)
 
 QByteArray stripped(QByteArray json)
 {
-    json.replace(' ', "").replace('\n', "");
+    json.replace(' ', "").replace('\n', "").replace('\r', ""); // \r: Windows checks the fixtures out with CRLF
     return json;
 }
 } // namespace
@@ -115,7 +115,11 @@ private Q_SLOTS:
     void bareNameOnPathCountsAsInstalled()
     {
         QTemporaryDir dir;
+#if defined(Q_OS_WIN)
+        const QString hook = dir.filePath(QStringLiteral("x3ro-deck-hook.exe")); // found by its suffix
+#else
         const QString hook = dir.filePath(QStringLiteral("x3ro-deck-hook"));
+#endif
         QFile f(hook);
         QVERIFY(f.open(QIODevice::WriteOnly));
         f.close();
