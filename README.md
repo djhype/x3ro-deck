@@ -198,6 +198,19 @@ ctest --test-dir build
 before sending a change. `x3ro-deck --demo` shows made-up checkouts, which is
 how the screenshots above were taken.
 
+## AI Usage Disclosure
+
+x3ro deck is built with AI. Most of its code, tests and documentation were
+written by AI coding agents, chiefly Anthropic's Claude through Claude Code,
+working under the maintainer's direction; the commits that came out of that
+work carry a `Co-Authored-By: Claude` line.
+
+That will not change: AI will keep being used to add features, fix bugs and
+maintain the app. A person decides what gets built, reviews each change and
+runs it, and every change passes the same build, tests and checks in CI
+regardless of who or what wrote it. Contributions written with AI tools are
+welcome under the same rules as any other (see `CONTRIBUTING.md`).
+
 ## License
 
 x3ro deck is free software under the GNU General Public License, version 3 or
