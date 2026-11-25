@@ -84,7 +84,11 @@ private Q_SLOTS:
                  cc.composeCommand(QStringLiteral("up")).replace(QStringLiteral("up -d"), QStringLiteral("down")));
         cc.composeUp = QStringLiteral("make up");
         QCOMPARE(cc.composeCommand(QStringLiteral("up")), QStringLiteral("make up"));
+#if defined(Q_OS_WIN)
+        QCOMPARE(ComposeFiles::shellQuote(QStringLiteral("it's")), QStringLiteral("\"it's\""));
+#else
         QCOMPARE(ComposeFiles::shellQuote(QStringLiteral("it's")), QStringLiteral("'it'\\''s'"));
+#endif
     }
 
     void projectNamePicksTheContainers()

@@ -591,7 +591,8 @@ void SessiondTest::backend()
 
     // Creating one does, in the background.
     const SessionBackend::Environment env{{QStringLiteral("X3RO_T"), QStringLiteral("e1")}};
-    QVERIFY(backend.createSession(QStringLiteral("b"), dir, QStringLiteral("cat -v >> ") + log, env));
+    QVERIFY(backend.createSession(QStringLiteral("b"), dir, QStringLiteral("cat -uv >> ") /* -u: BSD cat buffers a file otherwise */ + log,
+                                  env));
     QVERIFY(QFile::exists(m_socket));
     QVERIFY(backend.hasSession(QStringLiteral("b")));
     QCOMPARE(backend.sessionEnvironment(QStringLiteral("b")), env);
@@ -604,11 +605,6 @@ void SessiondTest::backend()
         return spy.isEmpty() ? QStringList() : spy.last().at(0).value<Commands>().value(QStringLiteral("b"));
     };
     QTRY_COMPARE_WITH_TIMEOUT(polledCommand(), QStringList{QStringLiteral("cat")}, 5000);
-    // The shell opens the log in the child it runs cat in, after handing it
-    // the terminal; keys sent before that can be lost (seen on macOS).
-    QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(log), 5000);
-    QTest::qWait(200);
-
     // Permission keys and prompt buttons.
     backend.sendKeys(QStringLiteral("b"), {QStringLiteral("1")});
     backend.sendKeys(QStringLiteral("b"), {QStringLiteral("Escape"), QStringLiteral("Enter")});
