@@ -591,8 +591,8 @@ void SessiondTest::backend()
 
     // Creating one does, in the background.
     const SessionBackend::Environment env{{QStringLiteral("X3RO_T"), QStringLiteral("e1")}};
-    QVERIFY(backend.createSession(QStringLiteral("b"), dir, QStringLiteral("cat -uv >> ") /* -u: BSD cat buffers a file otherwise */ + log,
-                                  env));
+    // -u: BSD cat buffers its output to a file otherwise.
+    QVERIFY(backend.createSession(QStringLiteral("b"), dir, QStringLiteral("cat -uv >> ") + log, env));
     QVERIFY(QFile::exists(m_socket));
     QVERIFY(backend.hasSession(QStringLiteral("b")));
     QCOMPARE(backend.sessionEnvironment(QStringLiteral("b")), env);
