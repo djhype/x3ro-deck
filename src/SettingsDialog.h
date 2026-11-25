@@ -87,6 +87,10 @@ private:
     QHash<QString, QKeySequence> shortcutBindings() const;
     void checkShortcuts();
     static ListButtons listButtons(const QString &addText);
+    // `table` with add, remove and reorder buttons under it; `read` and
+    // `write` move a row's JSON in and out for reordering.
+    static QWidget *editableTable(QTableWidget *table, QJsonObject (*read)(const QTableWidget *, int),
+                                  void (*write)(QTableWidget *, int, const QJsonObject &));
 
     void loadCheckout(int row);
     void editCheckout(const QString &key, const QJsonValue &value);
@@ -95,6 +99,8 @@ private:
     void checkPath();
     void storeComposeFiles();
     void refreshComposePlaceholders();
+    // Writes the quick command table back to the checkout it shows.
+    void storeCheckoutQuick();
 
     void loadAgent(int row);
     void editAgent(const QString &key, const QJsonValue &value);
@@ -174,6 +180,8 @@ private:
     QLineEdit *m_composeDown;
     QLineEdit *m_composeRestart;
     QTableWidget *m_quick;
+    QTableWidget *m_checkoutQuick;
+    int m_checkoutQuickRow = -1; // the checkout m_checkoutQuick shows
     QTableWidget *m_links;
 
     QCheckBox *m_autostart;

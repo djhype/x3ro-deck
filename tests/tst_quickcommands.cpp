@@ -220,6 +220,39 @@ private Q_SLOTS:
         QTRY_COMPARE_WITH_TIMEOUT(labels(quick.detected(0), QStringLiteral("justfile")), QStringList{QStringLiteral("compile")}, 1000);
     }
 
+    void checkoutCommandsOverrideGlobalOnes()
+    {
+        const QList<QuickCommand> global{{QStringLiteral("Test"), QStringLiteral("make test"), QStringLiteral("check")},
+                                         {QStringLiteral("Seed"), QStringLiteral("make seed"), QStringLiteral("data")}};
+        const QList<QuickCommand> own{{QStringLiteral("Lint"), QStringLiteral("make lint"), QStringLiteral("check")},
+                                      {QStringLiteral("Test"), QStringLiteral("pnpm test"), QStringLiteral("env")}};
+        const QList<QuickCommand> merged = mergeQuickCommands(global, own);
+        auto describe = [](const QList<QuickCommand> &list) {
+            QStringList out;
+            for (const QuickCommand &q : list) {
+                out.append(QStringLiteral("%1|%2|%3").arg(q.label, q.command, q.group));
+            }
+            return out;
+        };
+        // The override keeps the global command's place; the rest follow.
+        QCOMPARE(describe(merged),
+                 (QStringList{QStringLiteral("Test|pnpm test|env"), QStringLiteral("Seed|make seed|data"),
+                              QStringLiteral("Lint|make lint|check")}));
+        QCOMPARE(describe(mergeQuickCommands(global, {})), describe(global));
+        QCOMPARE(describe(mergeQuickCommands({}, own)), describe(own));
+
+        // Pins follow the label, so a pinned global command stays pinned when a checkout overrides it.
+        QTemporaryDir empty;
+        QuickCommands quick;
+        quick.setCheckouts({QStringLiteral("override")}, {empty.path()});
+        quick.setPinned(0, QStringLiteral("Manual:Seed"), true);
+        const QList<QuickEntry> e
+            = quick.entries(0, mergeQuickCommands(global, {{QStringLiteral("Seed"), QStringLiteral("just seed"), {}}}));
+        QCOMPARE(e.first().command, QStringLiteral("just seed"));
+        QVERIFY(e.first().pinned);
+        quick.setPinned(0, QStringLiteral("Manual:Seed"), false);
+    }
+
     void entriesMergePinAndHide()
     {
         QuickCommands quick;

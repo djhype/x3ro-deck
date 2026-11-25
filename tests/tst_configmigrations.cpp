@@ -31,6 +31,7 @@ private Q_SLOTS:
     void savingStampsTheVersion();
     void v5KeepsTheOldClaudePrompts();
     void freshInstallHasClaudeAndCodex();
+    void checkoutQuickCommandsLoad();
 
 private:
     QString configFile() const { return m_tmp->path() + QStringLiteral("/x3ro-deck/config.json"); }
@@ -260,6 +261,30 @@ void ConfigMigrationsTest::freshInstallHasClaudeAndCodex()
     }
     QCOMPARE(ids, (QStringList{QStringLiteral("claude"), QStringLiteral("codex")}));
     QCOMPARE(c.agents.first().prompts, QStringList{QStringLiteral("/review")});
+}
+
+void ConfigMigrationsTest::checkoutQuickCommandsLoad()
+{
+    QVERIFY(QDir().mkpath(m_tmp->path() + QStringLiteral("/x3ro-deck")));
+    const QJsonObject quick{{QStringLiteral("label"), QStringLiteral("Test")}, {QStringLiteral("command"), QStringLiteral("pnpm test")}};
+    QVERIFY(Config::writeJson(
+        QJsonObject{{QStringLiteral("quickCommands"),
+                     QJsonArray{QJsonObject{{QStringLiteral("label"), QStringLiteral("Test")},
+                                            {QStringLiteral("command"), QStringLiteral("make test")}}}},
+                    {QStringLiteral("checkouts"),
+                     QJsonArray{QJsonObject{{QStringLiteral("name"), QStringLiteral("a")},
+                                            {QStringLiteral("path"), m_tmp->path()},
+                                            {QStringLiteral("quickCommands"), QJsonArray{quick}}},
+                                QJsonObject{{QStringLiteral("name"), QStringLiteral("b")}, {QStringLiteral("path"), m_tmp->path()}}}}}));
+    QString error;
+    const Config c = Config::load(&error);
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+    QCOMPARE(c.checkouts.size(), 2);
+    QCOMPARE(c.checkouts.at(0).quickCommands.size(), 1);
+    QCOMPARE(c.checkouts.at(0).quickCommands.first().command, QStringLiteral("pnpm test"));
+    QCOMPARE(c.checkouts.at(0).quickCommands.first().group, QStringLiteral("check"));
+    QVERIFY(c.checkouts.at(1).quickCommands.isEmpty());
+    QCOMPARE(mergeQuickCommands(c.quickCommands, c.checkouts.at(0).quickCommands).first().command, QStringLiteral("pnpm test"));
 }
 
 QTEST_GUILESS_MAIN(ConfigMigrationsTest)

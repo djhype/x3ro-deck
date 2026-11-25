@@ -196,6 +196,50 @@ void setQuickRow(QTableWidget *t, int row, const QJsonObject &o)
     t->setCellWidget(row, 2, group);
 }
 
+QTableWidget *quickTable()
+{
+    auto *t = table({QStringLiteral("Label"), QStringLiteral("Command"), QStringLiteral("Group")});
+    t->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    t->horizontalHeader()->setStretchLastSection(false);
+    t->horizontalHeader()->resizeSection(0, 180);
+    t->horizontalHeader()->resizeSection(2, 120);
+    return t;
+}
+
+void fillQuick(QTableWidget *t, const QJsonArray &rows)
+{
+    t->setRowCount(0);
+    for (const QJsonValue &v : rows) {
+        t->insertRow(t->rowCount());
+        setQuickRow(t, t->rowCount() - 1, v.toObject());
+    }
+}
+
+// The rows with a label or a command; validate() rejects those with only one.
+QJsonArray quickRows(const QTableWidget *t)
+{
+    QJsonArray out;
+    for (int r = 0; r < t->rowCount(); ++r) {
+        const QJsonObject o = quickRow(t, r);
+        if (!o.value(QStringLiteral("label")).toString().isEmpty() || !o.value(QStringLiteral("command")).toString().isEmpty()) {
+            out.append(o);
+        }
+    }
+    return out;
+}
+
+// Index of the first row with a label but no command or the reverse, else -1.
+int incompleteQuick(const QJsonArray &rows)
+{
+    for (int i = 0; i < rows.size(); ++i) {
+        const QJsonObject o = rows.at(i).toObject();
+        if (o.value(QStringLiteral("label")).toString().isEmpty() != o.value(QStringLiteral("command")).toString().isEmpty()) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 QJsonObject linkRow(const QTableWidget *t, int row)
 {
     QJsonObject o = t->item(row, 0)->data(Qt::UserRole).toJsonObject();
@@ -333,6 +377,44 @@ SettingsDialog::ListButtons SettingsDialog::listButtons(const QString &addText)
     return b;
 }
 
+QWidget *SettingsDialog::editableTable(QTableWidget *t, QJsonObject (*read)(const QTableWidget *, int),
+                                       void (*write)(QTableWidget *, int, const QJsonObject &))
+{
+    const ListButtons b = listButtons(QStringLiteral("Add"));
+    QObject::connect(b.add, &QPushButton::clicked, t, [t, write] {
+        const int row = t->rowCount();
+        t->insertRow(row);
+        write(t, row, QJsonObject());
+        t->setCurrentCell(row, 0);
+        t->editItem(t->item(row, 0));
+    });
+    QObject::connect(b.remove, &QPushButton::clicked, t, [t] {
+        if (t->currentRow() >= 0) {
+            t->removeRow(t->currentRow());
+        }
+    });
+    auto move = [t, read, write](int delta) {
+        const int row = t->currentRow();
+        const int to = row + delta;
+        if (row < 0 || to < 0 || to >= t->rowCount()) {
+            return;
+        }
+        const QJsonObject a = read(t, row);
+        write(t, row, read(t, to));
+        write(t, to, a);
+        t->setCurrentCell(to, std::max(0, t->currentColumn()));
+    };
+    QObject::connect(b.up, &QPushButton::clicked, t, [move] { move(-1); });
+    QObject::connect(b.down, &QPushButton::clicked, t, [move] { move(1); });
+    auto *box = new QWidget;
+    auto *layout = new QVBoxLayout(box);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(6);
+    layout->addWidget(t, 1);
+    layout->addLayout(b.layout);
+    return box;
+}
+
 // ───────────────────────── checkouts ─────────────────────────
 
 QWidget *SettingsDialog::buildCheckoutsPage()
@@ -385,6 +467,12 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     addField(m_checkoutFields, QStringLiteral("Custom args"), m_checkoutArgs,
              hint(QStringLiteral("Added to the agent's command line. A flag set here replaces the same flag in the agent's command. "
                                  "Quote values with spaces.")));
+    m_checkoutQuick = quickTable();
+    m_checkoutQuick->setMinimumHeight(150);
+    addField(m_checkoutFields, QStringLiteral("Quick commands"), editableTable(m_checkoutQuick, quickRow, setQuickRow),
+             hint(QStringLiteral("Shown with the quick commands from the Docker page, for this checkout only. One with the same "
+                                 "label as a Docker page command replaces it.")),
+             true);
     m_composeFiles = new QListWidget;
     m_composeFiles->setFixedHeight(120);
     m_composeFiles->setDragDropMode(QAbstractItemView::InternalMove);
@@ -452,6 +540,7 @@ QWidget *SettingsDialog::buildCheckoutsPage()
     connect(m_checkoutButtons.remove, &QPushButton::clicked, this, [this] {
         const int row = m_checkoutList->currentRow();
         if (row >= 0) {
+            m_checkoutQuickRow = -1; // its table goes with it
             m_checkouts.removeAt(row);
             delete m_checkoutList->takeItem(row);
             loadCheckout(m_checkoutList->currentRow());
@@ -498,7 +587,10 @@ QWidget *SettingsDialog::buildCheckoutsPage()
 
 void SettingsDialog::loadCheckout(int row)
 {
+    storeCheckoutQuick();
     const bool valid = row >= 0 && row < m_checkouts.size();
+    m_checkoutQuickRow = valid ? row : -1;
+    fillQuick(m_checkoutQuick, valid ? m_checkouts.at(row).value(QStringLiteral("quickCommands")).toArray() : QJsonArray());
     m_checkoutForm->setEnabled(valid);
     m_checkoutButtons.remove->setEnabled(valid);
     m_checkoutButtons.up->setEnabled(valid && row > 0);
@@ -545,6 +637,19 @@ void SettingsDialog::loadCheckout(int row)
     m_loading = loading;
     checkPath();
     refreshComposePlaceholders();
+}
+
+void SettingsDialog::storeCheckoutQuick()
+{
+    if (m_checkoutQuickRow < 0 || m_checkoutQuickRow >= m_checkouts.size()) {
+        return;
+    }
+    QJsonObject &c = m_checkouts[m_checkoutQuickRow];
+    if (const QJsonArray quick = quickRows(m_checkoutQuick); quick.isEmpty()) {
+        c.remove(QStringLiteral("quickCommands"));
+    } else {
+        c.insert(QStringLiteral("quickCommands"), quick);
+    }
 }
 
 void SettingsDialog::storeComposeFiles()
@@ -641,6 +746,8 @@ void SettingsDialog::moveCheckout(int delta)
     if (row < 0 || to < 0 || to >= m_checkouts.size()) {
         return;
     }
+    storeCheckoutQuick();
+    m_checkoutQuickRow = -1;
     m_checkouts.swapItemsAt(row, to);
     {
         const QSignalBlocker block(m_checkoutList);
@@ -1123,16 +1230,8 @@ QWidget *SettingsDialog::buildDockerPage()
     addField(engine, QStringLiteral("Compose binary"), m_composeBinary,
              hint(QStringLiteral("What {compose} becomes in each checkout's compose commands and in quick commands.")));
 
-    m_quick = table({QStringLiteral("Label"), QStringLiteral("Command"), QStringLiteral("Group")});
-    m_quick->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_quick->horizontalHeader()->setStretchLastSection(false);
-    m_quick->horizontalHeader()->resizeSection(0, 180);
-    m_quick->horizontalHeader()->resizeSection(2, 120);
-    const QJsonArray quick = m_root.value(QStringLiteral("quickCommands")).toArray();
-    for (const QJsonValue &v : quick) {
-        m_quick->insertRow(m_quick->rowCount());
-        setQuickRow(m_quick, m_quick->rowCount() - 1, v.toObject());
-    }
+    m_quick = quickTable();
+    fillQuick(m_quick, m_root.value(QStringLiteral("quickCommands")).toArray());
 
     m_links = table({QStringLiteral("Label"), QStringLiteral("Service"), QStringLiteral("Container port")});
     m_links->horizontalHeader()->resizeSection(0, 180);
@@ -1142,43 +1241,6 @@ QWidget *SettingsDialog::buildDockerPage()
         m_links->insertRow(m_links->rowCount());
         setLinkRow(m_links, m_links->rowCount() - 1, v.toObject());
     }
-
-    // A table with add, remove and reorder buttons under it.
-    auto editable = [](QTableWidget *t, auto read, auto write) {
-        const ListButtons b = listButtons(QStringLiteral("Add"));
-        QObject::connect(b.add, &QPushButton::clicked, t, [t, write] {
-            const int row = t->rowCount();
-            t->insertRow(row);
-            write(t, row, QJsonObject());
-            t->setCurrentCell(row, 0);
-            t->editItem(t->item(row, 0));
-        });
-        QObject::connect(b.remove, &QPushButton::clicked, t, [t] {
-            if (t->currentRow() >= 0) {
-                t->removeRow(t->currentRow());
-            }
-        });
-        auto move = [t, read, write](int delta) {
-            const int row = t->currentRow();
-            const int to = row + delta;
-            if (row < 0 || to < 0 || to >= t->rowCount()) {
-                return;
-            }
-            const QJsonObject a = read(t, row);
-            write(t, row, read(t, to));
-            write(t, to, a);
-            t->setCurrentCell(to, std::max(0, t->currentColumn()));
-        };
-        QObject::connect(b.up, &QPushButton::clicked, t, [move] { move(-1); });
-        QObject::connect(b.down, &QPushButton::clicked, t, [move] { move(1); });
-        auto *box = new QWidget;
-        auto *layout = new QVBoxLayout(box);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(6);
-        layout->addWidget(t, 1);
-        layout->addLayout(b.layout);
-        return box;
-    };
 
     auto *page = new QWidget;
     auto *layout = new QVBoxLayout(page);
@@ -1192,13 +1254,14 @@ QWidget *SettingsDialog::buildDockerPage()
     layout->addWidget(section(QStringLiteral("Quick commands")));
     layout->addWidget(hint(QStringLiteral("{compose} becomes the compose binary, {project} the compose project and "
                                           "{port:<service>:<containerPort>} the port Docker published for it. The group picks the "
-                                          "button colour.")));
-    layout->addWidget(editable(m_quick, quickRow, setQuickRow), 3);
+                                          "button colour. Every checkout shows these; one of a checkout's own quick commands "
+                                          "(Checkouts page) with the same label replaces it there.")));
+    layout->addWidget(editableTable(m_quick, quickRow, setQuickRow), 3);
     layout->addSpacing(6);
     layout->addWidget(section(QStringLiteral("Links")));
     layout->addWidget(hint(QStringLiteral("Published ports that answer HTTP get a link by themselves, named after their service. Add one "
                                           "here to name a port yourself; it opens http://localhost on the port Docker published for it.")));
-    layout->addWidget(editable(m_links, linkRow, setLinkRow), 2);
+    layout->addWidget(editableTable(m_links, linkRow, setLinkRow), 2);
     return page;
 }
 
@@ -1580,8 +1643,16 @@ QJsonObject SettingsDialog::config() const
     root.insert(QStringLiteral("defaultAgent"), ids.value(m_defaultAgent, m_defaultAgent));
 
     QJsonArray checkouts;
-    for (const QJsonObject &checkout : m_checkouts) {
-        QJsonObject c = checkout;
+    for (int i = 0; i < m_checkouts.size(); ++i) {
+        QJsonObject c = m_checkouts.at(i);
+        // The table holds the shown checkout's quick commands until they are stored.
+        if (i == m_checkoutQuickRow) {
+            if (const QJsonArray quick = quickRows(m_checkoutQuick); quick.isEmpty()) {
+                c.remove(QStringLiteral("quickCommands"));
+            } else {
+                c.insert(QStringLiteral("quickCommands"), quick);
+            }
+        }
         if (c.contains(QStringLiteral("agent"))) {
             const QString agent = c.value(QStringLiteral("agent")).toString();
             c.insert(QStringLiteral("agent"), ids.value(agent, agent));
@@ -1612,14 +1683,7 @@ QJsonObject SettingsDialog::config() const
     }
     root.insert(QStringLiteral("themeLight"), m_themeLight->currentData().toString());
     root.insert(QStringLiteral("themeDark"), m_themeDark->currentData().toString());
-    QJsonArray quick;
-    for (int r = 0; r < m_quick->rowCount(); ++r) {
-        const QJsonObject o = quickRow(m_quick, r);
-        if (!o.value(QStringLiteral("label")).toString().isEmpty() || !o.value(QStringLiteral("command")).toString().isEmpty()) {
-            quick.append(o);
-        }
-    }
-    root.insert(QStringLiteral("quickCommands"), quick);
+    root.insert(QStringLiteral("quickCommands"), quickRows(m_quick));
     QJsonArray links;
     for (int r = 0; r < m_links->rowCount(); ++r) {
         const QJsonObject o = linkRow(m_links, r);
@@ -1706,9 +1770,24 @@ bool SettingsDialog::validate()
         }
     }
 
+    storeCheckoutQuick();
+    for (int i = 0; i < m_checkouts.size(); ++i) {
+        const int row = incompleteQuick(m_checkouts.at(i).value(QStringLiteral("quickCommands")).toArray());
+        if (row >= 0) {
+            // Reloading refills the table from the stored rows, so `row` is its table row.
+            {
+                const QSignalBlocker block(m_checkoutList);
+                m_checkoutList->setCurrentRow(i);
+            }
+            loadCheckout(i);
+            m_checkoutQuick->setCurrentCell(row, 0);
+            return fail(QStringLiteral("checkouts"),
+                        QStringLiteral("%1: every quick command needs a label and a command.")
+                            .arg(m_checkouts.at(i).value(QStringLiteral("name")).toString()));
+        }
+    }
     for (int r = 0; r < m_quick->rowCount(); ++r) {
-        const QJsonObject o = quickRow(m_quick, r);
-        if (o.value(QStringLiteral("label")).toString().isEmpty() != o.value(QStringLiteral("command")).toString().isEmpty()) {
+        if (incompleteQuick(QJsonArray{quickRow(m_quick, r)}) == 0) {
             m_quick->setCurrentCell(r, 0);
             return fail(QStringLiteral("docker"), QStringLiteral("Every quick command needs a label and a command."));
         }

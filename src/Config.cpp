@@ -156,6 +156,17 @@ QStringList withoutOverridden(const QStringList &base, const QStringList &extra)
     }
     return kept;
 }
+
+QList<QuickCommand> parseQuickCommands(const QJsonValue &value)
+{
+    QList<QuickCommand> out;
+    for (const QJsonValue &v : value.toArray()) {
+        const QJsonObject o = v.toObject();
+        out.append({o.value(QStringLiteral("label")).toString(), o.value(QStringLiteral("command")).toString(),
+                    o.value(QStringLiteral("group")).toString(QStringLiteral("check"))});
+    }
+    return out;
+}
 } // namespace
 
 QString AgentProfile::launchLine(bool resume, const QString &extraArgs) const
@@ -348,6 +359,20 @@ QString CheckoutConfig::composeCommand(const QString &which) const
     return own.isEmpty() ? defaultCompose(which) : own;
 }
 
+QList<QuickCommand> mergeQuickCommands(const QList<QuickCommand> &global, const QList<QuickCommand> &own)
+{
+    QList<QuickCommand> out = global;
+    for (const QuickCommand &q : own) {
+        const auto it = std::find_if(out.begin(), out.end(), [&](const QuickCommand &g) { return g.label == q.label; });
+        if (it != out.end()) {
+            *it = q;
+        } else {
+            out.append(q);
+        }
+    }
+    return out;
+}
+
 Config Config::load(QString *error)
 {
     const QJsonObject root = readJson(error);
@@ -377,15 +402,12 @@ Config Config::load(QString *error)
         cc.composeProfiles = list(compose.value(QStringLiteral("profiles")));
         cc.composeEnvFile = compose.value(QStringLiteral("envFile")).toString().trimmed();
         cc.composeProject = compose.value(QStringLiteral("project")).toString().trimmed();
+        cc.quickCommands = parseQuickCommands(o.value(QStringLiteral("quickCommands")));
         if (!cc.name.isEmpty()) {
             c.checkouts.append(cc);
         }
     }
-    for (const QJsonValue &v : root.value(QStringLiteral("quickCommands")).toArray()) {
-        const QJsonObject o = v.toObject();
-        c.quickCommands.append({o.value(QStringLiteral("label")).toString(), o.value(QStringLiteral("command")).toString(),
-                                o.value(QStringLiteral("group")).toString(QStringLiteral("check"))});
-    }
+    c.quickCommands = parseQuickCommands(root.value(QStringLiteral("quickCommands")));
     for (const QJsonValue &v : root.value(QStringLiteral("links")).toArray()) {
         const QJsonObject o = v.toObject();
         c.links.append({o.value(QStringLiteral("label")).toString(), o.value(QStringLiteral("service")).toString(),

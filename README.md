@@ -122,7 +122,7 @@ defaults, and older files are migrated automatically (with a backup).
 | `sessionBackend` | `tmux` or `daemon` (default: `tmux` when installed). |
 | `dockerHost` | Docker endpoint; empty finds it (`DOCKER_HOST`, the docker context, rootless Docker, Podman, Colima, OrbStack, Docker Desktop). |
 | `composeBinary` | What `{compose}` becomes: `docker compose`, `docker-compose` or `podman compose`. |
-| `quickCommands` | Your own quick commands: `label`, `command`, `group` (`check`, `env`, `data` or any name). |
+| `quickCommands` | Your own quick commands for every checkout: `label`, `command`, `group` (`check`, `env`, `data` or any name). |
 | `links` | Named browser links: `label`, `service`, `containerPort`. Web ports also get links by themselves. |
 | `terminalSettings` | Terminal to import the look from: empty for the desktop's default, `none`, or an id such as `kitty`. |
 | `terminalProfile` | That terminal's profile; empty for its default. |
@@ -133,9 +133,10 @@ defaults, and older files are migrated automatically (with a backup).
 | `shortcuts` | Rebound shortcuts by id, for example `{"next-checkout": "Ctrl+Alt+J"}`; `""` unbinds one. |
 
 A **checkout** has `name`, `path`, `agent` (a profile id), `args` (extra flags
-for the agent's command line) and `compose`, an object with `up`, `down`,
-`restart` (custom commands), `files` (passed with `-f`, in order), `profiles`,
-`envFile` and `project`.
+for the agent's command line), `quickCommands` (its own, shown with the global
+ones; one with a global command's label replaces it) and `compose`, an object
+with `up`, `down`, `restart` (custom commands), `files` (passed with `-f`, in
+order), `profiles`, `envFile` and `project`.
 
 An **agent profile** has `id`, `label`, `kind` (`claude`, `codex` or
 `custom`), `command`, `continueArgs` (what Continue adds), `process` (the

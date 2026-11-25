@@ -12,6 +12,13 @@
 #include <QStringList>
 #include <QVariantMap>
 
+struct QuickCommand
+{
+    QString label;
+    QString command; // may contain {port:<service>:<containerPort>} and {project}
+    QString group; // free-form; picks the accent colour (check, env and data have their own)
+};
+
 struct CheckoutConfig
 {
     QString name;
@@ -28,6 +35,7 @@ struct CheckoutConfig
     QStringList composeProfiles;
     QString composeEnvFile;
     QString composeProject; // empty = compose's default, the folder name
+    QList<QuickCommand> quickCommands; // merged over Config::quickCommands, see mergeQuickCommands
 
     // `which` is up, down or restart.
     QString composeCommand(const QString &which) const;
@@ -37,12 +45,9 @@ struct CheckoutConfig
     QString composeOptions() const;
 };
 
-struct QuickCommand
-{
-    QString label;
-    QString command; // may contain {port:<service>:<containerPort>} and {project}
-    QString group; // free-form; picks the accent colour (check, env and data have their own)
-};
+// The global quick commands with a checkout's own merged in: one with a
+// global command's label replaces it in place, the rest follow in order.
+QList<QuickCommand> mergeQuickCommands(const QList<QuickCommand> &global, const QList<QuickCommand> &own);
 
 struct LinkConfig
 {

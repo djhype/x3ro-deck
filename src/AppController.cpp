@@ -530,10 +530,18 @@ QVariantMap AppController::shortcutHints() const
     return Shortcuts::hints(m_config.shortcuts);
 }
 
+QList<QuickCommand> AppController::manualQuickCommands() const
+{
+    if (m_current >= m_checkouts.size()) {
+        return m_config.quickCommands;
+    }
+    return mergeQuickCommands(m_config.quickCommands, m_checkouts.at(m_current).cfg.quickCommands);
+}
+
 QVariantList AppController::quickCommands() const
 {
     QVariantList out;
-    for (const QuickEntry &e : m_quick->entries(m_current, m_config.quickCommands)) {
+    for (const QuickEntry &e : m_quick->entries(m_current, manualQuickCommands())) {
         out.append(QVariantMap{{QStringLiteral("key"), e.key},
                                {QStringLiteral("label"), e.label},
                                {QStringLiteral("command"), e.command},
@@ -1357,7 +1365,7 @@ void AppController::runQuick(const QString &key)
     if (m_current >= m_checkouts.size()) {
         return;
     }
-    for (const QuickEntry &e : m_quick->entries(m_current, m_config.quickCommands)) {
+    for (const QuickEntry &e : m_quick->entries(m_current, manualQuickCommands())) {
         if (e.key == key) {
             Q_EMIT runInTerminal(m_current, e.label, expand(m_current, e.command));
             return;

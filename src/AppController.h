@@ -215,6 +215,8 @@ Q_SIGNALS:
     void welcomeFailed(const QString &error);
 
 private:
+    // The configured quick commands for the current checkout, its own merged over the global ones.
+    QList<QuickCommand> manualQuickCommands() const;
     void sampleStats();
     void onContainers(const QList<ContainerInfo> &containers);
     void onStats(const QHash<QString, ContainerStats> &stats);
