@@ -255,6 +255,10 @@ const AgentProfile &Config::agent(const QString &id) const
 
 QString Config::configDir()
 {
+    // Tests point it elsewhere on every OS; macOS and Windows ignore XDG_CONFIG_HOME.
+    if (const QString dir = qEnvironmentVariable("X3RO_DECK_CONFIG_DIR"); !dir.isEmpty()) {
+        return dir;
+    }
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/x3ro-deck");
 }
 

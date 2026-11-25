@@ -26,9 +26,17 @@ inline QByteArray readFile(const QString &path)
     return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
 }
 
+// With the name's exact case, also on the case-insensitive file systems of
+// macOS and Windows, where `makefile` would otherwise find `Makefile`.
 inline bool exists(const QString &dir, const QString &name)
 {
-    return QFileInfo::exists(QDir(dir).filePath(name));
+    if (!QFileInfo::exists(QDir(dir).filePath(name))) {
+        return false;
+    }
+    if (name.contains(QLatin1Char('/'))) {
+        return true;
+    }
+    return QDir(dir).entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot).contains(name);
 }
 
 // The first of `names` that exists in `dir`, or empty.

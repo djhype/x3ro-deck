@@ -6,6 +6,7 @@
 #include "CommandDetector.h"
 #include "Config.h"
 #include "QuickCommands.h"
+#include "TestEnv.h"
 #include "ToolchainDetectors.h"
 
 #include <QCoreApplication>
@@ -48,7 +49,7 @@ private Q_SLOTS:
         QCoreApplication::setOrganizationName(QStringLiteral("x3ro-deck-test"));
         QCoreApplication::setApplicationName(QStringLiteral("tst_quickcommands"));
         QVERIFY(m_config.isValid());
-        qputenv("XDG_CONFIG_HOME", m_config.path().toLocal8Bit());
+        setConfigHome(m_config.path());
     }
 
     void makefileTargets()

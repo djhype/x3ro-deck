@@ -3,6 +3,8 @@
 
 #include "AppTheme.h"
 
+#include "Config.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -33,7 +35,7 @@ QString builtinPath(const QString &id)
 
 QString AppTheme::userDir()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/x3ro-deck/themes");
+    return Config::configDir() + QStringLiteral("/themes");
 }
 
 AppTheme::AppTheme(QObject *parent)

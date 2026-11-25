@@ -280,6 +280,7 @@ void SessiondTest::initTestCase()
     qunsetenv("X3RO_DECK_SESSIOND_SOCKET");
     qunsetenv("ENV");
     qputenv("XDG_RUNTIME_DIR", m_tmp.path().toLocal8Bit());
+    qputenv("TMPDIR", m_tmp.path().toLocal8Bit()); // where macOS puts the socket
     // A predictable shell without the user's rc files.
     qputenv("HOME", m_tmp.path().toLocal8Bit());
     qputenv("SHELL", "/bin/sh");

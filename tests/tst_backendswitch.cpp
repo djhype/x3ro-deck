@@ -6,6 +6,7 @@
 // exit, new ones start in the daemon.
 #include "DaemonBackend.h"
 #include "SwitchingBackend.h"
+#include "TestEnv.h"
 #include "TmuxManager.h"
 
 #include <QFile>
@@ -24,7 +25,7 @@ private Q_SLOTS:
         QFile::setPermissions(m_tmp.path(), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
         qputenv("XDG_RUNTIME_DIR", m_tmp.path().toLocal8Bit());
         qputenv("TMUX_TMPDIR", m_tmp.path().toLocal8Bit());
-        qputenv("XDG_CONFIG_HOME", (m_tmp.path() + QStringLiteral("/config")).toLocal8Bit());
+        setConfigHome(m_tmp.path() + QStringLiteral("/config"));
         qputenv("SHELL", "/bin/sh");
     }
 

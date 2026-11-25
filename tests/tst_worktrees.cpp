@@ -3,6 +3,7 @@
 
 #include "AppController.h"
 #include "Config.h"
+#include "TestEnv.h"
 #include "Worktrees.h"
 
 #include <QFile>
@@ -106,7 +107,7 @@ private Q_SLOTS:
         if (repo.isEmpty()) {
             QSKIP("git is not available");
         }
-        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        setConfigHome(config.path());
         qputenv("TMUX_TMPDIR", tmp.path().toUtf8());
         {
             AppController app;

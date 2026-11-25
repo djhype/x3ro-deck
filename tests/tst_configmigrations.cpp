@@ -6,6 +6,7 @@
 
 #include "Config.h"
 #include "ConfigMigrations.h"
+#include "TestEnv.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -45,7 +46,7 @@ void ConfigMigrationsTest::init()
 {
     m_tmp = std::make_unique<QTemporaryDir>();
     QVERIFY(m_tmp->isValid());
-    qputenv("XDG_CONFIG_HOME", m_tmp->path().toLocal8Bit());
+    setConfigHome(m_tmp->path());
     QCOMPARE(Config::configPath(), configFile());
 }
 

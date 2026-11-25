@@ -111,6 +111,7 @@ int main(int argc, char *argv[])
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <fcntl.h>
@@ -138,10 +139,13 @@ void report(int fd, char c)
 int main(int argc, char *argv[])
 {
     bool detach = false;
+    int ready = -1; // the ready pipe; see below
     x3ro_deck::SocketPath sock = x3ro_deck::sessiondSocketPath();
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--detach") == 0) {
             detach = true;
+        } else if (std::strcmp(argv[i], "--ready-fd") == 0 && i + 1 < argc) {
+            ready = std::atoi(argv[++i]); // internal: passed to the copy --detach starts
         } else if (std::strcmp(argv[i], "--socket") == 0 && i + 1 < argc) {
             sock = x3ro_deck::SocketPath{argv[++i], {}};
         } else if (std::strcmp(argv[i], "-h") == 0 || std::strcmp(argv[i], "--help") == 0) {
@@ -168,13 +172,21 @@ int main(int argc, char *argv[])
 
     // The ready pipe tells the waiting parent: '1' listening, 'a' another
     // daemon owns the socket; EOF means it failed.
-    int ready = -1;
     if (detach) {
         int fds[2];
         if (x3ro_deck::cloexecPipe(fds, false) != 0) {
             std::perror("x3ro-deck-sessiond: pipe");
             return 1;
         }
+        // The daemon is a fresh copy of this program, run after the forks
+        // below: a child of fork() may not touch Objective-C (QtCore does on
+        // macOS) before exec. Built before forking, which leaves only
+        // async-signal-safe calls in the children.
+        char readyArg[16];
+        std::snprintf(readyArg, sizeof readyArg, "%d", fds[1]);
+        char *const args[]
+            = {argv[0], const_cast<char *>("--socket"), const_cast<char *>(sock.path.c_str()), const_cast<char *>("--ready-fd"), readyArg,
+               nullptr};
         const pid_t child = fork();
         if (child < 0) {
             std::perror("x3ro-deck-sessiond: fork");
@@ -191,7 +203,6 @@ int main(int argc, char *argv[])
             return n == 1 && (c == '1' || c == 'a') ? 0 : 1;
         }
         close(fds[0]);
-        ready = fds[1];
         // A new session without a controlling terminal, and a second fork so
         // the daemon can never acquire one: it outlives the GUI and the
         // terminal that started it.
@@ -200,6 +211,11 @@ int main(int argc, char *argv[])
         if (daemon != 0) {
             _exit(daemon < 0 ? 1 : 0);
         }
+        fcntl(fds[1], F_SETFD, 0); // the copy inherits the write end
+        execvp(argv[0], args); // as it was started: a path, or a name on PATH
+        _exit(1); // the parent reads EOF
+    }
+    if (ready >= 0) {
         [[maybe_unused]] const int r = chdir("/");
     }
     signal(SIGPIPE, SIG_IGN);
@@ -220,7 +236,7 @@ int main(int argc, char *argv[])
     case Daemon::ListenResult::Listening:
         break;
     }
-    if (detach) {
+    if (ready >= 0) {
         const int null = open("/dev/null", O_RDWR);
         if (null >= 0) {
             dup2(null, STDIN_FILENO);

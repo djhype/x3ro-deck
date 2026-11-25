@@ -35,9 +35,16 @@ int mouseButton(Qt::MouseButton b)
     }
 }
 
+// The modifiers a program sees. Qt reports ⌘ as Control and the Control key
+// as Meta on macOS: the Control key is the terminal's Ctrl there, and ⌘ is
+// the app's (copy, paste and window shortcuts).
 Qt::KeyboardModifiers terminalMods(Qt::KeyboardModifiers mods)
 {
+#ifdef Q_OS_MACOS
+    return (mods & (Qt::ShiftModifier | Qt::AltModifier)) | ((mods & Qt::MetaModifier) ? Qt::ControlModifier : Qt::NoModifier);
+#else
     return mods & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier);
+#endif
 }
 
 // Cells a character takes in the preedit, which is not in libvterm's grid:
@@ -462,23 +469,30 @@ bool TerminalView::focusNextPrevChild(bool)
 
 void TerminalView::keyPressEvent(QKeyEvent *e)
 {
-    const Qt::KeyboardModifiers mods = e->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier);
+    const Qt::KeyboardModifiers raw = e->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    const Qt::KeyboardModifiers mods = terminalMods(e->modifiers());
     const int key = e->key();
 
 #ifdef Q_OS_MACOS
-    // Qt reports Cmd as Control on macOS, so Cmd+C and Cmd+V leave Ctrl+C alone.
+    // ⌘C and ⌘V (Control to Qt), leaving the Control key's Ctrl+C to the program.
     const Qt::KeyboardModifiers clipMods = Qt::ControlModifier;
 #else
     const Qt::KeyboardModifiers clipMods = Qt::ControlModifier | Qt::ShiftModifier;
 #endif
-    if ((key == Qt::Key_V && mods == clipMods) || (key == Qt::Key_Insert && mods == Qt::ShiftModifier)) {
+    if ((key == Qt::Key_V && raw == clipMods) || (key == Qt::Key_Insert && mods == Qt::ShiftModifier)) {
         pasteClipboard();
         return;
     }
-    if (key == Qt::Key_C && mods == clipMods) {
+    if (key == Qt::Key_C && raw == clipMods) {
         copySelection();
         return;
     }
+#ifdef Q_OS_MACOS
+    if (raw & Qt::ControlModifier) {
+        QWidget::keyPressEvent(e); // other ⌘ combinations are the app's, not the program's
+        return;
+    }
+#endif
     if ((key == Qt::Key_PageUp || key == Qt::Key_PageDown) && mods == Qt::ShiftModifier && !m_screen->altScreen()) {
         const int page = std::max(1, rows() - 1);
         scrollBy(key == Qt::Key_PageUp ? page : -page);
@@ -817,7 +831,7 @@ void TerminalView::wheelEvent(QWheelEvent *e)
     if (lines == 0) {
         return;
     }
-    const Qt::KeyboardModifiers mods = e->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier);
+    const Qt::KeyboardModifiers mods = terminalMods(e->modifiers());
     if (reportsMouse(mods)) {
         // One report per three lines, which tmux turns into its own scrolling.
         const QPoint cell = viewCellAt(e->position().toPoint()) - QPoint(0, m_offset);

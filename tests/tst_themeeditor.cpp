@@ -3,6 +3,7 @@
 
 // ThemeEditor: live preview, copies of built-ins, save, import and export.
 #include "AppTheme.h"
+#include "TestEnv.h"
 #include "ThemeEditor.h"
 
 #include <QFile>
@@ -19,7 +20,7 @@ private Q_SLOTS:
     void init()
     {
         m_config = std::make_unique<QTemporaryDir>();
-        qputenv("XDG_CONFIG_HOME", m_config->path().toLocal8Bit());
+        setConfigHome(m_config->path());
     }
 
     void editsACopyOfABuiltinWithALivePreview()
@@ -51,7 +52,7 @@ private Q_SLOTS:
         const QByteArray json = file.readAll();
         file.close();
         QTemporaryDir other;
-        qputenv("XDG_CONFIG_HOME", other.path().toLocal8Bit());
+        setConfigHome(other.path());
         QVERIFY(QDir().mkpath(AppTheme::userDir()));
         QFile copy(AppTheme::userDir() + QStringLiteral("/shared.json"));
         QVERIFY(copy.open(QIODevice::WriteOnly));
@@ -60,7 +61,7 @@ private Q_SLOTS:
         AppTheme elsewhere;
         QVERIFY(elsewhere.load(QStringLiteral("shared")));
         QCOMPARE(elsewhere.toJson(), live.toJson());
-        qputenv("XDG_CONFIG_HOME", m_config->path().toLocal8Bit());
+        setConfigHome(m_config->path());
 
         // A second copy does not overwrite the first.
         ThemeEditor again(&live, QStringLiteral("cyberdecker"));

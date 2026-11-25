@@ -115,7 +115,7 @@ struct Config
     // The profile with this id, else the default one.
     const AgentProfile &agent(const QString &id) const;
 
-    static QString configDir();
+    static QString configDir(); // $X3RO_DECK_CONFIG_DIR, else <GenericConfigLocation>/x3ro-deck
     static QString configPath();
     // Loads ~/.config/x3ro-deck/config.json, writing the defaults first if it is missing.
     static Config load(QString *error = nullptr);

@@ -6,6 +6,7 @@
 #include "TerminalChannel.h"
 #include "TerminalScreen.h"
 #include "TerminalView.h"
+#include "TestEnv.h"
 #include "TmuxManager.h"
 
 #include <QApplication>
@@ -22,6 +23,14 @@
 
 namespace
 {
+// QTest sends Qt's modifiers: on macOS Control is ⌘ and Meta the Control key.
+#ifdef Q_OS_MACOS
+constexpr Qt::KeyboardModifiers kCtrlKey = Qt::MetaModifier;
+constexpr Qt::KeyboardModifiers kClipboard = Qt::ControlModifier;
+#else
+constexpr Qt::KeyboardModifiers kCtrlKey = Qt::ControlModifier;
+constexpr Qt::KeyboardModifiers kClipboard = Qt::ControlModifier | Qt::ShiftModifier;
+#endif
 // Records what the view writes and lets the test play the program's side.
 class FakeChannel : public TerminalChannel
 {
@@ -104,7 +113,7 @@ private Q_SLOTS:
         QVERIFY(m_tmp.isValid());
         QFile::setPermissions(m_tmp.path(), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
         qputenv("TMUX_TMPDIR", m_tmp.path().toLocal8Bit());
-        qputenv("XDG_CONFIG_HOME", (m_tmp.path() + QStringLiteral("/config")).toLocal8Bit());
+        setConfigHome(m_tmp.path() + QStringLiteral("/config"));
         qputenv("SHELL", "/bin/sh");
     }
 
@@ -663,7 +672,7 @@ private Q_SLOTS:
         QTest::mouseRelease(&view, Qt::LeftButton, Qt::NoModifier, cellCenter(view, 5, 2));
         QCOMPARE(view.selectedText(), QStringLiteral("a long answer that wraps\nsecond"));
 
-        QTest::keyClick(&view, Qt::Key_C, Qt::ControlModifier | Qt::ShiftModifier);
+        QTest::keyClick(&view, Qt::Key_C, kClipboard);
         QCOMPARE(QApplication::clipboard()->text(), QStringLiteral("a long answer that wraps\nsecond"));
         QVERIFY(channel.written.isEmpty());
 
@@ -694,7 +703,7 @@ private Q_SLOTS:
         channel.print("\x1b[?2004h" + numberedLines(1, 20));
         view.scrollBy(5);
         QApplication::clipboard()->setText(QStringLiteral("one\ntwo\nthree"));
-        QTest::keyClick(&view, Qt::Key_V, Qt::ControlModifier | Qt::ShiftModifier);
+        QTest::keyClick(&view, Qt::Key_V, kClipboard);
         QCOMPARE(channel.written, QByteArray("\x1b[200~one\rtwo\rthree\x1b[201~"));
         QCOMPARE(view.scrollOffset(), 0);
         // Middle-click pastes the primary selection, or the clipboard where
@@ -803,7 +812,7 @@ private Q_SLOTS:
         QTest::keyClicks(&view, QStringLiteral("hi"));
         QTest::keyClick(&view, Qt::Key_Return);
         QTest::keyClick(&view, Qt::Key_Down);
-        QTest::keyClick(&view, Qt::Key_C, Qt::ControlModifier);
+        QTest::keyClick(&view, Qt::Key_C, kCtrlKey);
         QTest::keyClick(&view, Qt::Key_Tab);
         QTest::keyClick(&view, Qt::Key_PageUp);
         QTest::keyClick(&view, Qt::Key_F5);

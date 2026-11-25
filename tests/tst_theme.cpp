@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "AppTheme.h"
+#include "TestEnv.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -67,7 +68,7 @@ private Q_SLOTS:
     void userThemeOverlaysTheDefault()
     {
         QTemporaryDir config;
-        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        setConfigHome(config.path());
         QDir().mkpath(AppTheme::userDir());
         QFile f(AppTheme::userDir() + QStringLiteral("/mine.json"));
         QVERIFY(f.open(QIODevice::WriteOnly));
@@ -86,7 +87,7 @@ private Q_SLOTS:
     void badThemesKeepTheDefault()
     {
         QTemporaryDir config;
-        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        setConfigHome(config.path());
         QDir().mkpath(AppTheme::userDir());
         QFile f(AppTheme::userDir() + QStringLiteral("/broken.json"));
         QVERIFY(f.open(QIODevice::WriteOnly));
@@ -105,7 +106,7 @@ private Q_SLOTS:
     void listsBuiltinAndUserThemes()
     {
         QTemporaryDir config;
-        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        setConfigHome(config.path());
         QDir().mkpath(AppTheme::userDir());
         auto write = [](const QString &name, const QByteArray &json) {
             QFile f(AppTheme::userDir() + QLatin1Char('/') + name);
@@ -138,7 +139,7 @@ private Q_SLOTS:
     void selectSwitchesLiveAndFollowsTheSystem()
     {
         QTemporaryDir config;
-        qputenv("XDG_CONFIG_HOME", config.path().toUtf8());
+        setConfigHome(config.path());
         AppTheme theme;
         QSignalSpy changed(&theme, &AppTheme::changed);
         theme.select(QStringLiteral("cyberdecker-light"));

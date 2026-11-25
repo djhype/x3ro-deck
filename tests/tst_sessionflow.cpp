@@ -9,6 +9,7 @@
 #include "AgentBus.h"
 #include "AppController.h"
 #include "SessionBackend.h"
+#include "TestEnv.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -70,7 +71,7 @@ void SessionFlowTest::initTestCase()
     QFile::setPermissions(m_tmp.path(), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
     qputenv("XDG_RUNTIME_DIR", m_tmp.path().toLocal8Bit());
     qputenv("TMUX_TMPDIR", m_tmp.path().toLocal8Bit());
-    qputenv("XDG_CONFIG_HOME", (m_tmp.path() + QStringLiteral("/config")).toLocal8Bit());
+    setConfigHome(m_tmp.path() + QStringLiteral("/config"));
 
     m_repo = m_tmp.path() + QStringLiteral("/repo");
     m_log = m_tmp.path() + QStringLiteral("/agent.log");

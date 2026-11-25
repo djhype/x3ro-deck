@@ -7,6 +7,7 @@
 #include "AppController.h"
 #include "DockerClient.h"
 #include "DockerEndpoint.h"
+#include "TestEnv.h"
 
 #include <QDir>
 #include <QFile>
@@ -183,7 +184,7 @@ void DockerEndpointTest::appUsesResolvedSocketAndComposeBinary()
     const QString repo = tmp.path() + QStringLiteral("/repo");
     QVERIFY(QDir().mkpath(repo));
     const QString sock = tmp.path() + QStringLiteral("/podman.sock");
-    qputenv("XDG_CONFIG_HOME", (tmp.path() + QStringLiteral("/config")).toLocal8Bit());
+    setConfigHome(tmp.path() + QStringLiteral("/config"));
     qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
     qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
     qputenv("DOCKER_HOST", "unix:///nonexistent/should-lose.sock");

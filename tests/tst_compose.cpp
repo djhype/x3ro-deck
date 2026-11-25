@@ -9,6 +9,7 @@
 #include "DockerClient.h"
 #include "ListeningPorts.h"
 #include "PortProbe.h"
+#include "TestEnv.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -84,7 +85,7 @@ private Q_SLOTS:
     void projectNamePicksTheContainers()
     {
         QTemporaryDir tmp;
-        qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());
+        setConfigHome(tmp.path());
         qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
         qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
         QVERIFY(QDir().mkpath(tmp.filePath(QStringLiteral("x3ro-deck"))));
@@ -141,7 +142,7 @@ private Q_SLOTS:
     void linksAreTheWebPorts()
     {
         QTemporaryDir tmp;
-        qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());
+        setConfigHome(tmp.path());
         qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
         qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
         QVERIFY(QDir().mkpath(tmp.filePath(QStringLiteral("x3ro-deck"))));
@@ -212,7 +213,7 @@ private Q_SLOTS:
         QSKIP("reads /proc or libproc");
 #endif
         QTemporaryDir tmp;
-        qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());
+        setConfigHome(tmp.path());
         qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
         qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
         QVERIFY(QDir().mkpath(tmp.filePath(QStringLiteral("x3ro-deck"))));
@@ -250,7 +251,7 @@ private Q_SLOTS:
     void labelsPickTheCheckout()
     {
         QTemporaryDir tmp;
-        qputenv("XDG_CONFIG_HOME", tmp.path().toLocal8Bit());
+        setConfigHome(tmp.path());
         qputenv("XDG_RUNTIME_DIR", tmp.path().toLocal8Bit());
         qputenv("TMUX_TMPDIR", tmp.path().toLocal8Bit());
         QVERIFY(QDir().mkpath(tmp.filePath(QStringLiteral("x3ro-deck"))));
