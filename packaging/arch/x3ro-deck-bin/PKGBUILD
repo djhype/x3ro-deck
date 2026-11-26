@@ -6,7 +6,7 @@
 # /usr, built by the release workflow).
 pkgname=x3ro-deck-bin
 _pkgname=x3ro-deck
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Desktop cockpit for coding agents and their Docker Compose stacks (release build)'
 arch=('x86_64')

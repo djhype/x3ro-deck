@@ -14,7 +14,16 @@ permissions:
   contents: read
 
 jobs:
+  # Stops a tag whose CMake version or CHANGELOG.md section is missing before
+  # anything builds (scripts/release.sh prepare writes both).
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/release.sh check "$GITHUB_REF_NAME"
+
   linux:
+    needs: check
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -39,6 +48,7 @@ jobs:
   # Without the signing secrets, macOS and Windows build unsigned packages
   # (ad-hoc on macOS) and say so in a notice.
   macos:
+    needs: check
     runs-on: macos-latest
     environment: release
     env:
@@ -81,6 +91,7 @@ jobs:
           path: x3ro-deck-*.dmg
 
   windows:
+    needs: check
     runs-on: windows-latest
     environment: release
     env:
