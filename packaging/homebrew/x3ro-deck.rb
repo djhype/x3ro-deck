@@ -4,7 +4,7 @@
 # Cask for the djhype/homebrew-tap repository (Casks/x3ro-deck.rb). The release
 # workflow updates version and sha256.
 cask "x3ro-deck" do
-  version "0.1.0"
+  version "0.1.1"
   sha256 :no_check
 
   url "https://github.com/djhype/x3ro-deck/releases/download/v#{version}/x3ro-deck-#{version}.dmg"

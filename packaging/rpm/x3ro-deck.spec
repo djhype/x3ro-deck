@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 Name:           x3ro-deck
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Desktop cockpit for coding agents and their Docker Compose stacks
 License:        GPL-3.0-or-later
@@ -56,5 +56,8 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/x3ro-deck.desktop
 %{_datadir}/icons/hicolor/*/apps/x3ro-deck.*
 
 %changelog
+* Wed Nov 25 2026 x3ro - 0.1.1-1
+- Release 0.1.1; see CHANGELOG.md.
+
 * Wed Nov 18 2026 x3ro - 0.1.0-1
 - First release.

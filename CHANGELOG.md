@@ -6,6 +6,29 @@ All notable changes to x3ro deck are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-25
+
+### Added
+
+- Quick commands per checkout: a checkout's own `quickCommands` show next to
+  the global ones, and one with a global command's label replaces it.
+  Settings → Checkouts edits them.
+
+### Changed
+
+- Settings → Checkouts groups each checkout's options in General, Coding
+  Agent and Docker tabs.
+
+### Fixed
+
+- Windows: git, gh, the compose command and the agent CLIs no longer all
+  count as missing.
+- macOS: Ctrl+C and the other Ctrl keys reach the program in the built-in
+  terminal; ⌘ copies, pastes and runs the window's shortcuts.
+- macOS: the session daemon starts reliably when it detaches.
+- Linux: the package repositories get their first build; 0.1.0 failed on
+  the openSUSE Build Service.
+
 ## [0.1.0] - 2026-11-19
 
 First release.

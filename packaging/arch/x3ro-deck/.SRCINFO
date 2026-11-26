@@ -1,6 +1,6 @@
 pkgbase = x3ro-deck
 	pkgdesc = Desktop cockpit for coding agents and their Docker Compose stacks
-	pkgver = 0.1.0
+	pkgver = 0.1.1
 	pkgrel = 1
 	url = https://github.com/djhype/x3ro-deck
 	arch = x86_64
@@ -23,7 +23,7 @@ pkgbase = x3ro-deck
 	optdepends = github-cli: pull request status
 	optdepends = git: branch and worktree display
 	conflicts = x3ro-deck-bin
-	source = x3ro-deck-0.1.0.tar.gz::https://github.com/djhype/x3ro-deck/archive/refs/tags/v0.1.0.tar.gz
+	source = x3ro-deck-0.1.1.tar.gz::https://github.com/djhype/x3ro-deck/archive/refs/tags/v0.1.1.tar.gz
 	sha256sums = SKIP
 
 pkgname = x3ro-deck
